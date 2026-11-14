@@ -1,8 +1,10 @@
 /// \class TRestGeant4ToDetectorHitsProcess
 /// Transfers the hits (position, energy, time) of a TRestGeant4Event with positive energy to a
-/// TRestDetectorHitsEvent as XYZ hits. Only the hits of the volumes selected as in
-/// TRestGeant4QuenchingProcess are transferred (TRestGeant4GeometryInfo::GetVolumesMatchingExpression:
-/// physical volumes matching each regular expression or, if none, those of the matching logical volumes);
+/// TRestDetectorHitsEvent as XYZ hits, with the Particle ID (PDG encoding) of the track of each hit
+/// (fHitParticleID, e.g. for the scintillation profile of each particle). Only the hits of the volumes
+/// selected as in TRestGeant4QuenchingProcess are transferred
+/// (TRestGeant4GeometryInfo::GetVolumesMatchingExpression: physical volumes matching each regular expression
+/// or, if none, those of the matching logical volumes);
 /// without `volumes`, those of the sensitive volumes of the simulation (`volumes: [".*"]` or `["^."]`
 /// for all of them).
 ///
@@ -129,13 +131,19 @@ bool TRestGeant4ToDetectorHitsProcess::ProcessEvent(const TRestEvent& input, TRe
 
     const auto& data = g4Event->fEventData;
     const auto& hits = data.hitsStorage;
-    for (size_t i = 0; i < hits.energy.size(); i++) {
-        if (hits.energy[i] <= 0) continue;
-        if (fVolumeIDs.count(data.hitVolumeID.at(i)) == 0) continue;
-        if (hits.time[i] < 0) {
-            throw std::runtime_error("TRestGeant4ToDetectorHitsProcess: hit with negative time");
+    // The hits of the track t are [trackStartIndices[t], trackStartIndices[t] + trackNHits[t])
+    for (size_t t = 0; t < data.trackParticleIDs.size(); t++) {
+        const size_t start = data.trackStartIndices.at(t);
+        const size_t end = start + data.trackNHits.at(t);
+        for (size_t i = start; i < end; i++) {
+            if (hits.energy[i] <= 0) continue;
+            if (fVolumeIDs.count(data.hitVolumeID.at(i)) == 0) continue;
+            if (hits.time[i] < 0) {
+                throw std::runtime_error("TRestGeant4ToDetectorHitsProcess: hit with negative time");
+            }
+            hitsEvent->AddHit(hits.x[i], hits.y[i], hits.z[i], hits.energy[i], hits.time[i],
+                              TRestDetectorHitsEvent::REST_HitType::XYZ, data.trackParticleIDs[t]);
         }
-        hitsEvent->AddHit(hits.x[i], hits.y[i], hits.z[i], hits.energy[i], hits.time[i]);
     }
 
     RESTDebug << "TRestGeant4ToDetectorHitsProcess: " << hitsEvent->GetNumberOfHits() << " hits added"

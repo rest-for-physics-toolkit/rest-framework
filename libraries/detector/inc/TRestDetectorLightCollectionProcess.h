@@ -40,11 +40,13 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// \brief Photoelectrons of the photons reaching a photosensor (Binomial(photons, quantumEfficiency)).
     int Detect(int photons);
 
-    /// \brief The photoelectrons of the photons of a hit captured by the channels in range (localCapture).
-    void CaptureLocally(const ROOT::Math::XYZVector& position, int photons, double time,
+    /// \brief The photoelectrons of the photons of a hit captured by the channels in range (localCapture),
+    /// with the particle of the hit.
+    void CaptureLocally(const ROOT::Math::XYZVector& position, int photons, double time, int particleID,
                         TRestDetectorHitsEvent& output);
-    /// \brief The photoelectrons of the photons of a hit reaching the readout of its channel (attenuation).
-    void Attenuate(const ROOT::Math::XYZVector& position, int photons, double time,
+    /// \brief The photoelectrons of the photons of a hit reaching the readout of its channel (attenuation),
+    /// with the particle of the hit.
+    void Attenuate(const ROOT::Math::XYZVector& position, int photons, double time, int particleID,
                    TRestDetectorHitsEvent& output);
 
    public:

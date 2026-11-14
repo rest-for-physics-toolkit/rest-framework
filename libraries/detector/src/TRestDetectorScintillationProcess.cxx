@@ -125,7 +125,7 @@ bool TRestDetectorScintillationProcess::ProcessEvent(const TRestEvent& input, TR
         const int photons = fRandom.Poisson(energy * lightYield);
         if (photons <= 0) continue;
         outputEvent->AddHit(inputEvent->GetPosition(n), photons, inputEvent->GetTime(n),
-                            inputEvent->GetType(n));
+                            inputEvent->GetType(n), inputEvent->GetParticleID(n));
         fNPhotons += photons;
     }
 

@@ -9,15 +9,19 @@
 #include "TRestHits.h"
 
 /// \class TRestDetectorHitsEvent
-/// \brief Event container holding a flat list of 3D hits (position + energy + time + type).
+/// \brief Event container holding a flat list of 3D hits (position + energy + time + type + particle).
 ///
 /// The hits are stored in a TRestHitsData (one vector per quantity, stored as float) and accessed through a
 /// TRestHits view (GetHits), which provides the hit analysis methods (mean position, sigma, skewness...).
 /// The type of each hit (TRestHitsData::REST_HitType: X, Y, XY, XZ, YZ, XYZ...) tells which coordinates it
 /// defines (e.g. XZ and YZ for the hits of strip readouts; the others are NaN).
 ///
-/// Branches of the event tree: fHitX, fHitY, fHitZ, fHitTime, fHitEnergy and fHitType (plus those of
-/// TRestEvent). It is the input and output of the hits processes of this library (drift, avalanche,
+/// The particle of each hit (fHitParticleID) is the Particle ID (PDG encoding) of the Geant4 track that
+/// produced it, set by TRestGeant4ToDetectorHitsProcess and kept by the hits processes (e.g. for the
+/// scintillation profile of each particle); 0 when it is not known (real data, hits from signals).
+///
+/// Branches of the event tree: fHitX, fHitY, fHitZ, fHitTime, fHitEnergy, fHitType and fHitParticleID (plus
+/// those of TRestEvent). It is the input and output of the hits processes of this library (drift, avalanche,
 /// smearing, transformation, light attenuation, analysis) and the output of TRestDetectorSignalToHitsProcess
 /// and of TRestGeant4ToDetectorHitsProcess (connectors library).
 ///
@@ -33,6 +37,8 @@ class TRestDetectorHitsEvent : public TRestEvent {
    private:
     /// Persisted hit storage (x, y, z, time, energy, type).
     TRestHitsData fHitsData;
+    /// Persisted Particle ID (PDG encoding, 0: unknown) of each hit, parallel to fHitsData.
+    std::vector<int> fParticleIDs;
 
     /// Lightweight view over fHitsData (full range). Rebuilt whenever the
     /// underlying storage changes (see RefreshViews).
@@ -47,12 +53,13 @@ class TRestDetectorHitsEvent : public TRestEvent {
     TRestHits fXYZHitsView{&fXYZData, 0, 0};  //!
 
     /// Persisted branch pointers (ROOT requires T** for class/vector branches).
-    std::vector<float>* fPtrX = nullptr;       //!
-    std::vector<float>* fPtrY = nullptr;       //!
-    std::vector<float>* fPtrZ = nullptr;       //!
-    std::vector<float>* fPtrTime = nullptr;    //!
-    std::vector<float>* fPtrEnergy = nullptr;  //!
-    std::vector<int>* fPtrType = nullptr;      //!
+    std::vector<float>* fPtrX = nullptr;         //!
+    std::vector<float>* fPtrY = nullptr;         //!
+    std::vector<float>* fPtrZ = nullptr;         //!
+    std::vector<float>* fPtrTime = nullptr;      //!
+    std::vector<float>* fPtrEnergy = nullptr;    //!
+    std::vector<int>* fPtrType = nullptr;        //!
+    std::vector<int>* fPtrParticleID = nullptr;  //!
 
    public:
     /// \brief Returns the class name, "TRestDetectorHitsEvent".
@@ -80,11 +87,12 @@ class TRestDetectorHitsEvent : public TRestEvent {
     void Initialize() override {
         TRestEvent::Initialize();
         fHitsData.clear();
+        fParticleIDs.clear();
         RebuildHitsView();
     }
 
     /// \brief Creates the event branches in a tree: those of TRestEvent and fHitX, fHitY, fHitZ, fHitTime,
-    /// fHitEnergy and fHitType.
+    /// fHitEnergy, fHitType and fHitParticleID.
     /// \param tree Output event tree.
     void CreateBranches(TTree* tree) override {
         TRestEvent::CreateBranches(tree);
@@ -94,6 +102,7 @@ class TRestDetectorHitsEvent : public TRestEvent {
         tree->Branch("fHitTime", &fHitsData.time);
         tree->Branch("fHitEnergy", &fHitsData.energy);
         tree->Branch("fHitType", &fHitsData.type);
+        tree->Branch("fHitParticleID", &fParticleIDs);
     }
 
     /// \brief Binds the hit branches of an input tree (written by CreateBranches) to the hit storage.
@@ -114,6 +123,8 @@ class TRestDetectorHitsEvent : public TRestEvent {
         BindBranch(tree, "fHitTime", &fPtrTime);
         BindBranch(tree, "fHitEnergy", &fPtrEnergy);
         BindBranch(tree, "fHitType", &fPtrType);
+        fPtrParticleID = &fParticleIDs;
+        BindBranch(tree, "fHitParticleID", &fPtrParticleID);
     }
 
     /// \brief Rebuilds the fHits view to span the current size of fHitsData.
@@ -130,6 +141,7 @@ class TRestDetectorHitsEvent : public TRestEvent {
         auto* source = dynamic_cast<const TRestDetectorHitsEvent*>(other);
         if (source) {
             fHitsData = source->fHitsData;
+            fParticleIDs = source->fParticleIDs;
             RebuildHitsView();
         }
     }
@@ -139,15 +151,20 @@ class TRestDetectorHitsEvent : public TRestEvent {
     /// \param en Energy (keV).
     /// \param t Time (us).
     /// \param type Coordinates defined by the hit (XYZ by default).
-    void AddHit(double x, double y, double z, double en, double t = 0, REST_HitType type = REST_HitType::XYZ);
+    /// \param particleID Particle ID (PDG encoding) of the hit (0: unknown).
+    void AddHit(double x, double y, double z, double en, double t = 0, REST_HitType type = REST_HitType::XYZ,
+                int particleID = 0);
     /// \brief Appends a hit from a position vector (see the other overload).
-    void AddHit(const XYZVector& position, double energy, double time, REST_HitType type = REST_HitType::XYZ);
+    void AddHit(const XYZVector& position, double energy, double time, REST_HitType type = REST_HitType::XYZ,
+                int particleID = 0);
 
-    /// \brief Sorts the hits in place with a comparison of hit indices (TRestHits::Sort), e.g.
+    /// \brief Sorts the hits (and their particles) in place with a comparison of hit indices (default:
+    /// descending energy, as TRestHits::Sort), e.g.
     /// `event.Sort([&event](int a, int b) { return event.GetEnergy(a) > event.GetEnergy(b); });`
     /// \param compareCondition Strict ordering of two hit indices; nullptr uses the TRestHits default.
     void Sort(std::function<bool(int, int)> compareCondition = nullptr);
-    /// \brief Randomly permutes the hits in place with NLoop random swaps (TRestHits::Shuffle).
+    /// \brief Randomly permutes the hits (and their particles) in place with NLoop random swaps
+    /// (TRestHits::Shuffle).
     void Shuffle(int NLoop);
 
     /// \brief Number of hits of the event.
@@ -165,6 +182,8 @@ class TRestDetectorHitsEvent : public TRestEvent {
     inline double GetZ(int n) const { return fHits.GetZ(n); }
     /// \brief Type (defined coordinates) of hit n.
     inline REST_HitType GetType(int n) const { return fHits.GetType(n); }
+    /// \brief Particle ID (PDG encoding) of hit n (0: unknown).
+    inline int GetParticleID(int n) const { return fParticleIDs.at(n); }
     /// \brief Squared distance between hits n and m (TRestHits::GetDistance2).
     inline double GetDistance2(int n, int m) const { return fHits.GetDistance2(n, m); }
     /// \brief Energy of hit n (keV).
@@ -249,7 +268,7 @@ class TRestDetectorHitsEvent : public TRestEvent {
     /// \brief Copies the header and the hits, with the views over the storage of the copy (the implicit copy
     /// would leave them over the storage of `other`).
     TRestDetectorHitsEvent(const TRestDetectorHitsEvent& other)
-        : TRestEvent(other), fHitsData(other.fHitsData) {
+        : TRestEvent(other), fHitsData(other.fHitsData), fParticleIDs(other.fParticleIDs) {
         RebuildHitsView();
     }
     /// \brief Copies the header and the hits (see the copy constructor).
@@ -257,6 +276,7 @@ class TRestDetectorHitsEvent : public TRestEvent {
         if (this != &other) {
             TRestEvent::operator=(other);
             fHitsData = other.fHitsData;
+            fParticleIDs = other.fParticleIDs;
             RebuildHitsView();
         }
         return *this;

@@ -187,7 +187,8 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
             if (diffusedDistance < 0) electron -= diffusedDistance * normal;
             if (hasCathode && diffusedDistance > maxDistance)
                 electron -= (diffusedDistance - maxDistance) * normal;
-            outputEvent->AddHit(electron, electronEnergy, inputEvent->GetTime(n), inputEvent->GetType(n));
+            outputEvent->AddHit(electron, electronEnergy, inputEvent->GetTime(n), inputEvent->GetType(n),
+                                inputEvent->GetParticleID(n));
         }
     }
 

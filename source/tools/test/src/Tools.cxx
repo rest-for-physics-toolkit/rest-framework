@@ -1,8 +1,8 @@
 /// Unit tests of the generic functions of TRestTools (TRestTools.h): strings (Split, Trim, ReplaceAll,
 /// CountString, Format, NormalizeOption, ReplaceDelimited, ReplaceIdentifiers...), numbers, times, files
 /// and paths (GetFilesMatchingPattern, GetFullPath, SearchFileInPath, isRootFile...), the automatic run
-/// number and the geometries stored in ROOT files (WriteGeometry, ReadGeometryHash). The files are created
-/// in a work directory per test.
+/// number and the geometries stored in ROOT files (WriteGeometry, ReadGeometryHash), and the particle names
+/// and IDs of REST_Particles (TRestParticles.h). The files are created in a work directory per test.
 
 #include <TFile.h>
 #include <TGeoManager.h>
@@ -10,6 +10,7 @@
 #include <TGeoMedium.h>
 #include <TGeoVolume.h>
 #include <TNamed.h>
+#include <TRestParticles.h>
 #include <TRestTools.h>
 #include <gtest/gtest.h>
 
@@ -296,4 +297,34 @@ TEST(Tools, GeometryHash) {
         file.Close();
     }
     TRestTools::DeleteGeometry(geometry);
+}
+
+TEST(Tools, Particles) {
+    using namespace REST_Particles;
+    EXPECT_EQ(GetParticleID("e-"), 11);
+    EXPECT_EQ(GetParticleID("alpha"), 1000020040);
+    EXPECT_EQ(GetParticleID("Ar40"), 1000180400);
+    EXPECT_EQ(GetParticleID("Ar40[0.000]"), 1000180400);
+    EXPECT_EQ(GetParticleID("Ar40[1460.859]"), 1000180409);
+    EXPECT_EQ(GetParticleID("2212"), 2212);
+    EXPECT_EQ(GetParticleID("Xx40"), 0);
+    EXPECT_EQ(GetParticleID("unknown"), 0);
+
+    EXPECT_EQ(GetParticleName(-13), "mu+");
+    EXPECT_EQ(GetParticleName(1000822100), "Pb210");
+    EXPECT_EQ(GetParticleName(1000180409), "Ar40*");
+    EXPECT_EQ(GetParticleName(99999), "99999");
+    EXPECT_EQ(GetParticleName(0), "");
+
+    EXPECT_TRUE(IsIon(1000020040));
+    EXPECT_FALSE(IsIon(2212));
+    EXPECT_EQ(GetIonZ(1000180400), 18);
+    EXPECT_EQ(GetIonA(1000180400), 40);
+
+    EXPECT_TRUE(Matches(1000180409, "Ar40"));  // excited state of the nucleus
+    EXPECT_TRUE(Matches(1000060120, "ion"));
+    EXPECT_FALSE(Matches(11, "ion"));
+    EXPECT_TRUE(Matches(11, "e-"));
+    EXPECT_FALSE(Matches(-11, "e-"));
+    EXPECT_THROW(Matches(11, "unknown"), std::invalid_argument);
 }

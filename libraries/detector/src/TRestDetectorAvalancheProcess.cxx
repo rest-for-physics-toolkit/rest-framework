@@ -136,7 +136,7 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
         const double electrons = energy / wValue;
         std::gamma_distribution<double> gain(electrons * (fTheta + 1), fGain / (fTheta + 1));
         outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain(fEngine) / electrons,
-                            inputEvent->GetTime(n), inputEvent->GetType(n));
+                            inputEvent->GetTime(n), inputEvent->GetType(n), inputEvent->GetParticleID(n));
     }
 
     return outputEvent->GetNumberOfHits() > 0;

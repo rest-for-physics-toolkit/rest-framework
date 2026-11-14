@@ -27,6 +27,10 @@ links it. Its contents are free functions grouped in namespaces, plus the loggin
 - `REST_Units` and `TRestWithUnits` (TRestSystemOfUnits.h): the system of units (keV, us, mm, kg, V, T, bar,
   rad), parsing of values with units ("300 V", "1 kV/cm") and formatting with SI prefixes. A configuration
   field declared as `TRestWithUnits` accepts units in the YAML.
+- `REST_Particles` (TRestParticles.h): particle names (those of Geant4, fixed: e-, alpha, Ar40...) and IDs
+  (PDG encodings, as stored in the events), nuclei (Z, A) and the matching of a particle to a name of a
+  configuration (`ion`: any nucleus). Used by TRestGeant4PhysicsInfo for the particles not in a simulation
+  and by the scintillation profiles of the detector media.
 - `TRestGDMLParser` (TRestGDMLParser.h): GDML geometries with their entities expanded and the configuration
   parameters applied to their constants and entities; `--update-gdml` of restG4 writes the parameters
   back into the GDML files.

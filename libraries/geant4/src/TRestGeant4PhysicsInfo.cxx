@@ -5,6 +5,7 @@
 #include <shared_mutex>
 
 #include "TRestMetadata.h"
+#include "TRestParticles.h"
 
 using namespace std;
 
@@ -94,12 +95,15 @@ int TRestGeant4PhysicsInfo::GetProcessID(const std::string& processName) const {
 }
 
 std::string TRestGeant4PhysicsInfo::GetParticleName(int id) const {
-    return GetOrDefaultMapValueFromKey<int, std::string>(fParticleNamesMap, id);
+    const auto it = fParticleNamesMap.find(id);
+    return it != fParticleNamesMap.end() ? it->second : REST_Particles::GetParticleName(id);
 }
 
 int TRestGeant4PhysicsInfo::GetParticleID(const std::string& particleName) const {
-    auto id = GetOrDefaultMapValueFromKey<std::string, int>(fParticleNamesReverseMap, particleName);
-    return (id == 0 && fParticleNamesReverseMap.count(particleName) == 0) ? -1 : id;
+    const auto it = fParticleNamesReverseMap.find(particleName);
+    if (it != fParticleNamesReverseMap.end()) return it->second;
+    const int id = REST_Particles::GetParticleID(particleName);
+    return id != 0 ? id : -1;
 }
 
 std::string TRestGeant4PhysicsInfo::GetProcessType(const std::string& processName) const {

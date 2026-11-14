@@ -338,8 +338,10 @@ signals. Library: [detector](../libraries/detector/README.md).
 | `fHitTime` | `vector<float>` | Time (us). |
 | `fHitEnergy` | `vector<float>` | Energy (keV in simulations; the signal charge for hits reconstructed from data). |
 | `fHitType` | `vector<int>` | `REST_HitType` of each hit. |
+| `fHitParticleID` | `vector<int>` | Particle ID (PDG encoding) of the Geant4 track of each hit (`TRestGeant4ToDetectorHitsProcess`), kept by the hits processes; 0 if unknown (data). |
 
-In C++: `GetNumberOfHits()`, `GetX(n)`, `GetY(n)`, `GetZ(n)`, `GetTime(n)`, `GetEnergy(n)`, `GetType(n)`, and
+In C++: `GetNumberOfHits()`, `GetX(n)`, `GetY(n)`, `GetZ(n)`, `GetTime(n)`, `GetEnergy(n)`, `GetType(n)`,
+`GetParticleID(n)`, and
 `GetHits()`, a `TRestHits` view with the analysis methods (mean position, sigmas, skewness...).
 
 ### 3.6 `TRestTrackEvent`
@@ -918,7 +920,9 @@ The [detector library](../libraries/detector/README.md) describes the detector:
 - **Media** (`TRestDetectorMedium`): a material at its `pressure` and `temperature`, with a `charge` response
   (`wValue`, `fanoFactor`, `driftField`, fixed transport parameters or the transport and gain tables of its
   `mediumFile`, computed by restGarfield) and a `light` response (`lightYield`, `attenuationLength`,
-  `effectiveLightSpeed`). The light is simulated in three processes: `TRestDetectorScintillationProcess`
+  `effectiveLightSpeed`, and `scintillation`: time profiles of the emission per particle, each a list of
+  `components` with `fraction`, `riseTime` and `decayTime`, the one without `particles` the default; the
+  particle of each hit is its `fHitParticleID`). The light is simulated in three processes: `TRestDetectorScintillationProcess`
   (photons produced) and `TRestDetectorLightCollectionProcess` (photons reaching each channel and their
   photoelectrons with the quantum efficiency: `localCapture` for opaque scintillators such as LiquidO,
   `attenuation` for transparent ones read at an end such as the vetoes).

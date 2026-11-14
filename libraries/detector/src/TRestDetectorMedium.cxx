@@ -8,6 +8,7 @@
 #include "TFile.h"
 #include "TRandom.h"
 #include "TRestDetectorTransportManager.h"
+#include "TRestParticles.h"
 #include "TRestTools.h"
 #include "TRestYAMLUtils.h"
 
@@ -169,6 +170,98 @@ YAML::Node TRestDetectorMedium::GetFileMetadata(TFile* file, const std::string& 
 }
 
 // ============================================================
+// TRestDetectorScintillationComponent, TRestDetectorScintillationProfile
+// ============================================================
+
+static const bool TRestDetectorScintillationProfile_FieldsRegistered = []() {
+    auto& reg = TRestMetadataFieldRegistry::Instance();
+    using C = TRestDetectorScintillationComponent;
+    reg.RegisterField<C>("fraction", &C::fFraction);
+    reg.RegisterField<C>("riseTime", &C::fRiseTime);
+    reg.RegisterField<C>("decayTime", &C::fDecayTime);
+    using P = TRestDetectorScintillationProfile;
+    reg.RegisterField<P>("particles", &P::fParticles);
+    reg.RegisterField<P>("components", &P::fComponents);
+    return true;
+}();
+
+TRestDetectorScintillationComponent::TRestDetectorScintillationComponent() : TRestMetadata() {
+    fName = "TRestDetectorScintillationComponent";
+}
+
+TRestDetectorScintillationComponent::TRestDetectorScintillationComponent(const std::string& instanceName,
+                                                                         const YAML::Node& node)
+    : TRestMetadata(instanceName, node) {
+    LoadConfig();
+}
+
+void TRestDetectorScintillationComponent::LoadConfig() {
+    UpdateParamsFromYAML<TRestDetectorScintillationComponent>(fNode);
+    if (fFraction <= 0 || fFraction > 1) {
+        throw std::runtime_error("TRestDetectorScintillationComponent: fraction must be in (0, 1]");
+    }
+    if (fRiseTime < 0 || fDecayTime < 0) {
+        throw std::runtime_error("TRestDetectorScintillationComponent: riseTime and decayTime must be >= 0");
+    }
+    UpdateYAMLFromParams<TRestDetectorScintillationComponent>(fNode);
+}
+
+TRestDetectorScintillationProfile::TRestDetectorScintillationProfile() : TRestMetadata() {
+    fName = "TRestDetectorScintillationProfile";
+}
+
+TRestDetectorScintillationProfile::TRestDetectorScintillationProfile(const std::string& instanceName,
+                                                                     const YAML::Node& node)
+    : TRestMetadata(instanceName, node) {
+    LoadConfig();
+}
+
+void TRestDetectorScintillationProfile::LoadConfig() {
+    UpdateParamsFromYAML<TRestDetectorScintillationProfile>(fNode);
+    if (fComponents.empty()) {
+        throw std::runtime_error("TRestDetectorScintillationProfile: a profile needs components");
+    }
+    double total = 0;
+    for (const auto& component : fComponents) total += component.fFraction;
+    if (std::abs(total - 1) > 1e-6) {
+        throw std::runtime_error(
+            "TRestDetectorScintillationProfile: the fractions of the components add up "
+            "to " +
+            std::to_string(total) + ", not 1");
+    }
+    for (const auto& particle : fParticles) {
+        if (particle != "ion" && REST_Particles::GetParticleID(particle) == 0) {
+            throw std::runtime_error("TRestDetectorScintillationProfile: unknown particle '" + particle +
+                                     "'");
+        }
+    }
+    UpdateYAMLFromParams<TRestDetectorScintillationProfile>(fNode);
+}
+
+bool TRestDetectorScintillationProfile::AppliesTo(int particleID) const {
+    for (const auto& particle : fParticles) {
+        if (REST_Particles::Matches(particleID, particle)) return true;
+    }
+    return false;
+}
+
+double TRestDetectorScintillationProfile::SampleTime(TRandom& random) const {
+    const TRestDetectorScintillationComponent* component = &fComponents.back();
+    double u = random.Uniform();
+    for (const auto& c : fComponents) {
+        if (u < c.fFraction) {
+            component = &c;
+            break;
+        }
+        u -= c.fFraction;
+    }
+    double time = 0;
+    if (component->fDecayTime > 0) time += random.Exp(component->fDecayTime);
+    if (component->fRiseTime > 0) time += random.Exp(component->fRiseTime);
+    return time;
+}
+
+// ============================================================
 // TRestDetectorLightResponse
 // ============================================================
 
@@ -178,6 +271,7 @@ static const bool TRestDetectorLightResponse_FieldsRegistered = []() {
     reg.RegisterField<L>("lightYield", &L::fLightYield);
     reg.RegisterField<L>("attenuationLength", &L::fAttenuationLength);
     reg.RegisterField<L>("effectiveLightSpeed", &L::fEffectiveLightSpeed);
+    reg.RegisterField<L>("scintillation", &L::fScintillation);
     return true;
 }();
 
@@ -197,7 +291,31 @@ void TRestDetectorLightResponse::LoadConfig() {
         throw std::runtime_error(
             "TRestDetectorLightResponse: lightYield, attenuationLength and effectiveLightSpeed must be >= 0");
     }
+    int defaults = 0;
+    for (const auto& profile : fScintillation) defaults += profile.IsDefault() ? 1 : 0;
+    if (defaults > 1) {
+        throw std::runtime_error(
+            "TRestDetectorLightResponse: more than one scintillation profile without particles (default)");
+    }
     UpdateYAMLFromParams<TRestDetectorLightResponse>(fNode);
+}
+
+const TRestDetectorScintillationProfile* TRestDetectorLightResponse::GetScintillationProfile(
+    int particleID) const {
+    const TRestDetectorScintillationProfile* fallback = nullptr;
+    for (const auto& profile : fScintillation) {
+        if (profile.IsDefault()) {
+            fallback = &profile;
+        } else if (profile.AppliesTo(particleID)) {
+            return &profile;
+        }
+    }
+    return fallback;
+}
+
+double TRestDetectorLightResponse::GetScintillationTime(int particleID, TRandom& random) const {
+    const auto* profile = GetScintillationProfile(particleID);
+    return profile ? profile->SampleTime(random) : 0;
 }
 
 // ============================================================

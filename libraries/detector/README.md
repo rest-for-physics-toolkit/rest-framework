@@ -18,7 +18,7 @@ library](../connectors/README.md).
 
 | Class | Description |
 | --- | --- |
-| `TRestDetectorHitsEvent` | Event with a flat list of hits: position, energy, time and type (the coordinates each hit defines: XYZ, XZ, YZ...), with the hit analysis of `TRestHits` (branches `fHitX`, `fHitY`, `fHitZ`, `fHitTime`, `fHitEnergy`, `fHitType`). |
+| `TRestDetectorHitsEvent` | Event with a flat list of hits: position, energy, time and type (the coordinates each hit defines: XYZ, XZ, YZ...), with the hit analysis of `TRestHits` (branches `fHitX`, `fHitY`, `fHitZ`, `fHitTime`, `fHitEnergy`, `fHitType`, `fHitParticleID`: PDG code of the Geant4 track, 0 if unknown). |
 | `TRestDetectorSignalEvent` | Event with the signals of the readout channels: (time, amplitude) points in double precision, identified by the DAQ channel (branches `fSigTime`, `fSigAmplitude`, `fSigIDs`, `fSigOffsets`). |
 | `TRestDetectorSignal` | Lightweight view of one signal of a `TRestDetectorSignalEvent` (points, graph, sort, addition, scaling). |
 | `TRestDetectorSignalData` | Contiguous storage of the points, IDs and offsets shared by the signal views. |

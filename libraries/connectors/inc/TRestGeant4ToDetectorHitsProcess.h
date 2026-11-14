@@ -36,7 +36,8 @@ class TRestGeant4ToDetectorHitsProcess : public TRestEventProcess {
     /// \brief Finds the IDs of the selected volumes in the TRestGeant4Metadata of the run (throws if there is
     /// none or no volume matches).
     void InitProcess() override;
-    /// \brief Transfers the hits with positive energy of the selected volumes as XYZ hits.
+    /// \brief Transfers the hits with positive energy of the selected volumes as XYZ hits, with the particle
+    /// of their track.
     /// \return False if no hit is transferred.
     bool ProcessEvent(const TRestEvent& input, TRestEvent& output) override;
     void EndProcess() override {}

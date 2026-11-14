@@ -47,9 +47,11 @@ class TRestGeant4PhysicsInfo {
     std::set<std::string> GetAllProcesses() const;
 
     // --- Particle Mapping Definitions ---
-    /// \brief Returns particle name associated with a particle id ("" if not found).
+    /// \brief Returns the particle name of a particle id: the one of the simulation, otherwise
+    /// REST_Particles::GetParticleName (the number itself if unknown, "" for 0).
     std::string GetParticleName(int id) const;
-    /// \brief Returns particle id associated with a particle name (-1 if not found).
+    /// \brief Returns the particle id of a particle name: the one of the simulation, otherwise
+    /// REST_Particles::GetParticleID (-1 if not known).
     int GetParticleID(const std::string& particleName) const;
     /// \brief Registers one particle id/name pair (nothing if the ID exists).
     void InsertParticleName(int id, const std::string& particleName);

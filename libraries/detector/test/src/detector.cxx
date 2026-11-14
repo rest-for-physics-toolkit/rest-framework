@@ -176,9 +176,11 @@ TEST(DetectorHitsEvent, AddHitsAndObservables) {
     event.SetID(3);
     event.AddHit(1, 2, 3, 4, 0.5);
     event.AddHit(XYZVector(3, 2, 7), 4, 1.5);
-    event.AddHit(5, kNaN, 10, 2, 0, HitType::XZ);
+    event.AddHit(5, kNaN, 10, 2, 0, HitType::XZ, 1000020040);  // alpha
 
     ASSERT_EQ(event.GetNumberOfHits(), 3u);
+    EXPECT_EQ(event.GetParticleID(0), 0);  // unknown by default
+    EXPECT_EQ(event.GetParticleID(2), 1000020040);
     EXPECT_DOUBLE_EQ(event.GetX(1), 3);
     EXPECT_DOUBLE_EQ(event.GetTime(1), 1.5);
     EXPECT_EQ(event.GetType(0), HitType::XYZ);
@@ -200,6 +202,7 @@ TEST(DetectorHitsEvent, AddHitsAndObservables) {
     EXPECT_EQ(copy.GetID(), 3);
     ASSERT_EQ(copy.GetNumberOfHits(), 3u);
     EXPECT_DOUBLE_EQ(copy.GetZ(2), 10);
+    EXPECT_EQ(copy.GetParticleID(2), 1000020040);
 
     event.Initialize();
     EXPECT_EQ(event.GetNumberOfHits(), 0u);
@@ -209,17 +212,20 @@ TEST(DetectorHitsEvent, AddHitsAndObservables) {
 
 TEST(DetectorHitsEvent, SortAndEventSeed) {
     TRestDetectorHitsEvent event;
-    event.AddHit(0, 0, 0, 1);
-    event.AddHit(0, 0, 1, 3);
-    event.AddHit(0, 0, 2, 2);
-    event.Sort();  // descending energy by default
+    event.AddHit(0, 0, 0, 1, 0, HitType::XYZ, 11);
+    event.AddHit(0, 0, 1, 3, 0, HitType::XYZ, 13);
+    event.AddHit(0, 0, 2, 2, 0, HitType::XYZ, 2212);
+    event.Sort();  // descending energy by default, the particles with their hits
     EXPECT_DOUBLE_EQ(event.GetEnergy(0), 3);
     EXPECT_DOUBLE_EQ(event.GetEnergy(2), 1);
+    EXPECT_EQ(event.GetParticleID(0), 13);
+    EXPECT_EQ(event.GetParticleID(2), 11);
     EXPECT_TRUE(event.GetHits()->isSortedByEnergy());
 
     event.Sort([&event](int a, int b) { return event.GetZ(a) < event.GetZ(b); });
     EXPECT_DOUBLE_EQ(event.GetZ(0), 0);
     EXPECT_DOUBLE_EQ(event.GetZ(2), 2);
+    EXPECT_EQ(event.GetParticleID(2), 2212);
 
     // The seed of an event: deterministic, never 0, different for other events
     TRestDetectorHitsEvent other;
@@ -533,6 +539,50 @@ TEST(DetectorMedium, FixedChargeResponse) {
     const auto& light = medium.GetLightResponse("test");
     EXPECT_DOUBLE_EQ(light.GetAttenuationLength(), 3000);
     EXPECT_DOUBLE_EQ(light.GetEffectiveLightSpeed(), 150);
+    // Without scintillation profiles the photons are emitted at once
+    TRandom3 random(3);
+    EXPECT_EQ(light.GetScintillationProfile(11), nullptr);
+    EXPECT_DOUBLE_EQ(light.GetScintillationTime(11, random), 0);
+
+    // Scintillation profiles per particle: default (fast) and nuclei (slow, no rise time)
+    const TRestDetectorLightResponse scintillator(
+        "light", YAML::Load("{lightYield: 10, scintillation: ["
+                            "{components: [{fraction: 1, riseTime: 1 ns, decayTime: 2 ns}]},"
+                            "{particles: [alpha, ion], components: [{fraction: 0.5, decayTime: 10 ns},"
+                            "{fraction: 0.5, decayTime: 100 ns}]}]}"));
+    const auto* fast = scintillator.GetScintillationProfile(11);
+    const auto* slow = scintillator.GetScintillationProfile(1000180400);  // Ar40 recoil
+    ASSERT_NE(fast, nullptr);
+    ASSERT_NE(slow, nullptr);
+    EXPECT_TRUE(fast->IsDefault());
+    EXPECT_FALSE(slow->IsDefault());
+    EXPECT_EQ(scintillator.GetScintillationProfile(0), fast);           // unknown particle (data)
+    EXPECT_EQ(scintillator.GetScintillationProfile(1000020040), slow);  // alpha
+    // Mean emission time: decay + rise (us)
+    const int n = 20000;
+    double fastMean = 0, slowMean = 0;
+    for (int i = 0; i < n; i++) {
+        const double t = scintillator.GetScintillationTime(13, random);
+        ASSERT_GE(t, 0);
+        fastMean += t / n;
+        slowMean += scintillator.GetScintillationTime(1000020040, random) / n;
+    }
+    EXPECT_NEAR(fastMean, 0.003, 0.0002);
+    EXPECT_NEAR(slowMean, 0.055, 0.003);
+    // Errors: fractions not adding up to 1, unknown particle, two defaults, negative time
+    EXPECT_THROW(TRestDetectorLightResponse(
+                     "l", YAML::Load("{scintillation: [{components: [{fraction: 0.5, decayTime: 2 ns}]}]}")),
+                 std::runtime_error);
+    EXPECT_THROW(TRestDetectorLightResponse("l", YAML::Load("{scintillation: [{particles: [electron], "
+                                                            "components: [{decayTime: 2 ns}]}]}")),
+                 std::runtime_error);
+    EXPECT_THROW(TRestDetectorLightResponse("l", YAML::Load("{scintillation: ["
+                                                            "{components: [{decayTime: 2 ns}]},"
+                                                            "{components: [{decayTime: 3 ns}]}]}")),
+                 std::runtime_error);
+    EXPECT_THROW(
+        TRestDetectorLightResponse("l", YAML::Load("{scintillation: [{components: [{decayTime: -2 ns}]}]}")),
+        std::runtime_error);
 
     // Without name, the name of the instance (as any metadata)
     EXPECT_EQ(TRestDetectorMedium("m", YAML::Load("{charge: {wValue: 26 eV}}")).GetName(), "m");

@@ -12,23 +12,34 @@ const bool kRegistered = []() {
 }();
 }  // namespace
 
-void TRestDetectorHitsEvent::AddHit(double x, double y, double z, double en, double t, REST_HitType type) {
+void TRestDetectorHitsEvent::AddHit(double x, double y, double z, double en, double t, REST_HitType type,
+                                    int particleID) {
     fHitsData.push_back(x, y, z, t, en, (int)type);
+    fParticleIDs.push_back(particleID);
     RebuildHitsView();
 }
 
-void TRestDetectorHitsEvent::AddHit(const XYZVector& position, double energy, double time,
-                                    REST_HitType type) {
-    AddHit(position.X(), position.Y(), position.Z(), energy, time, type);
+void TRestDetectorHitsEvent::AddHit(const XYZVector& position, double energy, double time, REST_HitType type,
+                                    int particleID) {
+    AddHit(position.X(), position.Y(), position.Z(), energy, time, type, particleID);
 }
 
 void TRestDetectorHitsEvent::Sort(std::function<bool(int, int)> compareCondition) {
-    fHits.Sort(compareCondition);
+    const int n = static_cast<int>(GetNumberOfHits());
+    if (n < 2) return;
+    const auto order = TRestHitsUtils::BuildSortOrder(
+        n, compareCondition, [this](int a, int b) { return GetEnergy(a) > GetEnergy(b); });
+    TRestHitsUtils::ApplyPermutation(order, 0, fHitsData.x, fHitsData.y, fHitsData.z, fHitsData.time,
+                                     fHitsData.energy, fHitsData.type, fParticleIDs);
     RebuildHitsView();
 }
 
 void TRestDetectorHitsEvent::Shuffle(int NLoop) {
-    fHits.Shuffle(NLoop);
+    const int n = static_cast<int>(GetNumberOfHits());
+    if (n < 2) return;
+    const auto order = TRestHitsUtils::BuildShuffleOrder(n, NLoop);
+    TRestHitsUtils::ApplyPermutation(order, 0, fHitsData.x, fHitsData.y, fHitsData.z, fHitsData.time,
+                                     fHitsData.energy, fHitsData.type, fParticleIDs);
     RebuildHitsView();
 }
 

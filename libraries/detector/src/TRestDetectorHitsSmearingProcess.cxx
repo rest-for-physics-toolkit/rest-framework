@@ -143,7 +143,7 @@ bool TRestDetectorHitsSmearingProcess::ProcessEvent(const TRestEvent& input, TRe
 
     for (size_t n = 0; n < inputEvent->GetNumberOfHits(); n++) {
         outputEvent->AddHit(inputEvent->GetPosition(n), inputEvent->GetEnergy(n) * gain,
-                            inputEvent->GetTime(n), inputEvent->GetType(n));
+                            inputEvent->GetTime(n), inputEvent->GetType(n), inputEvent->GetParticleID(n));
     }
 
     return outputEvent->GetNumberOfHits() > 0;

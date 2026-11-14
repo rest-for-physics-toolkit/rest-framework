@@ -15,6 +15,7 @@
 
 #include "TRestGeant4Metadata.h"
 #include "TRestGeant4Track.h"
+#include "TRestParticles.h"
 #include "TRestRun.h"
 #include "TRestTools.h"
 
@@ -476,7 +477,8 @@ double TRestGeant4Event::GetEnergyInVolume(const std::string& volumeName) const 
 
 std::string TRestGeant4Event::GetParticleName(int particleID) const {
     const auto* metadata = GetGeant4Metadata();
-    return metadata ? metadata->GetGeant4PhysicsInfo().GetParticleName(particleID) : "";
+    return metadata ? metadata->GetGeant4PhysicsInfo().GetParticleName(particleID)
+                    : REST_Particles::GetParticleName(particleID);
 }
 
 std::string TRestGeant4Event::GetProcessName(int processID) const {

@@ -210,7 +210,7 @@ int TRestDetectorLightCollectionProcess::Detect(int photons) {
 }
 
 void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& position, int photons, double time,
-                                                         TRestDetectorHitsEvent& output) {
+                                                         int particleID, TRestDetectorHitsEvent& output) {
     const auto channels = fReadout->GetChannelsInRange(position, fMaxDistance);
     // Multinomial: each channel takes a binomial of the photons left, with its probability relative to
     // what is left of the total
@@ -238,14 +238,15 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
         left -= captured;
         const int photoelectrons = Detect(captured);
         if (photoelectrons <= 0) continue;
-        output.AddHit(channel.position, photoelectrons, time);
+        output.AddHit(channel.position, photoelectrons, time, TRestDetectorHitsEvent::REST_HitType::XYZ,
+                      particleID);
         fNPhotoelectrons += photoelectrons;
     }
     if (!collected) fNHitsWithoutChannel++;
 }
 
 void TRestDetectorLightCollectionProcess::Attenuate(const XYZVector& position, int photons, double time,
-                                                    TRestDetectorHitsEvent& output) {
+                                                    int particleID, TRestDetectorHitsEvent& output) {
     const int channel = fReadout->GetChannelFromPosition(position.X(), position.Y(), position.Z());
     if (channel < 0) {
         fNHitsWithoutChannel++;
@@ -265,7 +266,8 @@ void TRestDetectorLightCollectionProcess::Attenuate(const XYZVector& position, i
             : photons;
     const int photoelectrons = Detect(arriving);
     if (photoelectrons <= 0) return;
-    output.AddHit(position, photoelectrons, lightSpeed > 0 ? time + distance / lightSpeed : time);
+    output.AddHit(position, photoelectrons, lightSpeed > 0 ? time + distance / lightSpeed : time,
+                  TRestDetectorHitsEvent::REST_HitType::XYZ, particleID);
     fNPhotoelectrons += photoelectrons;
 }
 
@@ -287,9 +289,11 @@ bool TRestDetectorLightCollectionProcess::ProcessEvent(const TRestEvent& input, 
         const int photons = static_cast<int>(std::lround(inputEvent->GetEnergy(n)));
         if (photons <= 0) continue;
         if (fModel == "localCapture") {
-            CaptureLocally(inputEvent->GetPosition(n), photons, inputEvent->GetTime(n), *outputEvent);
+            CaptureLocally(inputEvent->GetPosition(n), photons, inputEvent->GetTime(n),
+                           inputEvent->GetParticleID(n), *outputEvent);
         } else {
-            Attenuate(inputEvent->GetPosition(n), photons, inputEvent->GetTime(n), *outputEvent);
+            Attenuate(inputEvent->GetPosition(n), photons, inputEvent->GetTime(n),
+                      inputEvent->GetParticleID(n), *outputEvent);
         }
     }
 

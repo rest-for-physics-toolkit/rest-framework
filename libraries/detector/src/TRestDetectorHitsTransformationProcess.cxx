@@ -132,7 +132,8 @@ bool TRestDetectorHitsTransformationProcess::ProcessEvent(const TRestEvent& inpu
             position += translation;
         }
 
-        outputEvent->AddHit(position, inputEvent->GetEnergy(n) * fEnergyFactor, inputEvent->GetTime(n), type);
+        outputEvent->AddHit(position, inputEvent->GetEnergy(n) * fEnergyFactor, inputEvent->GetTime(n), type,
+                            inputEvent->GetParticleID(n));
     }
 
     return true;

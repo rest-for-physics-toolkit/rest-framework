@@ -179,8 +179,8 @@ TEST(Geant4Event, TracksHitsAndEnergies) {
     EXPECT_NEAR(event.GetEnergyInVolume(kGas), 15, 1e-6);
     EXPECT_NEAR(event.GetEnergyInVolume(kScint), 67, 1e-6);
     EXPECT_DOUBLE_EQ(event.GetEnergyInVolume(99), 0);
-    // Without metadata there are no names
-    EXPECT_EQ(event.GetParticleName(kNeutron), "");
+    // Without metadata the names are those of REST_Particles
+    EXPECT_EQ(event.GetParticleName(kNeutron), "neutron");
     EXPECT_DOUBLE_EQ(event.GetEnergyInVolume("gas"), 0);
 
     const auto electron = event.GetTrackByID(3);
@@ -334,6 +334,10 @@ TEST(Geant4Metadata, FromYAML) {
     const auto& physics = metadata.GetGeant4PhysicsInfo();
     EXPECT_EQ(physics.GetParticleName(2112), "neutron");
     EXPECT_EQ(physics.GetParticleID("e-"), 11);
+    // Particles not in the simulation: REST_Particles
+    EXPECT_EQ(physics.GetParticleName(1000020040), "alpha");
+    EXPECT_EQ(physics.GetParticleID("Ar40"), 1000180400);
+    EXPECT_EQ(physics.GetParticleID("unknown"), -1);
     EXPECT_EQ(physics.GetProcessID("hadElastic"), 4111);
     EXPECT_EQ(physics.GetProcessID("Init"), 0);
     EXPECT_EQ(physics.GetProcessID("unknown"), -1);

@@ -145,6 +145,70 @@ class TRestDetectorChargeResponse : public TRestMetadata {
                                 TRandom& random);
 };
 
+/// \class TRestDetectorScintillationComponent
+/// \brief One component of a scintillation time profile (TRestDetectorScintillationProfile): the fraction of
+/// the photons emitted with it, and its rise and decay times. The emission time of a photon of the
+/// component is Exp(decayTime) + Exp(riseTime), whose distribution is the usual pulse
+/// (exp(-t / decayTime) - exp(-t / riseTime)) / (decayTime - riseTime) (exp(-t / decayTime) / decayTime
+/// without rise time).
+///
+/// Parameters: fraction (1), riseTime (0), decayTime (0: emitted at once).
+class TRestDetectorScintillationComponent : public TRestMetadata {
+   public:
+    /// `fraction`: fraction of the photons of the profile emitted with this component, in (0, 1]
+    double fFraction = 1;
+    /// `riseTime`: rise time (0: none)
+    TRestWithUnits fRiseTime = 0;  // us
+    /// `decayTime`: decay time (0: no delay)
+    TRestWithUnits fDecayTime = 0;  // us
+
+    /// \brief Builds a component emitting all the photons at once.
+    TRestDetectorScintillationComponent();
+    /// \brief Builds the component from one entry of `components` (LoadConfig).
+    TRestDetectorScintillationComponent(const std::string& instanceName, const YAML::Node& node);
+
+    /// \brief Returns the class name, "TRestDetectorScintillationComponent".
+    std::string GetClassName() const override { return "TRestDetectorScintillationComponent"; }
+    /// \brief Reads the parameters; throws if the fraction is not in (0, 1] or a time is negative.
+    void LoadConfig() override;
+    /// \brief Nothing to initialise.
+    void Initialize() override {}
+};
+
+/// \class TRestDetectorScintillationProfile
+/// \brief Time profile of the scintillation of some particles: its components
+/// (TRestDetectorScintillationComponent, fractions adding up to 1) and the particles it applies to
+/// (REST_Particles names: e-, alpha, Ar40..., or "ion" for any nucleus; none: the default profile, for the
+/// other particles and the hits without particle, e.g. data). One entry of the `scintillation` list of a
+/// TRestDetectorLightResponse.
+class TRestDetectorScintillationProfile : public TRestMetadata {
+   public:
+    /// `particles`: names of the particles of the profile (empty: default profile)
+    std::vector<std::string> fParticles;
+    /// `components`: the components of the profile
+    std::vector<TRestDetectorScintillationComponent> fComponents;
+
+    /// \brief Builds an empty profile.
+    TRestDetectorScintillationProfile();
+    /// \brief Builds the profile from one entry of `scintillation` (LoadConfig).
+    TRestDetectorScintillationProfile(const std::string& instanceName, const YAML::Node& node);
+
+    /// \brief Returns the class name, "TRestDetectorScintillationProfile".
+    std::string GetClassName() const override { return "TRestDetectorScintillationProfile"; }
+    /// \brief Reads the parameters; throws if there are no components, their fractions do not add up to 1 or
+    /// a particle is not known.
+    void LoadConfig() override;
+    /// \brief Nothing to initialise.
+    void Initialize() override {}
+
+    /// \brief Whether it is the default profile (no particles).
+    inline bool IsDefault() const { return fParticles.empty(); }
+    /// \brief Whether the profile applies to a particle (Particle ID, PDG encoding; REST_Particles::Matches).
+    bool AppliesTo(int particleID) const;
+    /// \brief Samples the emission time of a photon (us): a component by its fraction, then its time.
+    double SampleTime(TRandom& random) const;
+};
+
 /// \class TRestDetectorLightResponse
 /// \brief Light response of a scintillating medium: the light produced by the energy deposits (used by
 /// TRestDetectorScintillationProcess) and its propagation to the photocathode in a transparent scintillator
@@ -159,11 +223,23 @@ class TRestDetectorChargeResponse : public TRestMetadata {
 ///   the distance to the readout of the channel (TRestDetectorReadout::GetDistanceToReadout).
 /// - effectiveLightSpeed: the signal is delayed by d / effectiveLightSpeed (effective speed along the
 ///   scintillator, with its reflections).
+/// - scintillation: time profiles of the emission of the photons (TRestDetectorScintillationProfile), per
+///   particle (Particle ID of the hits, TRestDetectorHitsEvent::GetParticleID), e.g. for pulse shape
+///   discrimination; at most one without particles (the default). A particle without profile (and without
+///   default) is emitted at once.
 ///
 ///      light:
 ///        lightYield: 10
 ///        attenuationLength: 3 m
 ///        effectiveLightSpeed: 150 mm/ns
+///        scintillation:
+///          - components:                        # default
+///              - {fraction: 0.8, riseTime: 0.9 ns, decayTime: 2.1 ns}
+///              - {fraction: 0.2, decayTime: 20 ns}
+///          - particles: ["alpha", "proton", "ion"]
+///            components:
+///              - {fraction: 0.5, decayTime: 2.1 ns}
+///              - {fraction: 0.5, decayTime: 60 ns}
 class TRestDetectorLightResponse : public TRestMetadata {
    public:
     /// `lightYield`: scintillation photons per keV (0: not given)
@@ -172,6 +248,8 @@ class TRestDetectorLightResponse : public TRestMetadata {
     TRestWithUnits fAttenuationLength = 0;  // mm
     /// `effectiveLightSpeed`: effective speed of the light to the readout (0: no delay)
     TRestWithUnits fEffectiveLightSpeed = 0;  // mm/us
+    /// `scintillation`: time profiles of the scintillation (empty: photons emitted at once)
+    std::vector<TRestDetectorScintillationProfile> fScintillation;
 
     /// \brief Builds an empty light response.
     TRestDetectorLightResponse();
@@ -180,7 +258,8 @@ class TRestDetectorLightResponse : public TRestMetadata {
 
     /// \brief Returns the class name, "TRestDetectorLightResponse".
     std::string GetClassName() const override { return "TRestDetectorLightResponse"; }
-    /// \brief Reads the parameters; throws if one of them is negative.
+    /// \brief Reads the parameters; throws if one of them is negative or there is more than one default
+    /// scintillation profile.
     void LoadConfig() override;
     /// \brief Nothing to initialise.
     void Initialize() override {}
@@ -191,6 +270,11 @@ class TRestDetectorLightResponse : public TRestMetadata {
     inline double GetAttenuationLength() const { return fAttenuationLength; }
     /// \brief Effective light speed (mm/us).
     inline double GetEffectiveLightSpeed() const { return fEffectiveLightSpeed; }
+    /// \brief Scintillation profile of a particle (Particle ID): the first one applying to it, otherwise the
+    /// default one; nullptr if none.
+    const TRestDetectorScintillationProfile* GetScintillationProfile(int particleID) const;
+    /// \brief Samples the emission time (us) of a photon of a particle with its profile; 0 without profile.
+    double GetScintillationTime(int particleID, TRandom& random) const;
 };
 
 /// \class TRestDetectorMedium
