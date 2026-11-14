@@ -161,6 +161,20 @@ TEST(restG4Examples, NLDBD) {
     });
     EXPECT_GT(sensitiveEnergy, 1800);
     EXPECT_LT(sensitiveEnergy, 2460);
+
+    // The run goes from the generation of the first event to that of the last one; the event times (unix
+    // time with nanoseconds) are taken when the event is stored, after its generation
+    const double start = simulation.run.GetStartTime();
+    const double end = simulation.run.GetEndTime();
+    EXPECT_GT(start, 1.7e9);
+    EXPECT_GE(end, start);
+    bool nanoseconds = false;
+    simulation.ForEachEvent([&](const TRestGeant4Event& event) {
+        EXPECT_GE(event.GetTime(), start);
+        EXPECT_LT(event.GetTime(), end + 60);
+        if (event.GetTime() != std::floor(event.GetTime())) nanoseconds = true;
+    });
+    EXPECT_TRUE(nanoseconds);
 }
 
 // --- 02.TREXDM: full chain decays from the readout surface, and its analysis ---
@@ -170,6 +184,9 @@ TEST(restG4Examples, TREXDM) {
     Simulation simulation(Path("02.TREXDM", "TREXDM.root"));
     EXPECT_EQ(simulation.run.GetRunTag(), "Rn222_readout_surface_1um");
     EXPECT_GT(simulation.run.GetEntries(), 0);
+
+    // A source particle unknown to Geant4 (mass number before the element) stops restG4 before simulating
+    EXPECT_FALSE(RestG4("02.TREXDM", "FullChainFromReadout.yaml", "-n 20 --set isotope=222Rn -o Wrong.root"));
 }
 
 // --- 03.Fluorescence: copper fluorescences (8.05 keV) of 30 keV gammas ---
