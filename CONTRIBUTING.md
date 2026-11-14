@@ -21,8 +21,8 @@
   tools, core, analysis, raw, detector, track, geant4, connectors, restG4) or `make check` (build and run
   all). New features need unit tests in the `test/` directory of their component (see below).
 - Documentation: Doxygen in the `.cxx` of each class (keys, results, example), the README of the
-  component, the user guide (doc/UserGuide.md) for the formats and keys, and MIGRATION_GUIDE.md /
-  MIGRATION_STATUS.md for what comes from legacy.
+  component, the user guide (doc/UserGuide.md) for the formats and keys, and MIGRATION_GUIDE.md for what
+  comes from legacy.
 
 ## Tests
 

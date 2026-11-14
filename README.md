@@ -167,8 +167,6 @@ changes through pull requests) and the continuous integration.
 - The README of each component (table above) and the class documentation (Doxygen, target `doc`).
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md): moving from REST v2.x (legacy): configurations, equivalent
   classes, and how to port a legacy class to rest-for-physics-toolkit.
-- [MIGRATION_STATUS.md](MIGRATION_STATUS.md): status of the migration of the legacy classes, pending work and
-  decision log.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, tests and continuous integration.
 
 ## Origin, authors and license

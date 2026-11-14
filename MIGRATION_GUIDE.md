@@ -9,8 +9,8 @@ This guide is for two audiences:
 It only describes what changes with respect to legacy. The general usage of restv2 (installation, formats
 of events and files, YAML configuration, datasets) is in the [user guide](doc/UserGuide.md); each component
 documents its classes in its README (`source/*/README.md`, `libraries/*/README.md`, `packages/*/README.md`)
-and each class in the Doxygen comment of its `.cxx`. The migration status of every legacy class, with the
-decisions taken, is tracked in [MIGRATION_STATUS.md](MIGRATION_STATUS.md) (in Spanish).
+and each class in the Doxygen comment of its `.cxx`. What became of every legacy class (migrated, replaced
+or not migrated) is in [section 3](#3-class-equivalences).
 
 ## Contents
 
@@ -417,7 +417,7 @@ Old FEMDAQ files are still converted by `TRestRawFemDAQToSignalProcess`.
 
 ## 3. Class equivalences
 
-Status from [MIGRATION_STATUS.md](MIGRATION_STATUS.md). "Same name" means ported to the restv2 API,
+"Same name" means ported to the restv2 API,
 usually with changes documented in its `.cxx`; "not migrated" means a decision not to migrate (unless
 noted). The `axion`, `wimp` and `model` libraries, `masks` and the legacy packages restSQL and restP3DB
 are not migrated.
@@ -895,7 +895,7 @@ void TRestDataSetLogOdds::Apply(TRestDataSet& dataSet) const {
 
 - **Doxygen** in the `.cxx` of each class: what it does, the YAML keys with defaults, observables or
   results, an example and the "Differences with legacy"; the header documents the public API. Update the
-  README of the component and, for a legacy class, MIGRATION_STATUS.md.
+  README of the component and, for a legacy class, its row in [section 3](#3-class-equivalences).
 - **Unit tests** in the `test/src/*.cxx` of the component (GoogleTest, `rest_add_tests` in
   `cmake/RestTests.cmake`, label = component): build the inputs in memory (e.g. a process from
   `YAML::Load("{key: value}")` and events filled by hand), no external data. Build with
@@ -911,7 +911,8 @@ void TRestDataSetLogOdds::Apply(TRestDataSet& dataSet) const {
 
 ### 4.7 Checklist
 
-1. Decide the component and check MIGRATION_STATUS.md (is it migrated, replaced, or covered elsewhere?).
+1. Decide the component and check [section 3](#3-class-equivalences) (is it migrated, replaced, or covered
+   elsewhere?).
 2. Events: storage + views, branches, `BindBranch`, copy constructor/assignment, `RefreshViews`,
    `CopyFrom`, `Initialize`, `DrawEvent`, `EventRegistry` registration, format version.
 3. Metadata/processes: the three constructors, registered fields, `LoadConfig` (read, validate,
