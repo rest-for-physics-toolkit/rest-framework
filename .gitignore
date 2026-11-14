@@ -5,8 +5,3 @@ install/
 # examples/ of each library and package)
 testdata/
 config/
-# Previous versions of the documentation, kept locally as reference
-old-docs/
-# Internal notes of the migration (checklist, pending work, decision log) and of the assistants
-MIGRATION_STATUS.md
-CLAUDE.md
