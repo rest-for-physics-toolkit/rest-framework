@@ -911,7 +911,8 @@ The [detector library](../libraries/detector/README.md) describes the detector:
 - **Readouts** map positions to channels and back: `TRestMicromegasReadout` (strip planes), `TRestGDMLReadout`
   (volumes of a GDML geometry, e.g. vetoes, with a readout volume for the light attenuation) and
   `TRestFibreReadout` (a scintillator crossed by fibre lattices, e.g. LiquidO: the closest fibre, the fibres
-  within a distance, and the fibre placements for the GDML of the simulation). A readout is built once from
+  within a distance, each fibre read at one end or both, `readoutEnd`, and the fibre placements for the
+  GDML of the simulation). A readout is built once from
   its YAML and a decoding file (`daqChannel physicalID` rows) and exported to a ROOT file with the macros
   `REST_Detector_GenerateMicromegasReadout`, `REST_Detector_GenerateGDMLReadout` and
   `REST_Detector_GenerateFibreReadout`; the pipelines load it with a `TRestDetectorReadoutManager`
@@ -922,10 +923,17 @@ The [detector library](../libraries/detector/README.md) describes the detector:
   `mediumFile`, computed by restGarfield) and a `light` response (`lightYield`, `attenuationLength`,
   `effectiveLightSpeed`, and `scintillation`: time profiles of the emission per particle, each a list of
   `components` with `fraction`, `riseTime` and `decayTime`, the one without `particles` the default; the
-  particle of each hit is its `fHitParticleID`). The light is simulated in three processes: `TRestDetectorScintillationProcess`
-  (photons produced) and `TRestDetectorLightCollectionProcess` (photons reaching each channel and their
-  photoelectrons with the quantum efficiency: `localCapture` for opaque scintillators such as LiquidO,
-  `attenuation` for transparent ones read at an end such as the vetoes).
+  particle of each hit is its `fHitParticleID`) and a `wls` response for wavelength shifters such as WLS
+  fibres (`attenuationLength` and `lightSpeed` along them, `decayTime` of the re-emission). The light is
+  simulated in three processes:
+  `TRestDetectorScintillationProcess` (photons produced), `TRestDetectorLightCollectionProcess` (photons
+  reaching each channel and their photoelectrons with the quantum efficiency: `localCapture` for opaque
+  scintillators such as LiquidO, with `wlsMedium` the attenuation and delay along the fibres to their read
+  end, `attenuation` for transparent ones read at an end such as the vetoes) and
+  `TRestDetectorLightToSignalProcess` (signals: a time per photoelectron from the scintillation profile of
+  its particle, the re-emission of the `wlsMedium` and the `timeJitter` of the photosensor, and a charge
+  with the `gainSpread` of the photosensor), followed by `TRestDetectorSignalShapingProcess`
+  (single photoelectron response and gain).
   The processes find the medium and the readout by name (`medium`, `readout`; optional if there is only one).
 
 ```yaml

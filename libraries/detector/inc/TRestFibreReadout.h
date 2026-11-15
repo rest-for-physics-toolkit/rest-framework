@@ -22,12 +22,16 @@ class TRestFibreFamily : public TRestMetadata {
     /// `volume`: logical volume of the fibre in the GDML of the simulation (the placements written by
     /// TRestFibreReadout::WriteGDMLPlacements)
     std::string fVolume = "";
+    /// `readoutEnd`: end of the fibres read by a photosensor, "+" (the end at the upper side of the box along
+    /// the axis), "-" (lower side) or "both" (a channel per end)
+    std::string fReadoutEnd = "+";
 
     /// \brief Builds an empty family.
     TRestFibreFamily();
     /// \brief Builds the family from its YAML node (LoadConfig).
     TRestFibreFamily(const std::string& name, const YAML::Node& node);
-    /// \brief Reads the keys; throws if the axis is not X, Y or Z or the pitch is not positive.
+    /// \brief Reads the keys; throws if the axis is not X, Y or Z, the pitch is not positive or readoutEnd
+    /// is not +, - or both.
     void LoadConfig() override;
     /// \brief Nothing to initialise.
     void Initialize() override {}
@@ -36,6 +40,11 @@ class TRestFibreFamily : public TRestMetadata {
 
     /// \brief Axis of the fibres: 0 X, 1 Y, 2 Z.
     int GetAxis() const { return fAxis == "X" ? 0 : fAxis == "Y" ? 1 : 2; }
+    /// \brief Read ends: {-1}, {+1} or {-1, +1}.
+    std::vector<int> GetReadoutEnds() const {
+        if (fReadoutEnd == "both") return {-1, 1};
+        return {fReadoutEnd == "-" ? -1 : 1};
+    }
 };
 
 /// \class TRestFibreReadoutParameters
@@ -75,13 +84,15 @@ class TRestFibreReadout : public TRestDetectorReadout {
     TRestFibreReadoutParameters fReadoutParams;  ///< `readoutParameters`
 
    private:
-    /// The grid of a family: axis, transverse axes, number of fibres along them and first physical ID
+    /// The grid of a family: axis, transverse axes, number of fibres along them, read ends and first
+    /// physical ID (a block of nU * nV channels per read end)
     struct Grid {
         int axis = 2;
         int u = 0;
         int v = 1;
         int nU = 0;
         int nV = 0;
+        std::vector<int> ends = {1};
         int firstID = 0;
     };
     std::vector<Grid> fGrids;  //!
@@ -94,8 +105,10 @@ class TRestFibreReadout : public TRestDetectorReadout {
     }
     /// \brief Transverse coordinate of fibre index along the transverse axis t (0: u, 1: v) of a family.
     double GetFibreCoordinate(size_t family, int t, int index) const;
-    /// \brief Family and indices of a physical ID; false if it is not a fibre.
-    bool GetFibre(int physicalID, size_t& family, int& i, int& j) const;
+    /// \brief Family, indices and read end (-1 or +1) of a physical ID; false if it is not a channel.
+    bool GetFibre(int physicalID, size_t& family, int& i, int& j, int& end) const;
+    /// \brief Coordinate along the axis of a family of its end (-1: lower side of the box, +1: upper).
+    double GetEndCoordinate(size_t family, int end) const;
 
    public:
     /// \brief Constructor.
@@ -116,8 +129,11 @@ class TRestFibreReadout : public TRestDetectorReadout {
 
     /// \brief Total number of fibres.
     int GetNumberOfFibres() const;
+    /// \brief Total number of channels (read ends of the fibres).
+    int GetNumberOfChannels() const;
     /// \brief The closest fibre (any family) to a position inside the box, measured in the plane transverse
-    /// to the fibre; -1 outside the box or if it is not connected.
+    /// to the fibre, and of a fibre read at both ends the channel of the end closer to the position; -1
+    /// outside the box or if it is not connected.
     int GetChannelFromPosition(double x, double y, double z) const override;
     /// \brief Position of a fibre: its two transverse coordinates, the coordinate along it NaN (e.g. a
     /// fibre along Y gives an XZ hit).
@@ -127,11 +143,20 @@ class TRestFibreReadout : public TRestDetectorReadout {
     /// \brief Neighbour fibres of the same family and row (physical IDs - 1 and + 1 along the second
     /// transverse axis), -1 at the ends.
     std::pair<int, int> GetAdjacentChannels(int daqID) const override;
-    /// \brief The fibres closer than maxDistance to the position in the plane transverse to them (the
-    /// coordinate along the fibre inside the box), with that distance, at the projection of the position on
-    /// the fibre.
+    /// \brief The channels of the fibres closer than maxDistance to the position in the plane transverse to
+    /// them (the coordinate along the fibre inside the box), one per read end, with that distance, at the
+    /// position of their read end (GetReadoutPosition).
     std::vector<ChannelInRange> GetChannelsInRange(const ROOT::Math::XYZVector& position,
                                                    double maxDistance) const override;
+    /// \brief Position of the read end of the fibre of a channel (on the face of the box); NaN if it is not
+    /// a channel.
+    ROOT::Math::XYZVector GetReadoutPosition(int daqID) const override;
+    /// \brief Distance along the fibre of a channel from a position to its read end (the light travels it
+    /// inside the fibre, e.g. TRestDetectorLightCollectionProcess with a wls medium); NaN if it is not a
+    /// channel.
+    double GetDistanceToReadout(int daqID, const ROOT::Math::XYZVector& position) const override;
+    /// The distance without a channel is that of the base class (NaN: the fibres have no drift)
+    using TRestDetectorReadout::GetDistanceToReadout;
 
     /// \brief Writes the placements of the fibres (`physvol` elements of the GDML, named fibre_<physical
     /// ID>, with the logical volume `volume` of their family) to a file, to be included as an external

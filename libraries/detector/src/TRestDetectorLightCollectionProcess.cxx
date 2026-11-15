@@ -14,11 +14,15 @@
 ///   transverse to them) capture each photon with probability captureProbability(r), r the distance to the
 ///   channel; the photons of the hit are distributed among them with a multinomial (a photon is captured by
 ///   one channel at most; the probabilities of the channels of a position must add up to 1 at most).
-///   captureProbability includes the transport in the medium and the trapping and transport of the fibre
-///   to its photosensor: a ROOT formula of x = r in mm (e.g. a Gaussian light ball) or a graph or histogram
-///   of a ROOT file ("file.root:name", e.g. from an optical simulation of Geant4). The output hits are at
-///   the position given by the readout (for a fibre, the projection of the hit on it); their time is that of
-///   the hit.
+///   captureProbability includes the transport in the medium and the trapping of the channel towards its
+///   photosensor (for a fibre read at both ends, each end is a channel with its own probability): a ROOT
+///   formula of x = r in mm (e.g. a Gaussian light ball) or a graph or histogram of a ROOT file
+///   ("file.root:name", e.g. from an optical simulation of Geant4). With wlsMedium (the medium of the fibres
+///   with a `wls` response), the captured photons travel the distance d along the fibre to its read end
+///   (TRestDetectorReadout::GetDistanceToReadout of the channel): Binomial(N, exp(-d / attenuationLength))
+///   of them arrive, at t + d / lightSpeed; without it the captured photons arrive at once (the transport in
+///   the fibre is then part of captureProbability). The output hits are at the position given by the
+///   readout (for a fibre, its read end); their time is that of the hit plus the delay in the fibre.
 /// - `attenuation`, transparent scintillator read at one end (e.g. a veto with a light guide and a PMT):
 ///   all the light goes to the channel of the hit (TRestDetectorReadout::GetChannelFromPosition), the
 ///   photons reaching its readout are Binomial(N, exp(-d / attenuationLength)) and they arrive at
@@ -33,8 +37,8 @@
 ///
 /// Parameters: model (localCapture), readout (empty: the data readout of the TRestDetectorReadoutManager),
 /// medium (attenuation: name of the TRestDetectorMedium with `light`; empty: the only one),
-/// captureProbability and maxDistance (localCapture), quantumEfficiency (1), seed (0: random seed; otherwise
-/// the generator is re-seeded at each event from the seed and the event and subevent IDs).
+/// captureProbability, maxDistance and wlsMedium (localCapture), quantumEfficiency (1), seed (0: random seed;
+/// otherwise the generator is re-seeded at each event from the seed and the event and subevent IDs).
 ///
 /// Examples:
 ///
@@ -85,6 +89,7 @@ static const bool TRestDetectorLightCollectionProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("model", &P::fModel);
     reg.RegisterField<P>("readout", &P::fReadoutName);
     reg.RegisterField<P>("medium", &P::fMediumName);
+    reg.RegisterField<P>("wlsMedium", &P::fWLSMediumName);
     reg.RegisterField<P>("captureProbability", &P::fCaptureProbability);
     reg.RegisterField<P>("maxDistance", &P::fMaxDistance);
     reg.RegisterField<P>("quantumEfficiency", &P::fQuantumEfficiency);
@@ -193,6 +198,13 @@ void TRestDetectorLightCollectionProcess::InitProcess() {
         fLight = &medium->GetLightResponse(user);
         fMediumName = medium->GetName();
     }
+    fWLS = nullptr;
+    if (!fWLSMediumName.empty()) {
+        if (fModel != "localCapture") throw std::runtime_error(user + ": wlsMedium is for localCapture");
+        const auto* wlsMedium =
+            fManager->FindMetadata<TRestDetectorMedium>(fWLSMediumName, user, "wlsMedium");
+        fWLS = &wlsMedium->GetWLSResponse(user);
+    }
     // The stored metadata keeps the readout and medium used
     UpdateYAMLFromParams<TRestDetectorLightCollectionProcess>(fNode);
 
@@ -236,9 +248,27 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
                                  : static_cast<int>(fRandom.Binomial(left, probability / probabilityLeft));
         probabilityLeft -= probability;
         left -= captured;
-        const int photoelectrons = Detect(captured);
+        // Along the fibre to its read end
+        int arriving = captured;
+        double arrival = time;
+        if (fWLS && captured > 0) {
+            const double distance = fReadout->GetDistanceToReadout(channel.daqID, position);
+            if (std::isnan(distance)) {
+                throw std::runtime_error("TRestDetectorLightCollectionProcess: the channel " +
+                                         std::to_string(channel.daqID) + " of readout " +
+                                         fReadout->GetName() +
+                                         " has no distance to its readout (needed by wlsMedium)");
+            }
+            const double attenuationLength = fWLS->GetAttenuationLength();
+            if (attenuationLength > 0) {
+                const double survival = std::exp(-distance / attenuationLength);
+                arriving = static_cast<int>(fRandom.Binomial(captured, survival));
+            }
+            if (fWLS->GetLightSpeed() > 0) arrival += distance / fWLS->GetLightSpeed();
+        }
+        const int photoelectrons = Detect(arriving);
         if (photoelectrons <= 0) continue;
-        output.AddHit(channel.position, photoelectrons, time, TRestDetectorHitsEvent::REST_HitType::XYZ,
+        output.AddHit(channel.position, photoelectrons, arrival, TRestDetectorHitsEvent::REST_HitType::XYZ,
                       particleID);
         fNPhotoelectrons += photoelectrons;
     }

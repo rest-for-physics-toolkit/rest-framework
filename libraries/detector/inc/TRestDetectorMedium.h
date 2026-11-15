@@ -277,6 +277,52 @@ class TRestDetectorLightResponse : public TRestMetadata {
     double GetScintillationTime(int particleID, TRandom& random) const;
 };
 
+/// \class TRestDetectorWLSResponse
+/// \brief Wavelength shifting response of a medium (e.g. a WLS fibre, bar or plate): the light it absorbs is
+/// re-emitted after a delay and guided to its readout, attenuated and delayed with the distance. It is the
+/// `wls` key of a TRestDetectorMedium (no class key).
+///
+/// Parameters:
+/// - attenuationLength: the photons reaching the readout are a fraction exp(-d / attenuationLength) of
+///   those guided, d the distance along the medium to the readout (0: no attenuation).
+/// - lightSpeed: speed of the guided light along the medium, the delay is d / lightSpeed (0: no delay).
+/// - decayTime: decay time of the re-emission, each photon is delayed by Exp(decayTime) (0: no delay).
+///
+///      wls:
+///        attenuationLength: 3.5 m
+///        lightSpeed: 170 mm/ns
+///        decayTime: 8 ns
+class TRestDetectorWLSResponse : public TRestMetadata {
+   public:
+    /// `attenuationLength`: attenuation length along the medium (0: none)
+    TRestWithUnits fAttenuationLength = 0;  // mm
+    /// `lightSpeed`: speed of the guided light along the medium (0: no delay)
+    TRestWithUnits fLightSpeed = 0;  // mm/us
+    /// `decayTime`: decay time of the re-emission (0: no delay)
+    TRestWithUnits fDecayTime = 0;  // us
+
+    /// \brief Builds an empty response.
+    TRestDetectorWLSResponse();
+    /// \brief Builds the response from the `wls` node of a medium (LoadConfig).
+    TRestDetectorWLSResponse(const std::string& instanceName, const YAML::Node& node);
+
+    /// \brief Returns the class name, "TRestDetectorWLSResponse".
+    std::string GetClassName() const override { return "TRestDetectorWLSResponse"; }
+    /// \brief Reads the parameters; throws if one of them is negative.
+    void LoadConfig() override;
+    /// \brief Nothing to initialise.
+    void Initialize() override {}
+
+    /// \brief Attenuation length along the medium (mm).
+    inline double GetAttenuationLength() const { return fAttenuationLength; }
+    /// \brief Speed of the guided light (mm/us).
+    inline double GetLightSpeed() const { return fLightSpeed; }
+    /// \brief Decay time of the re-emission (us).
+    inline double GetDecayTime() const { return fDecayTime; }
+    /// \brief Samples the re-emission delay of a photon (us): Exp(decayTime), 0 without decay time.
+    double GetReemissionTime(TRandom& random) const;
+};
+
 /// \class TRestDetectorMedium
 /// \brief A material (gas, liquid or solid) at its conditions, with its medium file (the tables generated
 /// by restGarfield, read without Garfield++) and its responses. It describes the material, not the detector
@@ -300,7 +346,8 @@ class TRestDetectorLightResponse : public TRestMetadata {
 ///   ones of the tables of restGarfield). A pressure other than 1 bar for a liquid or a solid is an error
 ///   (1 bar is accepted, it is written to the metadata for any state).
 /// - Responses, each one a key without class: `charge` (TRestDetectorChargeResponse: ionisation, transport
-///   and gain) and `light` (TRestDetectorLightResponse: propagation of the scintillation light).
+///   and gain), `light` (TRestDetectorLightResponse: production and propagation of the scintillation light)
+///   and `wls` (TRestDetectorWLSResponse: wavelength shifting, re-emission and guiding of the light).
 ///
 ///    medium:
 ///      class: "TRestDetectorMedium"
@@ -317,6 +364,7 @@ class TRestDetectorMedium : public TRestMetadata {
    private:
     std::shared_ptr<TRestDetectorChargeResponse> fCharge;  //!
     std::shared_ptr<TRestDetectorLightResponse> fLight;    //!
+    std::shared_ptr<TRestDetectorWLSResponse> fWLS;        //!
 
    public:
     /// Values accepted by `state`
@@ -330,6 +378,8 @@ class TRestDetectorMedium : public TRestMetadata {
     YAML::Node fChargeNode;
     /// Configuration of the light response (`light` key)
     YAML::Node fLightNode;
+    /// Configuration of the wavelength shifting response (`wls` key)
+    YAML::Node fWLSNode;
 
     /// \brief Builds an empty medium.
     TRestDetectorMedium();
@@ -364,6 +414,11 @@ class TRestDetectorMedium : public TRestMetadata {
     inline const TRestDetectorLightResponse* GetLightResponse() const { return fLight.get(); }
     /// \brief Light response; throws if the medium has no `light` (user is for the message)
     const TRestDetectorLightResponse& GetLightResponse(const std::string& user) const;
+
+    /// \brief Wavelength shifting response, nullptr if the medium has no `wls`
+    inline const TRestDetectorWLSResponse* GetWLSResponse() const { return fWLS.get(); }
+    /// \brief Wavelength shifting response; throws if the medium has no `wls` (user is for the message)
+    const TRestDetectorWLSResponse& GetWLSResponse(const std::string& user) const;
 
     /// \brief YAML of the medium stored in its file (name, state, components)
     YAML::Node GetDefinition() const;

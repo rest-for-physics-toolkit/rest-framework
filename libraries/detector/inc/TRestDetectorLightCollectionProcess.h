@@ -10,6 +10,7 @@
 
 class TRestDetectorHitsEvent;
 class TRestDetectorLightResponse;
+class TRestDetectorWLSResponse;
 class TRestDetectorReadout;
 
 /// \class TRestDetectorLightCollectionProcess
@@ -29,6 +30,7 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
    private:
     const TRestDetectorReadout* fReadout = nullptr;
     const TRestDetectorLightResponse* fLight = nullptr;
+    const TRestDetectorWLSResponse* fWLS = nullptr;
     /// Capture probability versus the distance (mm), built from captureProbability (localCapture)
     std::function<double(double)> fCapture;  //!
     TRandom3 fRandom;                        //!
@@ -66,6 +68,10 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// "0.03*exp(-x*x/200)") or a graph or histogram of a ROOT file, "file.root:name" (e.g. from an optical
     /// simulation of Geant4)
     std::string fCaptureProbability = "";
+
+    /// `wlsMedium` (localCapture): name of the TRestDetectorMedium of the fibres, whose `wls` response gives
+    /// the attenuation and delay of the captured light along the fibre to its read end. Empty: none.
+    std::string fWLSMediumName = "";
 
     /// `maxDistance` (localCapture): channels farther than this collect no light
     TRestWithUnits fMaxDistance = 0;

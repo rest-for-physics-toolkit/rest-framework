@@ -203,7 +203,7 @@ class TRestDetectorReadout : public TRestMetadata {
     /// \brief The channels closer than maxDistance to a position, with their distance (geometry only, e.g.
     /// for the local capture of the light of TRestDetectorLightCollectionProcess). By default the channel at
     /// the position, at distance 0; TRestFibreReadout: the fibres within maxDistance in the plane transverse
-    /// to them, at the projection of the position on each one.
+    /// to them, a channel per read end, at the read end.
     virtual std::vector<ChannelInRange> GetChannelsInRange(const ROOT::Math::XYZVector& position,
                                                            double maxDistance) const {
         (void)maxDistance;
@@ -233,7 +233,8 @@ class TRestDetectorReadout : public TRestMetadata {
     virtual std::pair<ROOT::Math::XYZVector, ROOT::Math::XYZVector> GetChannelsBoundingBox() const;
 
     /// \brief Returns the signed distance from a position to the readout of a DAQ channel, projected on the
-    /// readout normal (as legacy TRestDetectorReadoutPlane::GetDistanceTo: (pos - plane) · normal).
+    /// readout normal (as legacy TRestDetectorReadoutPlane::GetDistanceTo: (pos - plane) · normal);
+    /// TRestGDMLReadout: to the readout volume; TRestFibreReadout: along the fibre to its read end.
     /// \return The distance, or NaN if the readout does not define one or the channel is unknown.
     virtual double GetDistanceToReadout(int daqID, const ROOT::Math::XYZVector& position) const {
         if (!IsChannelConnected(daqID)) return std::numeric_limits<double>::quiet_NaN();

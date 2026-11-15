@@ -25,17 +25,24 @@
 /// `pitch` in the plane transverse to them, starting at `offset` from the lower corner of the box (the
 /// transverse axes in cyclic order after the axis: X: Y and Z; Y: Z and X; Z: X and Y). The fibres of a
 /// family span the whole box along their axis; the families must not intersect (e.g. alternated layers).
-/// Each fibre is a channel: the physical IDs are consecutive, family by family, and inside a family
-/// firstID + i * nV + j (i, j the indices along the first and second transverse axes). Without
-/// `decodingFile`, the DAQ ID of each fibre is its physical ID.
+/// Each read end of a fibre is a channel (`readoutEnd`: "+", the end on the upper face of the box along
+/// the axis, "-" the lower one, or "both"): the physical IDs are consecutive, family by family, and inside a
+/// family firstID + e * nU * nV + i * nV + j (e the index of the read end, 0 for "-" if both are read, i, j
+/// the indices along the first and second transverse axes). Without `decodingFile`, the DAQ ID of each
+/// channel is its physical ID.
 ///
 /// A fibre measures its two transverse coordinates: GetPositionFromChannel gives them, with the coordinate
 /// along the fibre NaN, so the hits reconstructed from the signals of the fibres along Y are XZ hits and
 /// those along X are YZ hits (as the strips of a Micromegas). GetChannelFromPosition gives the closest
-/// fibre to a position (in the plane transverse to each fibre).
+/// fibre to a position (in the plane transverse to each fibre; of a fibre read at both ends, the channel of
+/// the end closer to the position). GetReadoutPosition gives the read end of a channel and
+/// GetDistanceToReadout(channel, position) the distance along the fibre from the position to it, the path of
+/// the light inside the fibre (attenuation and delay of the `wls` response of the fibre medium in
+/// TRestDetectorLightCollectionProcess); without a channel there is no distance (no drift).
 ///
 /// The readout gives only the geometry: GetChannelsInRange gives the fibres closer than a distance to a
-/// position (in the plane transverse to each fibre), used by the localCapture model of
+/// position (in the plane transverse to each fibre, one channel per read end, at the read end), used by the
+/// localCapture model of
 /// TRestDetectorLightCollectionProcess with its capture probability versus that distance and the quantum
 /// efficiency of the SiPMs; the light yield is in TRestDetectorScintillationProcess.
 ///
@@ -46,7 +53,7 @@
 /// scintillator, so the simulation and the readout share the same fibres.
 ///
 /// Parameters: decodingFile (optional) and, in `readoutParameters`, size, position and fibres (axis, pitch,
-/// offset, volume).
+/// offset, volume, readoutEnd).
 ///
 /// Example (LiquidO prototype of 1.5 m, fibres along Y and along X in alternated layers 10 mm apart):
 ///
@@ -61,6 +68,7 @@
 ///            pitch: 20mm
 ///            offset: [15mm, 15mm]
 ///            volume: "fibreYVolume"
+///            readoutEnd: "both"
 ///          - axis: "X"
 ///            pitch: 20mm
 ///            offset: [5mm, 5mm]
@@ -101,6 +109,7 @@ static const bool TRestFibreReadout_FieldsRegistered = []() {
     reg.RegisterField<F>("pitch", &F::fPitch);
     reg.RegisterField<F>("offset", &F::fOffset);
     reg.RegisterField<F>("volume", &F::fVolume);
+    reg.RegisterField<F>("readoutEnd", &F::fReadoutEnd);
     return true;
 }();
 
@@ -122,6 +131,9 @@ void TRestFibreFamily::LoadConfig() {
         throw std::runtime_error(prefix + "axis must be X, Y or Z, not '" + fAxis + "'");
     }
     if (fPitch <= 0) throw std::runtime_error(prefix + "pitch must be positive");
+    if (fReadoutEnd != "+" && fReadoutEnd != "-" && fReadoutEnd != "both") {
+        throw std::runtime_error(prefix + "readoutEnd must be +, - or both, not '" + fReadoutEnd + "'");
+    }
     UpdateYAMLFromParams<TRestFibreFamily>(fNode);
 }
 
@@ -191,8 +203,9 @@ void TRestFibreReadout::BuildGrids() {
         }
         grid.nU = count[0];
         grid.nV = count[1];
+        grid.ends = family.GetReadoutEnds();
         grid.firstID = firstID;
-        firstID += grid.nU * grid.nV;
+        firstID += grid.nU * grid.nV * static_cast<int>(grid.ends.size());
         fGrids.push_back(grid);
     }
 }
@@ -203,6 +216,17 @@ int TRestFibreReadout::GetNumberOfFibres() const {
     return total;
 }
 
+int TRestFibreReadout::GetNumberOfChannels() const {
+    int total = 0;
+    for (const auto& grid : fGrids) total += grid.nU * grid.nV * static_cast<int>(grid.ends.size());
+    return total;
+}
+
+double TRestFibreReadout::GetEndCoordinate(size_t family, int end) const {
+    const int axis = fGrids[family].axis;
+    return GetMinimum(axis) + (end > 0 ? static_cast<double>(fReadoutParams.fSize[axis]) : 0.0);
+}
+
 double TRestFibreReadout::GetFibreCoordinate(size_t family, int t, int index) const {
     const auto& grid = fGrids[family];
     const int axis = t == 0 ? grid.u : grid.v;
@@ -210,14 +234,16 @@ double TRestFibreReadout::GetFibreCoordinate(size_t family, int t, int index) co
            index * static_cast<double>(fReadoutParams.fFibres[family].fPitch);
 }
 
-bool TRestFibreReadout::GetFibre(int physicalID, size_t& family, int& i, int& j) const {
+bool TRestFibreReadout::GetFibre(int physicalID, size_t& family, int& i, int& j, int& end) const {
     for (size_t f = 0; f < fGrids.size(); f++) {
         const auto& grid = fGrids[f];
+        const int fibres = grid.nU * grid.nV;
         const int local = physicalID - grid.firstID;
-        if (local < 0 || local >= grid.nU * grid.nV) continue;
+        if (local < 0 || local >= fibres * static_cast<int>(grid.ends.size())) continue;
         family = f;
-        i = local / grid.nV;
-        j = local % grid.nV;
+        end = grid.ends[local / fibres];
+        i = (local % fibres) / grid.nV;
+        j = (local % fibres) % grid.nV;
         return true;
     }
     return false;
@@ -238,7 +264,7 @@ void TRestFibreReadout::BuildGeometry() {
         }
     } else {
         fPhysicalToDAQMap.clear();
-        for (int id = 0; id < GetNumberOfFibres(); id++) fPhysicalToDAQMap[id] = id;
+        for (int id = 0; id < GetNumberOfChannels(); id++) fPhysicalToDAQMap[id] = id;
     }
 
     TGeoMedium* fibreMedium = fGeoManager->GetMedium("fibre_medium");
@@ -272,6 +298,7 @@ void TRestFibreReadout::BuildGeometry() {
                 centre[grid.axis] = fReadoutParams.fPosition[grid.axis];
                 centre[grid.u] = GetFibreCoordinate(f, 0, i);
                 centre[grid.v] = GetFibreCoordinate(f, 1, j);
+                // The physical ID of the first read end of the fibre
                 const int physicalID = grid.firstID + i * grid.nV + j;
                 TGeoNode* node = row->AddNode(volume, physicalID,
                                               new TGeoCombiTrans(centre[0], centre[1], centre[2], rotation));
@@ -296,6 +323,7 @@ int TRestFibreReadout::GetChannelFromPosition(double x, double y, double z) cons
 
     int closestID = -1;
     double closest = std::numeric_limits<double>::infinity();
+    const XYZVector point(x, y, z);
     for (size_t f = 0; f < fGrids.size(); f++) {
         const auto& grid = fGrids[f];
         if (grid.nU == 0 || grid.nV == 0) continue;
@@ -313,7 +341,12 @@ int TRestFibreReadout::GetChannelFromPosition(double x, double y, double z) cons
         }
         if (distance2 < closest) {
             closest = distance2;
-            closestID = grid.firstID + index[0] * grid.nV + index[1];
+            // Read at both ends: the end closer to the position (the upper one from the centre)
+            int e = 0;
+            if (grid.ends.size() > 1 && Component(point, grid.axis) >= fReadoutParams.fPosition[grid.axis]) {
+                e = 1;
+            }
+            closestID = grid.firstID + e * grid.nU * grid.nV + index[0] * grid.nV + index[1];
         }
     }
     return closestID < 0 ? -1 : GetDAQID(closestID);
@@ -322,8 +355,8 @@ int TRestFibreReadout::GetChannelFromPosition(double x, double y, double z) cons
 XYZVector TRestFibreReadout::GetPositionFromChannel(int daqID) const {
     const int physicalID = GetPhysicalID(daqID);
     size_t family;
-    int i, j;
-    if (physicalID < 0 || !GetFibre(physicalID, family, i, j)) return XYZVector(kNaN, kNaN, kNaN);
+    int i, j, end;
+    if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return XYZVector(kNaN, kNaN, kNaN);
     double position[3] = {kNaN, kNaN, kNaN};
     position[fGrids[family].u] = GetFibreCoordinate(family, 0, i);
     position[fGrids[family].v] = GetFibreCoordinate(family, 1, j);
@@ -342,8 +375,8 @@ std::pair<XYZVector, XYZVector> TRestFibreReadout::GetChannelsBoundingBox() cons
 std::pair<int, int> TRestFibreReadout::GetAdjacentChannels(int daqID) const {
     const int physicalID = GetPhysicalID(daqID);
     size_t family;
-    int i, j;
-    if (physicalID < 0 || !GetFibre(physicalID, family, i, j)) return {-1, -1};
+    int i, j, end;
+    if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return {-1, -1};
     const int nV = fGrids[family].nV;
     return {j > 0 ? GetDAQID(physicalID - 1) : -1, j < nV - 1 ? GetDAQID(physicalID + 1) : -1};
 }
@@ -375,18 +408,41 @@ std::vector<TRestDetectorReadout::ChannelInRange> TRestFibreReadout::GetChannels
                 const double v = firstV + j * pitch;
                 const double distance = std::hypot(pu - u, pv - v);
                 if (distance > maxDistance) continue;
-                const int daqID = GetDAQID(grid.firstID + i * grid.nV + j);
-                if (daqID < 0) continue;
-                // The projection of the position on the fibre
-                double projected[3];
-                projected[grid.axis] = along;
-                projected[grid.u] = u;
-                projected[grid.v] = v;
-                channels.push_back({daqID, distance, XYZVector(projected[0], projected[1], projected[2])});
+                for (size_t e = 0; e < grid.ends.size(); e++) {
+                    const int daqID =
+                        GetDAQID(grid.firstID + static_cast<int>(e) * grid.nU * grid.nV + i * grid.nV + j);
+                    if (daqID < 0) continue;
+                    // The read end of the fibre
+                    double end[3];
+                    end[grid.axis] = GetEndCoordinate(f, grid.ends[e]);
+                    end[grid.u] = u;
+                    end[grid.v] = v;
+                    channels.push_back({daqID, distance, XYZVector(end[0], end[1], end[2])});
+                }
             }
         }
     }
     return channels;
+}
+
+XYZVector TRestFibreReadout::GetReadoutPosition(int daqID) const {
+    const int physicalID = GetPhysicalID(daqID);
+    size_t family;
+    int i, j, end;
+    if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return XYZVector(kNaN, kNaN, kNaN);
+    double position[3];
+    position[fGrids[family].axis] = GetEndCoordinate(family, end);
+    position[fGrids[family].u] = GetFibreCoordinate(family, 0, i);
+    position[fGrids[family].v] = GetFibreCoordinate(family, 1, j);
+    return XYZVector(position[0], position[1], position[2]);
+}
+
+double TRestFibreReadout::GetDistanceToReadout(int daqID, const XYZVector& position) const {
+    const int physicalID = GetPhysicalID(daqID);
+    size_t family;
+    int i, j, end;
+    if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return kNaN;
+    return std::abs(GetEndCoordinate(family, end) - Component(position, fGrids[family].axis));
 }
 
 bool TRestFibreReadout::WriteGDMLPlacements(const std::string& fileName) const {

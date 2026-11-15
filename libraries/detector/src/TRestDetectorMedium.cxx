@@ -24,6 +24,7 @@ static const bool TRestDetectorMedium_FieldsRegistered = []() {
     reg.RegisterField<M>("temperature", &M::fTemperature);
     reg.RegisterField<M>("charge", &M::fChargeNode);
     reg.RegisterField<M>("light", &M::fLightNode);
+    reg.RegisterField<M>("wls", &M::fWLSNode);
     return true;
 }();
 
@@ -116,6 +117,12 @@ void TRestDetectorMedium::LoadConfig() {
         fLight = std::make_shared<TRestDetectorLightResponse>("light", fLightNode);
         fLight->CheckConfig();
     }
+    fWLS.reset();
+    if (fWLSNode && !fWLSNode.IsNull()) {
+        if (!fWLSNode.IsMap()) throw std::runtime_error(prefix + "wls must be a map");
+        fWLS = std::make_shared<TRestDetectorWLSResponse>("wls", fWLSNode);
+        fWLS->CheckConfig();
+    }
     UpdateYAMLFromParams<TRestDetectorMedium>(fNode);
 }
 
@@ -124,6 +131,14 @@ const TRestDetectorLightResponse& TRestDetectorMedium::GetLightResponse(const st
         throw std::runtime_error(user + ": the medium '" + fName + "' has no light response (key 'light')");
     }
     return *fLight;
+}
+
+const TRestDetectorWLSResponse& TRestDetectorMedium::GetWLSResponse(const std::string& user) const {
+    if (!fWLS) {
+        throw std::runtime_error(user + ": the medium '" + fName +
+                                 "' has no wavelength shifting response (key 'wls')");
+    }
+    return *fWLS;
 }
 
 const TRestDetectorChargeResponse& TRestDetectorMedium::GetChargeResponse(const std::string& user) const {
@@ -316,6 +331,39 @@ const TRestDetectorScintillationProfile* TRestDetectorLightResponse::GetScintill
 double TRestDetectorLightResponse::GetScintillationTime(int particleID, TRandom& random) const {
     const auto* profile = GetScintillationProfile(particleID);
     return profile ? profile->SampleTime(random) : 0;
+}
+
+// ============================================================
+// TRestDetectorWLSResponse
+// ============================================================
+
+static const bool TRestDetectorWLSResponse_FieldsRegistered = []() {
+    auto& reg = TRestMetadataFieldRegistry::Instance();
+    using W = TRestDetectorWLSResponse;
+    reg.RegisterField<W>("attenuationLength", &W::fAttenuationLength);
+    reg.RegisterField<W>("lightSpeed", &W::fLightSpeed);
+    reg.RegisterField<W>("decayTime", &W::fDecayTime);
+    return true;
+}();
+
+TRestDetectorWLSResponse::TRestDetectorWLSResponse() : TRestMetadata() { fName = "TRestDetectorWLSResponse"; }
+
+TRestDetectorWLSResponse::TRestDetectorWLSResponse(const std::string& instanceName, const YAML::Node& node)
+    : TRestMetadata(instanceName, node) {
+    LoadConfig();
+}
+
+void TRestDetectorWLSResponse::LoadConfig() {
+    UpdateParamsFromYAML<TRestDetectorWLSResponse>(fNode);
+    if (fAttenuationLength < 0 || fLightSpeed < 0 || fDecayTime < 0) {
+        throw std::runtime_error(
+            "TRestDetectorWLSResponse: attenuationLength, lightSpeed and decayTime must be >= 0");
+    }
+    UpdateYAMLFromParams<TRestDetectorWLSResponse>(fNode);
+}
+
+double TRestDetectorWLSResponse::GetReemissionTime(TRandom& random) const {
+    return fDecayTime > 0 ? random.Exp(fDecayTime) : 0;
 }
 
 // ============================================================
