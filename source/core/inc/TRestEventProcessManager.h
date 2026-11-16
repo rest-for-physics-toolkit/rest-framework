@@ -58,6 +58,21 @@ class TRestEventProcessManager : public TRestMetadata {
     long long fEntryStart = -1;
     long long fEntryEnd = -1;
 
+    /// Time spent in ProcessEvent by each process of the chain (s) and its number of calls, measured in
+    /// Run() and printed at its end (PrintProcessTimes)
+    std::vector<double> fProcessTimes;
+    std::vector<long long> fProcessCalls;
+    /// Time spent reading the entries of the input file and writing the accepted events (s), and their
+    /// numbers
+    double fReadTime = 0;
+    double fWriteTime = 0;
+    long long fReadCalls = 0;
+    long long fWriteCalls = 0;
+
+    /// \brief Prints the time spent by each process, reading the input and writing the output: total (s),
+    /// per call (ms) and fraction of the loop.
+    void PrintProcessTimes() const;
+
    public:
     /// Maximum number of events to process (`eventsToProcess`), 0 for all.
     int fEventsToProcess = 0;
@@ -117,7 +132,7 @@ class TRestEventProcessManager : public TRestMetadata {
     /// needed, initializes the processes and their cuts, creates the stage events, registers the stored
     /// events, and loops over the entries (or until a generator process finishes its input), filling the
     /// accepted events. Ends with EndProcess of every process. The loop stops on
-    /// TRestManager::RequestStop.
+    /// TRestManager::RequestStop. At the end it prints the time spent by each process (PrintProcessTimes).
     void Run();
     /// \brief Sets the run and runs the pipeline on it.
     /// \param restRun Run with the input and output files.

@@ -33,7 +33,7 @@ metadata from it.
 | Class | Role |
 |---|---|
 | `TRestEventProcess` | Abstract base of the event processes: input/output event types, `InitProcess`, `ProcessEvent`, observables and `cuts`. |
-| `TRestEventProcessManager` | The pipeline: chains the processes, routes the events, stores the outputs and runs the event loop. |
+| `TRestEventProcessManager` | The pipeline: chains the processes, routes the events, stores the outputs and runs the event loop; at the end it prints the time spent by each process, reading the input and writing the output. |
 | `TRestSelectionProcess` | Keeps the events passing its `TRestCut`, for any event type. |
 | `TRestCut` | Named conditions (C++ expressions of observables) used by processes, datasets and plots. |
 | `TRestManager` | Top section of a configuration: creates its metadata and runs the event pipeline (also multithreaded), the dataset generation/processing and the plots. |

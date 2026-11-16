@@ -1,6 +1,8 @@
 #include "TRestEventProcessManager.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -10,6 +12,13 @@
 #include "TRestTools.h"
 
 using namespace TRestTools;
+
+namespace {
+/// Seconds since a time point of the steady clock
+double SecondsSince(const std::chrono::steady_clock::time_point& start) {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
+}  // namespace
 
 static const bool TRestEventProcessManager_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
@@ -262,6 +271,13 @@ void TRestEventProcessManager::Run() {
 
     long long acceptedCount = 0;
     long long rejectedCount = 0;
+    fProcessTimes.assign(fProcessChain.size(), 0);
+    fProcessCalls.assign(fProcessChain.size(), 0);
+    fReadTime = 0;
+    fWriteTime = 0;
+    fReadCalls = 0;
+    fWriteCalls = 0;
+    using Clock = std::chrono::steady_clock;
 
     const bool hasInputTree = (totalEntries > 0);
 
@@ -273,7 +289,11 @@ void TRestEventProcessManager::Run() {
         }
 
         // No more entries in the input event trees
-        if (hasInputTree && !fRunInfo->GetEntry(entry) && !fRunInfo->fInputEventTrees.empty()) {
+        const auto readStart = Clock::now();
+        const bool entryRead = !hasInputTree || fRunInfo->GetEntry(entry);
+        fReadTime += SecondsSince(readStart);
+        fReadCalls++;
+        if (hasInputTree && !entryRead && !fRunInfo->fInputEventTrees.empty()) {
             RESTWarning << "TRestEventProcessManager: entry " << entry
                         << " could not be read from the input file, breaking event loop" << RESTendl;
             break;
@@ -287,7 +307,11 @@ void TRestEventProcessManager::Run() {
 
             // The messages of the events and tools used by the process take its verbose
             TRestLogScope logScope(fProcessChain[i]->GetLogContext());
-            if (!fProcessChain[i]->ProcessEvent(inputEvent, outputEvent)) {
+            const auto processStart = Clock::now();
+            const bool processed = fProcessChain[i]->ProcessEvent(inputEvent, outputEvent);
+            fProcessTimes[i] += SecondsSince(processStart);
+            fProcessCalls[i]++;
+            if (!processed) {
                 // End of the external file of the process: not a rejected event
                 inputFinished = fProcessChain[i]->InputFinished();
                 eventAccepted = false;
@@ -309,7 +333,10 @@ void TRestEventProcessManager::Run() {
 
         if (eventAccepted) {
             acceptedCount++;
+            const auto writeStart = Clock::now();
             fRunInfo->Fill();
+            fWriteTime += SecondsSince(writeStart);
+            fWriteCalls++;
         } else {
             rejectedCount++;
         }
@@ -331,5 +358,40 @@ void TRestEventProcessManager::Run() {
 
     RESTInfo << "TRestEventProcessManager: Pipeline finished. Accepted: " << acceptedCount
              << " events, Rejected: " << rejectedCount << " events" << RESTendl;
+    PrintProcessTimes();
     RESTInfo << "Output file name: " << fRunInfo->GetOutputFileName() << RESTendl;
+}
+
+void TRestEventProcessManager::PrintProcessTimes() const {
+    if (fProcessTimes.empty()) return;
+    double total = fReadTime + fWriteTime;
+    for (const double time : fProcessTimes) total += time;
+    if (total <= 0) return;
+
+    // name, total (s), per call (ms), fraction of the loop (%)
+    std::vector<std::string> names;
+    std::vector<double> times;
+    std::vector<long long> calls;
+    for (size_t i = 0; i < fProcessChain.size(); i++) {
+        names.push_back(fProcessChain[i]->GetName() + " (" + fProcessChain[i]->GetClassName() + ")");
+        times.push_back(fProcessTimes[i]);
+        calls.push_back(fProcessCalls[i]);
+    }
+    names.push_back("reading the input");
+    times.push_back(fReadTime);
+    calls.push_back(fReadCalls);
+    names.push_back("writing the output (accepted events)");
+    times.push_back(fWriteTime);
+    calls.push_back(fWriteCalls);
+
+    size_t width = 0;
+    for (const auto& name : names) width = std::max(width, name.size());
+    RESTInfo << "TRestEventProcessManager: time of the event loop, " << total << " s:" << RESTendl;
+    char line[512];
+    for (size_t i = 0; i < names.size(); i++) {
+        const double perCall = calls[i] > 0 ? 1e3 * times[i] / calls[i] : 0;
+        std::snprintf(line, sizeof(line), "  %-*s %10.3f s %10.3f ms/event %6.1f %%", static_cast<int>(width),
+                      names[i].c_str(), times[i], perCall, 100 * times[i] / total);
+        RESTInfo << line << RESTendl;
+    }
 }
