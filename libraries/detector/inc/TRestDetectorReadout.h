@@ -7,6 +7,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -68,8 +69,22 @@ class TRestDetectorReadout : public TRestMetadata {
     /// fGeoManager
     mutable TGeoManager* fViewGeo = nullptr;
 
-    /// Decoding map from geometry physical ID to DAQ channel ID.
+    /// Decoding map from geometry physical ID to DAQ channel ID (written with SetDecodingMap).
     std::map<int, int> fPhysicalToDAQMap;
+    /// Inverse of fPhysicalToDAQMap, DAQ channel ID to physical ID (the first physical ID of a DAQ ID), kept
+    /// by SetDecodingMap: GetPhysicalID and IsChannelConnected without scanning the decoding (readouts with
+    /// thousands of channels, e.g. fibres, ask them for each hit)
+    std::unordered_map<int, int> fDAQToPhysicalMap;  //!
+
+    /// \brief Sets the decoding map and its inverse.
+    void SetDecodingMap(std::map<int, int> decodingMap) {
+        fPhysicalToDAQMap = std::move(decodingMap);
+        fDAQToPhysicalMap.clear();
+        fDAQToPhysicalMap.reserve(fPhysicalToDAQMap.size());
+        for (const auto& [physicalID, daqID] : fPhysicalToDAQMap) {
+            fDAQToPhysicalMap.emplace(daqID, physicalID);
+        }
+    }
 
    public:
     /// \brief Default decoding file name used when none is provided by configuration.
@@ -282,12 +297,7 @@ class TRestDetectorReadout : public TRestMetadata {
     /// \brief Checks whether a DAQ channel is present in the decoding table.
     /// \param daqID DAQ channel identifier.
     /// \return `true` if the channel is connected.
-    bool IsChannelConnected(int daqID) const {
-        for (const auto& [physicalID, channelID] : fPhysicalToDAQMap) {
-            if (channelID == daqID) return true;
-        }
-        return false;
-    }
+    bool IsChannelConnected(int daqID) const { return fDAQToPhysicalMap.count(daqID) > 0; }
 
     /// \brief Returns the DAQ channel of a physical ID, or -1 if it is not in the decoding table.
     int GetDAQID(int physicalID) const {
@@ -297,10 +307,8 @@ class TRestDetectorReadout : public TRestMetadata {
 
     /// \brief Returns the physical ID of a DAQ channel, or -1 if it is not in the decoding table.
     int GetPhysicalID(int daqID) const {
-        for (const auto& [physicalID, channelID] : fPhysicalToDAQMap) {
-            if (channelID == daqID) return physicalID;
-        }
-        return -1;
+        const auto it = fDAQToPhysicalMap.find(daqID);
+        return it == fDAQToPhysicalMap.end() ? -1 : it->second;
     }
 
     /// \brief Returns the DAQ channels adjacent to a DAQ channel, {previous, next}: those of the physical

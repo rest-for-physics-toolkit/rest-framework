@@ -293,13 +293,7 @@ ROOT::Math::XYZVector TRestMicromegasReadout::GetPositionFromChannel(int daqID) 
         return ROOT::Math::XYZVector(REST_nan, REST_nan, REST_nan);
     }
 
-    int targetPhysicalID = -1;
-    for (const auto& [physicalID, channelID] : fPhysicalToDAQMap) {
-        if (channelID == daqID) {
-            targetPhysicalID = physicalID;
-            break;
-        }
-    }
+    const int targetPhysicalID = GetPhysicalID(daqID);
     if (targetPhysicalID < 0) {
         RESTWarning << "DaqID " << daqID << " not found in Micromegas map" << RESTendl;
         return ROOT::Math::XYZVector(REST_nan, REST_nan, REST_nan);

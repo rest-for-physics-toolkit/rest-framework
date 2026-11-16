@@ -315,13 +315,7 @@ void TRestDetectorReadout::DrawViewItems(std::vector<ViewItem>& items, TGeoManag
 ROOT::Math::XYZVector TRestDetectorReadout::GetPositionFromChannel(int daqID) const {
     if (!fGeoManager) return ROOT::Math::XYZVector(REST_nan, REST_nan, REST_nan);
 
-    int targetPhysicalID = -1;
-    for (const auto& [physicalID, channelID] : fPhysicalToDAQMap) {
-        if (channelID == daqID) {
-            targetPhysicalID = physicalID;
-            break;
-        }
-    }
+    const int targetPhysicalID = GetPhysicalID(daqID);
     if (targetPhysicalID < 0) return ROOT::Math::XYZVector(REST_nan, REST_nan, REST_nan);
 
     bool usePathNavigation = !fPathToPhysicalIDMap.empty();
@@ -468,7 +462,7 @@ bool TRestDetectorReadout::LoadDecoding(const std::string& decFilename) {
         return false;
     }
 
-    fPhysicalToDAQMap = std::move(decodingMap);
+    SetDecodingMap(std::move(decodingMap));
     return true;
 }
 
@@ -537,7 +531,7 @@ bool TRestDetectorReadout::Import(TFile* fIn, const std::string& geometryName,
     std::map<int, int> decodingMap;
     if (!ParseDecodingString(decObj->GetString().Data(), decodingMap)) return false;
 
-    fPhysicalToDAQMap = std::move(decodingMap);
+    SetDecodingMap(std::move(decodingMap));
     return true;
 }
 

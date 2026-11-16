@@ -263,8 +263,9 @@ void TRestFibreReadout::BuildGeometry() {
                                      fDecodingFile + "' (not found or without channels)");
         }
     } else {
-        fPhysicalToDAQMap.clear();
-        for (int id = 0; id < GetNumberOfChannels(); id++) fPhysicalToDAQMap[id] = id;
+        std::map<int, int> identity;
+        for (int id = 0; id < GetNumberOfChannels(); id++) identity[id] = id;
+        SetDecodingMap(std::move(identity));
     }
 
     TGeoMedium* fibreMedium = fGeoManager->GetMedium("fibre_medium");
