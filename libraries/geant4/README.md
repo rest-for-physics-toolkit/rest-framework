@@ -74,7 +74,7 @@ The `generator` section of `TRestGeant4Metadata`; the options and examples are d
 | Class | Description |
 | --- | --- |
 | `TRestGeant4QuenchingProcess` | Quenches the hit energies only in the volumes given (`volume`, each with its model, lindhard or birks, required; `model`: the same model for all the other volumes of the geometry) and recomputes the event energies. The Lindhard model needs a simulation with `storeHadronicTargetInfo: true` (error otherwise). |
-| `TRestGeant4AnalysisProcess` | Observables of the event: global and primary ones and, per selection of volumes, particles and processes, energy, mean position, entering particle, energy per volume and interaction points (e.g. neutron captures). |
+| `TRestGeant4AnalysisProcess` | Observables of the event: global and primary ones and, per selection of volumes, particles and processes, energy, mean position, entering particle, energy per volume and interaction points (e.g. neutron captures). Times relative to the first energy deposit of the event (`GetFirstDepositTime`), as the hits of `TRestGeant4ToDetectorHitsProcess`. |
 
 The configuration keys, the observables and a YAML example of each process are given in its class
 documentation.

@@ -33,8 +33,8 @@ class TRestDetectorHitsSmearingProcess : public TRestEventProcess {
     /// Only smear with the resolution not explained by the Fano factor of the medium (already applied by
     /// TRestDetectorHitsDriftProcess)
     bool fSubtractFano = false;
-    /// Name of the TRestDetectorMedium (only with subtractFano). It can be omitted if the manager contains a
-    /// single medium.
+    /// Name of the TRestDetectorMedium (only with subtractFano). Empty: the only medium with
+    /// `charge`.
     std::string fMediumName = "";
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
     /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.

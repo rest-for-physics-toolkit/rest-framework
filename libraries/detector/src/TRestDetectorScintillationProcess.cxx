@@ -13,8 +13,8 @@
 /// Observable NPhotons: the photons of the event. Events without photons are rejected.
 ///
 /// Parameters: medium (name of the TRestDetectorMedium with `light` and its lightYield; empty: the only
-/// one), seed (0: random seed; otherwise the generator is re-seeded at each event from the seed and the
-/// event and subevent IDs).
+/// one with `light`), seed (0: random seed; otherwise the generator is re-seeded at each event from the seed
+/// and the event and subevent IDs).
 ///
 /// Example:
 ///
@@ -88,8 +88,8 @@ void TRestDetectorScintillationProcess::InitProcess() {
     const std::string user = "TRestDetectorScintillationProcess";
     if (!fManager) throw std::runtime_error(user + ": no TRestManager");
 
-    const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium");
+    const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "light", user);
+    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium with light");
     fLight = &medium->GetLightResponse(user);
     if (fLight->GetLightYield() <= 0) {
         throw std::runtime_error(user + ": the light of the medium '" + medium->GetName() +

@@ -8,6 +8,7 @@
 #include "TFile.h"
 #include "TRandom.h"
 #include "TRestDetectorTransportManager.h"
+#include "TRestManager.h"
 #include "TRestParticles.h"
 #include "TRestTools.h"
 #include "TRestYAMLUtils.h"
@@ -146,6 +147,36 @@ const TRestDetectorChargeResponse& TRestDetectorMedium::GetChargeResponse(const 
         throw std::runtime_error(user + ": the medium '" + fName + "' has no charge response (key 'charge')");
     }
     return *fCharge;
+}
+
+bool TRestDetectorMedium::HasResponse(const std::string& response) const {
+    if (response == "charge") return fCharge != nullptr;
+    if (response == "light") return fLight != nullptr;
+    if (response == "wls") return fWLS != nullptr;
+    throw std::invalid_argument("TRestDetectorMedium: unknown response '" + response +
+                                "' (charge, light or wls)");
+}
+
+const TRestDetectorMedium* TRestDetectorMedium::Find(const TRestManager& manager, const std::string& name,
+                                                     const std::string& response, const std::string& user,
+                                                     const std::string& field) {
+    if (!name.empty()) {
+        const auto* medium = manager.FindMetadata<TRestDetectorMedium>(name, user, field);
+        if (!medium->HasResponse(response)) {
+            throw std::runtime_error(user + ": the " + field + " '" + name + "' has no '" + response + "'");
+        }
+        return medium;
+    }
+    const TRestDetectorMedium* found = nullptr;
+    for (const auto* medium : manager.GetMetadataOfType<TRestDetectorMedium>()) {
+        if (!medium->HasResponse(response)) continue;
+        if (found) {
+            throw std::runtime_error(user + ": several TRestDetectorMedium with '" + response + "', set '" +
+                                     field + "'");
+        }
+        found = medium;
+    }
+    return found;
 }
 
 YAML::Node TRestDetectorMedium::GetDefinition() const {

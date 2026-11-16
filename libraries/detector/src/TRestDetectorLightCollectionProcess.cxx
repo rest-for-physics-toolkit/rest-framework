@@ -1,12 +1,27 @@
 /// \class TRestDetectorLightCollectionProcess
 /// Collection of the scintillation photons of the hits of a TRestDetectorHitsEvent (energies in photons,
 /// from TRestDetectorScintillationProcess) by the readout channels and their detection by the photosensor of
-/// each channel (SiPM, PMT): the photons reaching it give Binomial(N, quantumEfficiency) photoelectrons. The
-/// output hits have the photoelectrons of each channel (energies in photoelectrons), one per input hit and
-/// channel, at a position that the readout assigns to that channel (so TRestDetectorHitsToSignalProcess puts
-/// them in it); the gain of the photosensor and the electronics go into TRestDetectorSignalShapingProcess and
-/// TRestDetectorSignalToRawSignalProcess. The way the light reaches the channels depends on the
-/// scintillator (`model`):
+/// each channel (SiPM, PMT): the photons reaching it give Binomial(N, quantumEfficiency) photoelectrons.
+/// Each photoelectron is an output hit, at a position that the readout assigns to its channel (so
+/// TRestDetectorHitsToSignalProcess puts it in that channel), with the particle of the input hit, the
+/// charge 1 in units of the mean single photoelectron charge, or Gauss(1, gainSpread) truncated at 0 with
+/// the relative spread of the gain of the photosensor (e.g. 0.3-0.4 for a PMT, 0.1 for a SiPM), and the time
+///
+///     t = t_hit + t_transport + t_scintillation + t_wls + t_jitter
+///
+/// - t_transport: the delay to the photosensor of the model (below);
+/// - t_scintillation: emission time of the photon, sampled from the scintillation profile of the particle
+///   of the hit (TRestDetectorLightResponse::GetScintillationTime of the medium with `light`; the default
+///   profile for unknown particles, 0 without profiles or without such a medium);
+/// - t_wls: re-emission delay of the fibres, Exp(decayTime) of the `wls` response of wlsMedium;
+/// - t_jitter: Gaussian time jitter of the photosensor (timeJitter, transit time spread).
+///
+/// TRestDetectorHitsToSignalProcess then gives the signals in photoelectrons (its sampling bins the times);
+/// the pulse of a photoelectron and the mean gain of the photosensor go into
+/// TRestDetectorSignalShapingProcess (e.g. `exponential` or `gaus` with a shapingTime of a few ns for a PMT),
+/// so the pulse of an event is the scintillation profile convolved with the single photoelectron response,
+/// and the electronics into TRestDetectorSignalToRawSignalProcess. The way the light reaches the channels
+/// depends on the scintillator (`model`):
 ///
 /// - `localCapture`, opaque scintillator (e.g. LiquidO: the light stays near where it is produced and the
 ///   fibres around it capture it): the channels closer than maxDistance to the hit
@@ -36,9 +51,13 @@
 /// rejected.
 ///
 /// Parameters: model (localCapture), readout (empty: the data readout of the TRestDetectorReadoutManager),
-/// medium (attenuation: name of the TRestDetectorMedium with `light`; empty: the only one),
-/// captureProbability, maxDistance and wlsMedium (localCapture), quantumEfficiency (1), seed (0: random seed;
-/// otherwise the generator is re-seeded at each event from the seed and the event and subevent IDs).
+/// medium (name of the TRestDetectorMedium with `light`; empty: the only one with `light`, needed for
+/// attenuation), captureProbability, maxDistance and wlsMedium (localCapture), quantumEfficiency (1),
+/// timeJitter (0), gainSpread (0), seed (0: random seed; otherwise the generator is re-seeded at each event
+/// from the seed and the event and subevent IDs).
+///
+/// Differences with the previous version of restv2: the times and charges of the photoelectrons were given
+/// by TRestDetectorLightToSignalProcess (removed), now TRestDetectorHitsToSignalProcess as for the charge.
 ///
 /// Examples:
 ///
@@ -47,9 +66,15 @@
 ///      class: "TRestDetectorLightCollectionProcess"
 ///      model: "localCapture"
 ///      captureProbability: "0.03*exp(-x*x/(2*10*10))"
-///      maxDistance: 40 mm
+///      maxDistance: 30 mm
+///      wlsMedium: "Y11"         # medium of the fibres with a `wls` response
 ///      quantumEfficiency: 0.4   # SiPMs
+///      timeJitter: 0.2 ns
+///      gainSpread: 0.1
 ///      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+///    hitsToSignal:
+///      class: "TRestDetectorHitsToSignalProcess"
+///      sampling: 0.04 us
 ///
 ///    # Vetoes (TRestGDMLReadout with readoutVolume), medium with attenuationLength and effectiveLightSpeed
 ///    lightCollection:
@@ -58,6 +83,8 @@
 ///      readout: "Veto_Readout"
 ///      medium: "BC408"
 ///      quantumEfficiency: 0.25  # PMT
+///      timeJitter: 0.5 ns
+///      gainSpread: 0.35
 ///
 /// The attenuation model replaces the legacy TRestDetectorLightAttenuationProcess (energy E exp(-d/λ) of the
 /// veto hits), now with photons; its parameters (vetoLightAttenuationLength, vetoEffectiveLightSpeed) are
@@ -67,7 +94,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
+#include <random>
 #include <stdexcept>
 
 #include "TF1.h"
@@ -83,6 +112,26 @@
 
 using ROOT::Math::XYZVector;
 
+namespace {
+/// Uniform random bits from a TRandom, for the distributions of <random>
+struct TRandomBits {
+    using result_type = std::uint32_t;
+    TRandom& random;
+    static constexpr result_type min() { return 0; }
+    static constexpr result_type max() { return 0xFFFFFFFEu; }
+    result_type operator()() { return static_cast<result_type>(random.Integer(0xFFFFFFFFu)); }
+};
+
+/// Binomial(n, p) drawn from a TRandom in about constant time: TRandom::Binomial draws n uniform numbers,
+/// too slow for the photons of a hit (thousands, for each channel around it)
+int Binomial(TRandom& random, int n, double p) {
+    if (n <= 0 || !(p > 0)) return 0;
+    if (p >= 1) return n;
+    TRandomBits bits{random};
+    return std::binomial_distribution<int>(n, p)(bits);
+}
+}  // namespace
+
 static const bool TRestDetectorLightCollectionProcess_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
     using P = TRestDetectorLightCollectionProcess;
@@ -93,6 +142,8 @@ static const bool TRestDetectorLightCollectionProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("captureProbability", &P::fCaptureProbability);
     reg.RegisterField<P>("maxDistance", &P::fMaxDistance);
     reg.RegisterField<P>("quantumEfficiency", &P::fQuantumEfficiency);
+    reg.RegisterField<P>("timeJitter", &P::fTimeJitter);
+    reg.RegisterField<P>("gainSpread", &P::fGainSpread);
     reg.RegisterField<P>("seed", &P::fSeed);
     return true;
 }();
@@ -166,6 +217,9 @@ void TRestDetectorLightCollectionProcess::LoadConfig() {
     if (fQuantumEfficiency < 0 || fQuantumEfficiency > 1) {
         throw std::runtime_error(prefix + "quantumEfficiency must be in [0, 1]");
     }
+    if (fTimeJitter < 0 || fGainSpread < 0) {
+        throw std::runtime_error(prefix + "timeJitter and gainSpread must be >= 0");
+    }
     fCapture = nullptr;
     if (fModel == "localCapture") {
         if (fMaxDistance <= 0) throw std::runtime_error(prefix + "localCapture needs maxDistance > 0");
@@ -191,18 +245,20 @@ void TRestDetectorLightCollectionProcess::InitProcess() {
     if (!readouts) throw std::runtime_error(user + ": no TRestDetectorReadoutManager found");
     fReadout = readouts->SelectReadout(fReadoutName, user);
 
+    // The light response: scintillation profiles, and the attenuation of the attenuation model
     fLight = nullptr;
-    if (fModel == "attenuation") {
-        const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-        if (!medium) throw std::runtime_error(user + ": the attenuation model needs a TRestDetectorMedium");
+    const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "light", user);
+    if (medium) {
         fLight = &medium->GetLightResponse(user);
         fMediumName = medium->GetName();
+    } else if (fModel == "attenuation") {
+        throw std::runtime_error(user + ": the attenuation model needs a TRestDetectorMedium with light");
     }
     fWLS = nullptr;
     if (!fWLSMediumName.empty()) {
         if (fModel != "localCapture") throw std::runtime_error(user + ": wlsMedium is for localCapture");
         const auto* wlsMedium =
-            fManager->FindMetadata<TRestDetectorMedium>(fWLSMediumName, user, "wlsMedium");
+            TRestDetectorMedium::Find(*fManager, fWLSMediumName, "wls", user, "wlsMedium");
         fWLS = &wlsMedium->GetWLSResponse(user);
     }
     // The stored metadata keeps the readout and medium used
@@ -215,10 +271,26 @@ void TRestDetectorLightCollectionProcess::InitProcess() {
     RegisterObservable("NHitsWithoutChannel", fNHitsWithoutChannel);
 }
 
+void TRestDetectorLightCollectionProcess::AddPhotoelectrons(const XYZVector& position, int photoelectrons,
+                                                            double time, int particleID,
+                                                            TRestDetectorHitsEvent& output) {
+    if (photoelectrons <= 0) return;
+    const auto* profile = fLight ? fLight->GetScintillationProfile(particleID) : nullptr;
+    for (int p = 0; p < photoelectrons; p++) {
+        double t = time;
+        if (profile) t += profile->SampleTime(fRandom);
+        if (fWLS) t += fWLS->GetReemissionTime(fRandom);
+        if (fTimeJitter > 0) t += fRandom.Gaus(0, fTimeJitter);
+        const double charge = fGainSpread > 0 ? std::max(0.0, fRandom.Gaus(1, fGainSpread)) : 1.0;
+        output.AddHit(position, charge, t, TRestDetectorHitsEvent::REST_HitType::XYZ, particleID);
+    }
+    fNPhotoelectrons += photoelectrons;
+}
+
 int TRestDetectorLightCollectionProcess::Detect(int photons) {
     if (photons <= 0) return 0;
     if (fQuantumEfficiency >= 1) return photons;
-    return static_cast<int>(fRandom.Binomial(photons, fQuantumEfficiency));
+    return Binomial(fRandom, photons, fQuantumEfficiency);
 }
 
 void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& position, int photons, double time,
@@ -243,9 +315,8 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
             probabilityLeft -= probability;
             continue;
         }
-        const int captured = probability >= probabilityLeft
-                                 ? left
-                                 : static_cast<int>(fRandom.Binomial(left, probability / probabilityLeft));
+        const int captured =
+            probability >= probabilityLeft ? left : Binomial(fRandom, left, probability / probabilityLeft);
         probabilityLeft -= probability;
         left -= captured;
         // Along the fibre to its read end
@@ -262,15 +333,11 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
             const double attenuationLength = fWLS->GetAttenuationLength();
             if (attenuationLength > 0) {
                 const double survival = std::exp(-distance / attenuationLength);
-                arriving = static_cast<int>(fRandom.Binomial(captured, survival));
+                arriving = Binomial(fRandom, captured, survival);
             }
             if (fWLS->GetLightSpeed() > 0) arrival += distance / fWLS->GetLightSpeed();
         }
-        const int photoelectrons = Detect(arriving);
-        if (photoelectrons <= 0) continue;
-        output.AddHit(channel.position, photoelectrons, arrival, TRestDetectorHitsEvent::REST_HitType::XYZ,
-                      particleID);
-        fNPhotoelectrons += photoelectrons;
+        AddPhotoelectrons(channel.position, Detect(arriving), arrival, particleID, output);
     }
     if (!collected) fNHitsWithoutChannel++;
 }
@@ -291,14 +358,9 @@ void TRestDetectorLightCollectionProcess::Attenuate(const XYZVector& position, i
     const double attenuationLength = fLight->GetAttenuationLength();
     const double lightSpeed = fLight->GetEffectiveLightSpeed();
     const int arriving =
-        attenuationLength > 0
-            ? static_cast<int>(fRandom.Binomial(photons, std::exp(-distance / attenuationLength)))
-            : photons;
-    const int photoelectrons = Detect(arriving);
-    if (photoelectrons <= 0) return;
-    output.AddHit(position, photoelectrons, lightSpeed > 0 ? time + distance / lightSpeed : time,
-                  TRestDetectorHitsEvent::REST_HitType::XYZ, particleID);
-    fNPhotoelectrons += photoelectrons;
+        attenuationLength > 0 ? Binomial(fRandom, photons, std::exp(-distance / attenuationLength)) : photons;
+    AddPhotoelectrons(position, Detect(arriving), lightSpeed > 0 ? time + distance / lightSpeed : time,
+                      particleID, output);
 }
 
 bool TRestDetectorLightCollectionProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {

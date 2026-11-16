@@ -28,7 +28,7 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     TRestWithUnits fAmplificationVoltage = 0;  // V
     /// Amplification gap (uniform field amplificationVoltage / gap)
     TRestWithUnits fGap = 0;  // mm
-    /// Name of the TRestDetectorMedium. It can be omitted if the manager contains a single medium.
+    /// Name of the TRestDetectorMedium (with `charge`). Empty: the only medium with `charge`.
     std::string fMediumName = "";
     /// Key of the amplification table. Only needed if the medium has several with the gap
     std::string fTable = "";

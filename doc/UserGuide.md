@@ -314,7 +314,8 @@ the order of these entries). Its files are read as a plain `TRestRawSignalEvent`
 
 The signals of the readout channels as (time, amplitude) points in double precision. Produced from raw
 signals by `TRestRawToDetectorSignalProcess` (time = `triggerStarts + sampling * bin`) or from hits by
-`TRestDetectorHitsToSignalProcess` (time = hit time + drift time, in us). Library:
+`TRestDetectorHitsToSignalProcess` (time = hit time, in us; the drift time is added by
+`TRestDetectorHitsDriftProcess`). Library:
 [detector](../libraries/detector/README.md).
 
 | Branch | Type | Content |
@@ -335,7 +336,7 @@ signals. Library: [detector](../libraries/detector/README.md).
 | Branch | Type | Content |
 |---|---|---|
 | `fHitX`, `fHitY`, `fHitZ` | `vector<float>` | Position (mm); NaN for the coordinates the hit does not define. |
-| `fHitTime` | `vector<float>` | Time (us). |
+| `fHitTime` | `vector<double>` | Time (us), in double precision (simulated times can be ~1e13 us, e.g. radioactive decays). Simulated hits: relative to the first energy deposit of the Geant4 event (`TRestGeant4ToDetectorHitsProcess`, observable `TimeOffset`). |
 | `fHitEnergy` | `vector<float>` | Energy (keV in simulations; the signal charge for hits reconstructed from data). |
 | `fHitType` | `vector<int>` | `REST_HitType` of each hit. |
 | `fHitParticleID` | `vector<int>` | Particle ID (PDG encoding) of the Geant4 track of each hit (`TRestGeant4ToDetectorHitsProcess`), kept by the hits processes; 0 if unknown (data). |
@@ -351,7 +352,7 @@ of hits of one type, stored contiguously. Library: [track](../libraries/track/RE
 
 | Branch | Type | Entries | Content |
 |---|---|---|---|
-| `fHitX`, `fHitY`, `fHitZ`, `fHitTime`, `fHitEnergy`, `fHitType` | `vector<float>`, type `vector<int>` | one per hit | The hits of all the tracks, back-to-back, as in 3.5. |
+| `fHitX`, `fHitY`, `fHitZ`, `fHitTime`, `fHitEnergy`, `fHitType` | `vector<float>` (time `vector<double>`), type `vector<int>` | one per hit | The hits of all the tracks, back-to-back, as in 3.5. |
 | `fSigmaX`, `fSigmaY`, `fSigmaZ` | `vector<float>` | one per hit | Spatial uncertainty of each hit (volume hits). |
 | `fTrackID` | `vector<int>` | one per track | Track ID. |
 | `fParentID` | `vector<int>` | one per track | ID of the track it comes from in the input event of the stage (0 if none). |
@@ -379,7 +380,7 @@ Geant4 process type * 1000 + subtype). Energies in keV, positions in mm, times i
 | Tracks | `fTrackIDs`, `fTrackParentIDs` (0: primary), `fTrackParticleIDs`, `fTrackCreatorProcessIDs` (int); `fTrackDepositedEnergy`, `fTrackInitialEnergies`, `fTrackGlobalTimestamp`, `fTrackTimeOffset`, `fTrackTimeLength`, `fTrackLength`, `fTrackWeight` (double); `fTrackInitialPositionX/Y/Z` (float) | one per track |
 | Hits of the tracks | `fTrackStartIndices`, `fTrackNHits` (int) | one per track |
 | Children of the tracks | `fTrackSecondariesIDs` (int, one per child); `fTrackSecondariesIndex` (index of the first child), `fTrackSecondariesOffsets` (number of children) (int, one per track) | |
-| Hits | `fHitX/Y/Z`, `fHitTime`, `fHitEnergy` (float), `fHitType` (int); `fHitProcessID` (0: initial step), `fHitVolumeID` (int); `fHitKineticEnergy`, `fHitMomentumDirectionX/Y/Z` (float); `fHitHadronicTargetIsotopeA/Z` (int, 0 if none) | one per hit |
+| Hits | `fHitX/Y/Z`, `fHitEnergy` (float), `fHitTime` (double, global time of Geant4), `fHitType` (int); `fHitProcessID` (0: initial step), `fHitVolumeID` (int); `fHitKineticEnergy`, `fHitMomentumDirectionX/Y/Z` (float); `fHitHadronicTargetIsotopeA/Z` (int, 0 if none) | one per hit |
 
 The hits of track `n` are `[fTrackStartIndices[n], fTrackStartIndices[n] + fTrackNHits[n])`; the children of
 track `n` are `fTrackSecondariesIDs[fTrackSecondariesIndex[n] ... + fTrackSecondariesOffsets[n] - 1]`. In C++:
@@ -481,6 +482,18 @@ pipeline:
 
 Every map with `class` inside the pipeline is created as a metadata: the processes form the chain **in their
 order in the file**; other metadata (e.g. a readout) are kept and can be used by the processes.
+
+At the end of the loop the pipeline prints the time spent by each process, reading the input and writing the
+accepted events: total (s), per event (ms) and fraction of the loop, to find the slow steps of a chain
+(with several threads, one table per thread):
+
+```
+TRestEventProcessManager: time of the event loop, 12.5 s:
+  quenching (TRestGeant4QuenchingProcess)          0.210 s      2.100 ms/event    1.7 %
+  lightCollection (TRestDetectorLightCollectionProcess)   ...
+  reading the input                                0.800 s      8.000 ms/event    6.4 %
+  writing the output (accepted events)             1.100 s     11.000 ms/event    8.8 %
+```
 
 ### 4.3 Event routing
 
@@ -925,16 +938,24 @@ The [detector library](../libraries/detector/README.md) describes the detector:
   `components` with `fraction`, `riseTime` and `decayTime`, the one without `particles` the default; the
   particle of each hit is its `fHitParticleID`) and a `wls` response for wavelength shifters such as WLS
   fibres (`attenuationLength` and `lightSpeed` along them, `decayTime` of the re-emission). The light is
-  simulated in three processes:
-  `TRestDetectorScintillationProcess` (photons produced), `TRestDetectorLightCollectionProcess` (photons
+  simulated in two processes:
+  `TRestDetectorScintillationProcess` (photons produced) and `TRestDetectorLightCollectionProcess` (photons
   reaching each channel and their photoelectrons with the quantum efficiency: `localCapture` for opaque
   scintillators such as LiquidO, with `wlsMedium` the attenuation and delay along the fibres to their read
-  end, `attenuation` for transparent ones read at an end such as the vetoes) and
-  `TRestDetectorLightToSignalProcess` (signals: a time per photoelectron from the scintillation profile of
-  its particle, the re-emission of the `wlsMedium` and the `timeJitter` of the photosensor, and a charge
-  with the `gainSpread` of the photosensor), followed by `TRestDetectorSignalShapingProcess`
-  (single photoelectron response and gain).
-  The processes find the medium and the readout by name (`medium`, `readout`; optional if there is only one).
+  end, `attenuation` for transparent ones read at an end such as the vetoes; a hit per photoelectron, with
+  its time from the scintillation profile of its particle, the re-emission of the `wlsMedium` and the
+  `timeJitter` of the photosensor, and its charge with the `gainSpread` of the photosensor), followed by the
+  generic `TRestDetectorHitsToSignalProcess` and `TRestDetectorSignalShapingProcess` (single photoelectron
+  response and gain).
+  The processes find the readout by name (`readout`, optional if there is only one) and the medium by name
+  and the response they use (`medium`, `wlsMedium`): without a name, the only medium with that key
+  (`charge`, `light` or `wls`), so a scintillator, its fibres and a gas need no names unless two media have
+  the same key.
+  The drift is only in the processes of the charge: `TRestDetectorHitsDriftProcess` (simulation: the
+  electrons on the readout plane at their arrival time) and `TRestDetectorHitsTimeProjectionProcess`
+  (data: the coordinate along the drift from the time, after `TRestDetectorSignalToHitsProcess`).
+  `TRestDetectorHitsToSignalProcess` and `TRestDetectorSignalToHitsProcess` are generic (channel, energy and
+  time), the same for charge and light.
 
 ```yaml
 readoutManager:

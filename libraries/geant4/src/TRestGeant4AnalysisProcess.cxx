@@ -1,5 +1,7 @@
 /// \class TRestGeant4AnalysisProcess
-/// Observables of a TRestGeant4Event. Energies in keV, positions in mm and angles in rad; times as the hits.
+/// Observables of a TRestGeant4Event. Energies in keV, positions in mm and angles in rad; times in us,
+/// relative to the first energy deposit of the event (TRestGeant4Event::GetFirstDepositTime), the origin of
+/// the times of TRestGeant4ToDetectorHitsProcess (e.g. a trigger time from FirstHitTime).
 ///
 /// Global and primary observables: totalEdep, sensitiveVolumeEnergy, nTracks, boundingSize (diagonal of
 /// the box containing the hits with energy), energyPrimary, x/y/zOriginPrimary, x/y/zDirectionPrimary,
@@ -454,6 +456,7 @@ bool TRestGeant4AnalysisProcess::ProcessEvent(const TRestEvent& input, TRestEven
         event->GetNumberOfPrimaries() == 0 ? "" : event->GetPrimaryParticleName(0);
     fObs.subEventPrimaryParticleName = event->IsSubEvent() ? event->GetSubEventParticleName() : "generator";
 
+    fTimeOrigin = event->GetFirstDepositTime();
     ProcessSelections(*event);
     for (auto& selection : fSelectionObs) {
         if (selection.entering) ProcessEntering(*event, selection);
@@ -521,7 +524,7 @@ void TRestGeant4AnalysisProcess::ProcessSelections(const TRestGeant4Event& event
                 selection.meanPosX += energy * hits.x[h];
                 selection.meanPosY += energy * hits.y[h];
                 selection.meanPosZ += energy * hits.z[h];
-                selection.firstHitTime = std::min(selection.firstHitTime, static_cast<double>(hits.time[h]));
+                selection.firstHitTime = std::min(selection.firstHitTime, hits.time[h] - fTimeOrigin);
                 any = true;
             }
             if (!any) continue;
@@ -624,7 +627,7 @@ void TRestGeant4AnalysisProcess::ProcessEntering(const TRestGeant4Event& event, 
         if (!inVolumes(h)) continue;
         if (!entered) {
             entering.entryEnergy = data.hitKineticEnergy[h];
-            entering.entryTime = hits.time[h];
+            entering.entryTime = hits.time[h] - fTimeOrigin;
             entering.entryX = hits.x[h];
             entering.entryY = hits.y[h];
             entering.entryZ = hits.z[h];
@@ -711,7 +714,7 @@ void TRestGeant4AnalysisProcess::ProcessInteractions(const TRestGeant4Event& eve
                 selection.interactionX.push_back(hits.x[h]);
                 selection.interactionY.push_back(hits.y[h]);
                 selection.interactionZ.push_back(hits.z[h]);
-                selection.interactionTime.push_back(hits.time[h]);
+                selection.interactionTime.push_back(hits.time[h] - fTimeOrigin);
                 selection.interactionKineticEnergy.push_back(data.hitKineticEnergy[h]);
                 selection.interactionSecondariesEnergy.push_back(0);
             }

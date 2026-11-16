@@ -12,7 +12,8 @@ class TRestDetectorReadout;
 
 /// \class TRestDetectorHitsDriftProcess
 /// \brief Converts the energy deposits of a TRestDetectorHitsEvent into ionization electrons and drifts
-/// them to the readout through a TRestDetectorMedium at its drift field (replaces the legacy
+/// them to the readout (position on the readout, arrival time) through a TRestDetectorMedium at its drift
+/// field (replaces the legacy
 /// TRestDetectorElectronDiffusionProcess and TRestDetectorGarfieldDriftProcess).
 ///
 /// The parameters (YAML keys), the observables and an example are described in the class documentation
@@ -35,7 +36,7 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
     /// omitted if the manager contains a single readout.
     std::string fReadoutName = "";
 
-    /// Name of the TRestDetectorMedium. It can be omitted if the manager contains a single medium.
+    /// Name of the TRestDetectorMedium (with `charge`). Empty: the only medium with `charge`.
     std::string fMediumName = "";
 
     /// Fluctuation of the number of electrons: fano (gaussian with the medium Fano factor), poisson or none.
@@ -56,6 +57,8 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
     double fTransversalDiffusion = 0;
     /// Attachment used (1/cm), written by InitProcess (not an input)
     double fAttachment = 0;
+    /// Drift velocity used (mm/us), written by InitProcess (not an input): arrival time of each electron
+    double fDriftVelocity = 0;
 
     /// \brief Default constructor (no configuration).
     TRestDetectorHitsDriftProcess();
@@ -66,9 +69,9 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
 
     /// \brief Reads the parameters from the YAML node.
     void LoadConfig() override;
-    /// \brief Gets the readout and the charge response of the medium (wValue > 0 needed, and fanoFactor > 0
-    /// with fano fluctuations) and writes the transport used to the metadata. Throws if one of them is
-    /// missing.
+    /// \brief Gets the readout and the charge response of the medium (wValue > 0 and a drift velocity
+    /// needed, and fanoFactor > 0 with fano fluctuations) and writes the transport used to the metadata.
+    /// Throws if one of them is missing.
     void InitProcess() override;
     /// \brief Converts the hits into drifted electrons (see the class description).
     /// \return false if no electron survives.

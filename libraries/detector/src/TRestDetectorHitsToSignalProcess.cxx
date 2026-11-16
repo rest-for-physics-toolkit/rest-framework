@@ -1,26 +1,19 @@
 /// \class TRestDetectorHitsToSignalProcess
 /// Converts a TRestDetectorHitsEvent into a TRestDetectorSignalEvent: the energy of each hit is added to the
-/// signal of the readout channel that collects it, at its arrival time.
+/// signal of the readout channel at its position (TRestDetectorReadout::GetChannelFromPosition), at the
+/// time of the hit. It is generic: the hits must already be where and when they are collected, e.g. the
+/// electrons drifted to the readout plane at their arrival time (TRestDetectorHitsDriftProcess) or the
+/// deposits of a scintillator read as a whole. Hits without channel are rejected and counted in the
+/// observable NHitsRejected.
 ///
-/// The drift is given by the readout (TRestDetectorReadout::GetDistanceToReadout, e.g. the Micromegas plane
-/// and its normal): the hit is collected at its projection on the readout (ProjectToReadout), which gives
-/// the channel (GetChannelFromPosition), and arrives at time + distance / driftVelocity. The drift velocity
-/// is the one of the TRestDetectorMedium at its drift field, unless driftVelocity is given.
-/// Hits outside the drift volume (distance < 0 or beyond the cathode, GetMaxDistanceToReadout) or without
-/// channel are rejected (fiducialization), and counted in the observable NHitsRejected. A readout without
-/// maximum distance (NaN, e.g. a Micromegas readout without gasThickness) has no cathode: no upper cut. For
-/// readouts without a distance (e.g. a PMT) the channel is the one at the hit position and the time is the
-/// hit time.
+/// With sampling > 0 the times are rounded down to multiples of it (fewer points per signal); otherwise the
+/// times are exact. Events without signals are rejected.
 ///
-/// With sampling > 0 the arrival times are rounded down to multiples of it (fewer points per signal);
-/// otherwise the times are exact. Events without signals are rejected.
+/// Differences with legacy: the drift (projection on the readout, drift time and drift volume cuts) is done
+/// by TRestDetectorHitsDriftProcess, there is no light-speed time for veto channels (they go in their own
+/// pipeline; the light has its own processes), no readout planes loop and the sampling is optional.
 ///
-/// Differences with legacy: the drift velocity comes from the medium, there is no light-speed time
-/// for veto channels (they go in their own pipeline, with a readout without distance), no readout planes
-/// loop (the readout gives the distance) and the sampling is optional.
-///
-/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (name,
-/// optional if there is only one), driftVelocity (0: the one of the medium), sampling (0).
+/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), sampling (0).
 ///
 /// Example:
 ///
@@ -36,7 +29,6 @@
 #include <stdexcept>
 
 #include "TRestDetectorHitsEvent.h"
-#include "TRestDetectorMedium.h"
 #include "TRestDetectorReadout.h"
 #include "TRestDetectorReadoutManager.h"
 #include "TRestDetectorSignalEvent.h"
@@ -49,8 +41,6 @@ static const bool TRestDetectorHitsToSignalProcess_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
     using P = TRestDetectorHitsToSignalProcess;
     reg.RegisterField<P>("readout", &P::fReadoutName);
-    reg.RegisterField<P>("medium", &P::fMediumName);
-    reg.RegisterField<P>("driftVelocity", &P::fDriftVelocity);
     reg.RegisterField<P>("sampling", &P::fSampling);
     return true;
 }();
@@ -101,20 +91,7 @@ void TRestDetectorHitsToSignalProcess::InitProcess() {
         throw std::runtime_error("TRestDetectorHitsToSignalProcess: no TRestDetectorReadoutManager found");
     }
     fReadout = readouts->SelectReadout(fReadoutName, "TRestDetectorHitsToSignalProcess");
-
-    // The drift velocity is only needed by readouts with a distance: checked with the first hit that drifts
-    fVelocity = fDriftVelocity;
-    if (fVelocity <= 0) {
-        const std::string user = "TRestDetectorHitsToSignalProcess";
-        const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-        // A medium without charge (e.g. a scintillator with only `light`) has no drift velocity
-        if (medium && medium->GetChargeResponse()) {
-            fVelocity = medium->GetChargeResponse()->GetDriftVelocity();
-            fMediumName = medium->GetName();
-        }
-    }
-    // The stored metadata keeps the readout and drift velocity used, not the defaults of the YAML
-    fDriftVelocity = fVelocity;
+    // The stored metadata keeps the readout used
     UpdateYAMLFromParams<TRestDetectorHitsToSignalProcess>(fNode);
 
     RegisterObservable("NHitsRejected", fNHitsRejected);
@@ -132,32 +109,22 @@ bool TRestDetectorHitsToSignalProcess::ProcessEvent(const TRestEvent& input, TRe
     signalEvent->Initialize();
     signalEvent->SetEventInfo(hitsEvent);
 
-    // Charge of each channel versus the arrival time, sorted
+    // Charge of each channel versus the time, sorted
     std::map<int, std::map<double, double>> charges;
     fNHitsRejected = 0;
+    // Consecutive hits at the same position (e.g. the photoelectrons of a channel) share its channel
+    XYZVector lastPosition;
+    int lastChannel = -1;
+    bool hasLast = false;
     for (size_t n = 0; n < hitsEvent->GetNumberOfHits(); n++) {
         const XYZVector position = hitsEvent->GetPosition(n);
         double time = hitsEvent->GetTime(n);
-        XYZVector collected = position;
-
-        const double distance = fReadout->GetDistanceToReadout(position);
-        if (!std::isnan(distance)) {
-            // NaN maximum distance: no cathode, no upper cut
-            const double maxDistance = fReadout->GetMaxDistanceToReadout(position);
-            if (distance < 0 || (!std::isnan(maxDistance) && distance > maxDistance)) {
-                fNHitsRejected++;
-                continue;
-            }
-            if (fVelocity <= 0) {
-                throw std::runtime_error(
-                    "TRestDetectorHitsToSignalProcess: no drift velocity. Define a TRestDetectorMedium (with "
-                    "the driftField of its charge) or set 'driftVelocity'");
-            }
-            collected = fReadout->ProjectToReadout(position);
-            time += distance / fVelocity;
+        if (!hasLast || position != lastPosition) {
+            lastChannel = fReadout->GetChannelFromPosition(position.X(), position.Y(), position.Z());
+            lastPosition = position;
+            hasLast = true;
         }
-
-        const int daqID = fReadout->GetChannelFromPosition(collected.X(), collected.Y(), collected.Z());
+        const int daqID = lastChannel;
         if (daqID < 0) {
             fNHitsRejected++;
             continue;

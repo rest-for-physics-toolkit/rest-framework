@@ -1,15 +1,10 @@
 /// \class TRestDetectorSignalToHitsProcess
-/// Creates the hits of an event from its signals. The channel of each signal gives the coordinates
-/// defined by the readout (e.g. only X or only Y for strips; undefined ones are NaN) and, if
-/// driftVelocity > 0, the coordinate along driftAxis where the distance to the readout is
-/// driftVelocity * time (as legacy: plane position + normal * distance). If the readout defines
-/// TRestDetectorReadout::GetDistanceToReadout (e.g. the Micromegas plane, positive towards its cathode
-/// as set by its normal), the drift axis (the one of its normal, e.g. Y for a Micromegas with normal
-/// [0, -1, 0]), the plane and the drift sense come from the readout and driftAxis is ignored. Otherwise the
-/// plane is at 0, the axis is driftAxis and the sense its sign ("-Z" puts the drift volume on the -Z side).
-/// The drift only fills a coordinate the readout leaves undefined: channels whose readout already gives it
-/// (e.g. the centre of a scintillator) keep their position, so detectors with and without drift can share the
-/// process. The hit type (X, Y, XY, ...) is deduced from the coordinates that are defined.
+/// Creates the hits of an event from its signals. It is generic: the channel of each signal gives the
+/// coordinates defined by the readout (TRestDetectorReadout::GetPositionFromChannel, e.g. only X or only Y
+/// for strips, the centre of a scintillator; undefined ones are NaN) and the pulse gives the energy and the
+/// time of the hits. The hit type (X, Y, XY, ...) is deduced from the coordinates that are defined. In a
+/// detector with drift, the coordinate along the drift is obtained from the time afterwards, by
+/// TRestDetectorHitsTimeProjectionProcess.
 ///
 /// Methods (energy, time of each hit):
 /// - onlyMax, tripleMax, tripleMaxAverage, gaussFit, landauFit, agetFit: one hit at the pulse maximum.
@@ -22,16 +17,15 @@
 /// - all: one hit per signal point.
 /// - intWindow: one hit per integration window of intWindow, if the mean charge is over threshold.
 ///
-/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), driftVelocity (0:
-/// from the TRestDetectorMedium at its drift field, or no drift if there is no medium), medium (name,
-/// optional if only one), driftAxis ("Z"), method ("tripleMaxAverage"),
-/// smoothingPoints (5), intWindow (5), threshold (100), integralRange ([0, 0]).
+/// Differences with legacy: no driftVelocity (TRestDetectorHitsTimeProjectionProcess).
+///
+/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), method
+/// ("tripleMaxAverage"), smoothingPoints (5), intWindow (5), threshold (100), integralRange ([0, 0]).
 ///
 /// Example:
 ///
 ///    signalToHits:
 ///      class: "TRestDetectorSignalToHitsProcess"
-///      driftVelocity: 1.2
 ///      method: "tripleMaxAverage"
 
 #include "TRestDetectorSignalToHitsProcess.h"
@@ -39,9 +33,7 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "TRestConstants.h"
 #include "TRestDetectorHitsEvent.h"
-#include "TRestDetectorMedium.h"
 #include "TRestDetectorReadout.h"
 #include "TRestDetectorReadoutManager.h"
 #include "TRestDetectorSignalEvent.h"
@@ -55,9 +47,6 @@ static const bool TRestDetectorSignalToHitsProcess_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
     using P = TRestDetectorSignalToHitsProcess;
     reg.RegisterField<P>("readout", &P::fReadoutName);
-    reg.RegisterField<P>("driftVelocity", &P::fDriftVelocity);
-    reg.RegisterField<P>("medium", &P::fMediumName);
-    reg.RegisterField<P>("driftAxis", &P::fDriftAxis);
     reg.RegisterField<P>("method", &P::fMethod);
     reg.RegisterField<P>("smoothingPoints", &P::fSmoothingPoints);
     reg.RegisterField<P>("intWindow", &P::fIntWindow);
@@ -74,65 +63,6 @@ const bool kRegistered = []() {
         });
     return true;
 }();
-
-/// Sets the coordinate along the drift axis, only if the channel position leaves it undefined
-void SetDriftCoordinate(ROOT::Math::XYZVector& p, char axis, double value) {
-    if (axis == 'X' && std::isnan(p.X())) p.SetX(value);
-    if (axis == 'Y' && std::isnan(p.Y())) p.SetY(value);
-    if (axis == 'Z' && std::isnan(p.Z())) p.SetZ(value);
-}
-
-/// Drift coordinate as {offset, slope}: coordinate along the axis = offset + slope * distance, where
-/// distance is the one to the readout of a channel. TRestDetectorReadout::GetDistanceToReadout is a
-/// projection on the plane normal, so it is affine along the axis and two evaluations give the plane
-/// (offset) and the sense (slope). {0, direction} if the readout defines no distance along the axis.
-std::pair<double, double> GetDriftLine(const TRestDetectorReadout& readout, int daqID,
-                                       ROOT::Math::XYZVector p, char axis, int direction) {
-    if (std::isnan(p.X())) p.SetX(0);
-    if (std::isnan(p.Y())) p.SetY(0);
-    if (std::isnan(p.Z())) p.SetZ(0);
-    const ROOT::Math::XYZVector step(axis == 'X', axis == 'Y', axis == 'Z');
-    p -= step * (axis == 'X' ? p.X() : axis == 'Y' ? p.Y() : p.Z());  // coordinate 0 on the axis
-    const double d0 = readout.GetDistanceToReadout(daqID, p);
-    const double d1 = readout.GetDistanceToReadout(daqID, p + step);
-    if (std::isnan(d0) || std::isnan(d1) || d1 == d0) return {0, direction};
-    return {-d0 / (d1 - d0), 1 / (d1 - d0)};
-}
-
-/// Drift axis of a channel: that of the normal of its readout (the axis along which the distance to the
-/// readout changes most), `fallback` if the readout defines no distance
-char GetDriftAxis(const TRestDetectorReadout& readout, int daqID, ROOT::Math::XYZVector p, char fallback) {
-    if (std::isnan(p.X())) p.SetX(0);
-    if (std::isnan(p.Y())) p.SetY(0);
-    if (std::isnan(p.Z())) p.SetZ(0);
-    const double d0 = readout.GetDistanceToReadout(daqID, p);
-    if (std::isnan(d0)) return fallback;
-    const char axes[3] = {'X', 'Y', 'Z'};
-    const ROOT::Math::XYZVector steps[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
-    char axis = fallback;
-    double largest = 0;
-    for (int a = 0; a < 3; a++) {
-        const double change = std::abs(readout.GetDistanceToReadout(daqID, p + steps[a]) - d0);
-        if (std::isfinite(change) && change > largest) {
-            largest = change;
-            axis = axes[a];
-        }
-    }
-    return axis;
-}
-
-/// Hit type from the coordinates that are defined
-TRestHitsData::REST_HitType GetHitType(const ROOT::Math::XYZVector& p) {
-    const bool x = !std::isnan(p.X()), y = !std::isnan(p.Y()), z = !std::isnan(p.Z());
-    if (x && y && z) return TRestHitsData::XYZ;
-    if (x && y) return TRestHitsData::XY;
-    if (x && z) return TRestHitsData::XZ;
-    if (y && z) return TRestHitsData::YZ;
-    if (x) return TRestHitsData::X;
-    if (y) return TRestHitsData::Y;
-    if (z) return TRestHitsData::Z;
-    return TRestHitsData::unknown;
-}
 }  // namespace
 
 TRestDetectorSignalToHitsProcess::TRestDetectorSignalToHitsProcess() : TRestEventProcess() {
@@ -161,11 +91,6 @@ void TRestDetectorSignalToHitsProcess::LoadConfig() {
 
     UpdateParamsFromYAML<TRestDetectorSignalToHitsProcess>(fNode);
     fMethod = TRestTools::NormalizeOption("method", fMethod, kMethods);
-    // [+-]X, Y or Z, the axis in upper case
-    const bool signed_ = !fDriftAxis.empty() && (fDriftAxis[0] == '+' || fDriftAxis[0] == '-');
-    fDriftAxis = (signed_ ? fDriftAxis.substr(0, 1) : "") +
-                 TRestTools::NormalizeOption("driftAxis", signed_ ? fDriftAxis.substr(1) : fDriftAxis,
-                                             {"X", "Y", "Z"});
     if (fMethod == "intWindow" && !(fIntWindow > 0)) {
         throw std::runtime_error("TRestDetectorSignalToHitsProcess: method intWindow needs intWindow > 0");
     }
@@ -173,9 +98,6 @@ void TRestDetectorSignalToHitsProcess::LoadConfig() {
 }
 
 void TRestDetectorSignalToHitsProcess::InitProcess() {
-    fAxis = fDriftAxis.back();  // [+-]X, Y or Z, checked in LoadConfig
-    fDriftDirection = fDriftAxis[0] == '-' ? -1 : 1;
-
     auto* readouts = fManager ? dynamic_cast<TRestDetectorReadoutManager*>(
                                     fManager->GetMetadataClass("TRestDetectorReadoutManager"))
                               : nullptr;
@@ -184,19 +106,7 @@ void TRestDetectorSignalToHitsProcess::InitProcess() {
     }
     fReadout = readouts->SelectReadout(fReadoutName, "TRestDetectorSignalToHitsProcess");
 
-    if (fDriftVelocity <= 0) {
-        const std::string user = "TRestDetectorSignalToHitsProcess";
-        const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-        // A medium without charge (e.g. a scintillator with only `light`) gives no drift: no drift velocity
-        if (medium && (medium->GetChargeResponse() || !fMediumName.empty())) {
-            fDriftVelocity = medium->GetChargeResponse(user).GetDriftVelocity();
-            if (fDriftVelocity <= 0 && !fMediumName.empty()) {
-                throw std::runtime_error(user + ": the medium '" + fMediumName + "' gives no drift velocity");
-            }
-            fMediumName = medium->GetName();
-        }
-    }
-    // The stored metadata keeps the readout and drift velocity used, not the defaults of the YAML
+    // The stored metadata keeps the readout used, not the default of the YAML
     UpdateYAMLFromParams<TRestDetectorSignalToHitsProcess>(fNode);
 }
 
@@ -270,17 +180,8 @@ bool TRestDetectorSignalToHitsProcess::ProcessEvent(const TRestEvent& input, TRe
             if (std::isfinite(hit.first) && hit.second > 0) hits.push_back(hit);
         }
 
-        const char axis = fDriftVelocity > 0 ? GetDriftAxis(*fReadout, daqID, channelPos, fAxis) : fAxis;
-        const auto [driftOffset, driftSlope] =
-            fDriftVelocity > 0 ? GetDriftLine(*fReadout, daqID, channelPos, axis, fDriftDirection)
-                               : std::pair<double, double>{0, 0};
-        for (const auto& [time, energy] : hits) {
-            auto position = channelPos;
-            if (fDriftVelocity > 0) {
-                SetDriftCoordinate(position, axis, driftOffset + driftSlope * fDriftVelocity * time);
-            }
-            hitsEvent->AddHit(position, energy, time, GetHitType(position));
-        }
+        const auto type = TRestHitsData::GetHitType(channelPos.X(), channelPos.Y(), channelPos.Z());
+        for (const auto& [time, energy] : hits) hitsEvent->AddHit(channelPos, energy, time, type);
     }
 
     return hitsEvent->GetNumberOfHits() > 0;

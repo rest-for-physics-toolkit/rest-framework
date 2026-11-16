@@ -8,6 +8,13 @@
 /// without `volumes`, those of the sensitive volumes of the simulation (`volumes: [".*"]` or `["^."]`
 /// for all of them).
 ///
+/// The times of the hits are relative to the first energy deposit of the Geant4 event in any volume
+/// (TRestGeant4Event::GetFirstDepositTime, the same origin as the times of TRestGeant4AnalysisProcess and for
+/// every detector of the event): the times of a radioactive decay, ~1e13 us after the generation of the
+/// event, become those of the detector (a trigger at the first deposit, drift and scintillation times of ns
+/// or us). The time of that first deposit is the observable TimeOffset (the event time is not changed: it is
+/// the generation time of the event).
+///
 /// Difference with legacy: there is no `type` per volume (legacy VETO hits), the hits of different
 /// detectors are transferred by separate processes or pipelines with their own `volumes`.
 ///
@@ -115,6 +122,8 @@ void TRestGeant4ToDetectorHitsProcess::InitProcess() {
     if (fVolumeIDs.empty()) {
         throw std::runtime_error("TRestGeant4ToDetectorHitsProcess: no volume matches 'volumes'");
     }
+
+    RegisterObservable("TimeOffset", fTimeOffset);
 }
 
 bool TRestGeant4ToDetectorHitsProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -131,6 +140,8 @@ bool TRestGeant4ToDetectorHitsProcess::ProcessEvent(const TRestEvent& input, TRe
 
     const auto& data = g4Event->fEventData;
     const auto& hits = data.hitsStorage;
+    // Times relative to the first deposit of the event
+    fTimeOffset = g4Event->GetFirstDepositTime();
     // The hits of the track t are [trackStartIndices[t], trackStartIndices[t] + trackNHits[t])
     for (size_t t = 0; t < data.trackParticleIDs.size(); t++) {
         const size_t start = data.trackStartIndices.at(t);
@@ -138,10 +149,7 @@ bool TRestGeant4ToDetectorHitsProcess::ProcessEvent(const TRestEvent& input, TRe
         for (size_t i = start; i < end; i++) {
             if (hits.energy[i] <= 0) continue;
             if (fVolumeIDs.count(data.hitVolumeID.at(i)) == 0) continue;
-            if (hits.time[i] < 0) {
-                throw std::runtime_error("TRestGeant4ToDetectorHitsProcess: hit with negative time");
-            }
-            hitsEvent->AddHit(hits.x[i], hits.y[i], hits.z[i], hits.energy[i], hits.time[i],
+            hitsEvent->AddHit(hits.x[i], hits.y[i], hits.z[i], hits.energy[i], hits.time[i] - fTimeOffset,
                               TRestDetectorHitsEvent::REST_HitType::XYZ, data.trackParticleIDs[t]);
         }
     }

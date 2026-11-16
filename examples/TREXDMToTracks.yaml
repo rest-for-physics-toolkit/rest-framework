@@ -114,10 +114,12 @@ manager:
         - "SignalsPhysicalID"
         - "SignalsMaxAmplitude"
 
-    # Hits with the drift velocity of the medium at the drift field
     signalToHits:
       class: "TRestDetectorSignalToHitsProcess"
       method: "gaussFit"
+    # Drift coordinate from the time, with the drift velocity of the medium at the drift field
+    timeProjection:
+      class: "TRestDetectorHitsTimeProjectionProcess"
 
     hitsToTrack:
       class: "TRestDetectorHitsToTrackProcess"

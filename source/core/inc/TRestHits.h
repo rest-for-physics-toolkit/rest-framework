@@ -70,8 +70,11 @@ struct TRestHitsData {
     /// Y = 3, Z = 5), so a type defines a coordinate if it is divisible by its prime.
     enum REST_HitType : int { unknown = -1, X = 2, Y = 3, Z = 5, XY = 6, XZ = 10, YZ = 15, XYZ = 30 };
 
-    std::vector<float> x, y, z, time, energy;  ///< Positions (mm), time and energy of the hits.
-    std::vector<int> type;                     ///< REST_HitType of each hit.
+    std::vector<float> x, y, z, energy;  ///< Positions (mm) and energy of the hits.
+    /// Time of the hits, in double precision: the times of a simulation can be large (e.g. a radioactive
+    /// decay, ~1e13 us) while the differences that matter are of ns or us (drift, scintillation)
+    std::vector<double> time;
+    std::vector<int> type;  ///< REST_HitType of each hit.
 
     /// Coordinates as indices 0, 1, 2 (X, Y, Z): factor in the hit type and axis title
     static constexpr REST_HitType kAxisTypes[3] = {X, Y, Z};
@@ -85,6 +88,15 @@ struct TRestHitsData {
     /// \brief Whether a hit of the given type defines the coordinate (0, 1, 2 = X, Y, Z).
     static bool IsDefined(int hitType, int axis) { return hitType % kAxisTypes[axis] == 0; }
 
+    /// \brief Type of a hit from the coordinates that are defined (not NaN); unknown if none is.
+    static REST_HitType GetHitType(double hitX, double hitY, double hitZ) {
+        int type = 1;
+        if (!std::isnan(hitX)) type *= X;
+        if (!std::isnan(hitY)) type *= Y;
+        if (!std::isnan(hitZ)) type *= Z;
+        return type == 1 ? unknown : static_cast<REST_HitType>(type);
+    }
+
     /// \brief Appends a hit. The coordinates its type does not define are stored as NaN, whatever the value
     /// given (e.g. the 0 of a projected position, TRestHits::GetPosition, when the hits are copied); all
     /// of them are kept for the unknown type.
@@ -94,7 +106,7 @@ struct TRestHitsData {
         x.push_back(known && !IsDefined(hitType, 0) ? nan : (float)hitX);
         y.push_back(known && !IsDefined(hitType, 1) ? nan : (float)hitY);
         z.push_back(known && !IsDefined(hitType, 2) ? nan : (float)hitZ);
-        time.push_back((float)hitTime);
+        time.push_back(hitTime);
         energy.push_back((float)hitEnergy);
         type.push_back(hitType);
     }

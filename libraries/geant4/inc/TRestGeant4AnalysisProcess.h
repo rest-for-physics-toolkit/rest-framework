@@ -71,6 +71,8 @@ class TRestGeant4SelectionInfo : public TRestMetadata {
 /// \author JuanAn García <juanangp@unizar.es>
 class TRestGeant4AnalysisProcess : public TRestEventProcess {
    private:
+    /// Time origin of the event (TRestGeant4Event::GetFirstDepositTime): the times are relative to it
+    double fTimeOrigin = 0;  //!
     struct GlobalObservables {
         double totalEdep = 0;
         double sensitiveVolumeEnergy = 0;

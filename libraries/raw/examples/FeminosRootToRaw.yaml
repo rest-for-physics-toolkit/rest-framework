@@ -73,8 +73,10 @@ manager:
         - "all"
     signalToHits:
       class: "TRestDetectorSignalToHitsProcess"
-#      driftVelocity: 33.4296
       method: "gaussFit"
+    timeProjection:                    # drift velocity of the medium at its drift field
+      class: "TRestDetectorHitsTimeProjectionProcess"
+#      driftVelocity: 33.4296
     hitsToTrack:
       class: "TRestDetectorHitsToTrackProcess"
       clusterDistance: "2.5mm"

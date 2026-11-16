@@ -14,9 +14,9 @@
 # volume of its veto (the light guide, readoutVolume of libraries/detector/examples/GDMLReadout.yaml:
 # veto_readout_output.root must be generated again with it) are attenuated and delayed with the distance
 # (attenuation model, light response of the medium) and the PMT converts them into photoelectrons
-# (quantumEfficiency of lightCollection). lightToSignal gives each photoelectron its time (the scintillation
-# profile of BC408, the transit time spread of the PMT) and charge (gain spread of the PMT), and
-# signalShaping the response of the electronics: the signals are in photoelectrons. The values of the light
+# (quantumEfficiency of lightCollection), each with its time (the scintillation profile of BC408, the transit
+# time spread of the PMT) and charge (gain spread of the PMT); hitsToSignal collects them in the channels and
+# signalShaping gives the response of the electronics: the signals are in photoelectrons. The values of the light
 # are placeholders to be measured (BC408: about 10 photons per keV, rise 0.9 ns and decay 2.1 ns; the gain is
 # in ADC per photoelectron).
 
@@ -74,13 +74,12 @@ manager:
       class: "TRestDetectorLightCollectionProcess"
       model: "attenuation"
       quantumEfficiency: 0.25  # PMT
-      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
-    lightToSignal:
-      class: "TRestDetectorLightToSignalProcess"
       timeJitter: 0.5 ns  # PMT transit time spread
       gainSpread: 0.35  # PMT single photoelectron resolution
+      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+    hitsToSignal:
+      class: "TRestDetectorHitsToSignalProcess"
       sampling: 1 ns
-      observables: ["NPhotoelectrons"]
     signalShaping:
       class: "TRestDetectorSignalShapingProcess"
       shapingType: "shaperSin"

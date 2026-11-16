@@ -11,7 +11,7 @@ class TRestDetectorReadout;
 
 /// \class TRestDetectorSignalToHitsProcess
 /// \brief Transforms the signals of a TRestDetectorSignalEvent into the hits of a TRestDetectorHitsEvent
-/// using the readout (channel position) and, optionally, a constant drift velocity.
+/// using the readout (channel position) and the pulses (energy and time); generic, no drift.
 ///
 /// The parameters (YAML keys), the observables and an example are described in the class documentation
 /// (TRestDetectorSignalToHitsProcess.cxx).
@@ -21,8 +21,6 @@ class TRestDetectorReadout;
 class TRestDetectorSignalToHitsProcess : public TRestEventProcess {
    private:
     TRestDetectorReadout* fReadout = nullptr;
-    char fAxis = 'Z';         ///< Drift axis parsed from fDriftAxis
-    int fDriftDirection = 1;  ///< Drift sense parsed from fDriftAxis (readouts without distance)
 
    public:
     /// Methods accepted by fMethod. onlyMax, tripleMax, tripleMaxAverage, gaussFit, landauFit and agetFit
@@ -34,24 +32,6 @@ class TRestDetectorSignalToHitsProcess : public TRestEventProcess {
     /// Name of the readout (in TRestDetectorReadoutManager) that decodes the signal channels. It can be
     /// omitted if the manager contains a single readout.
     std::string fReadoutName = "";
-
-    /// Drift velocity in position units per signal time unit: coordinate along fDriftAxis where
-    /// TRestDetectorReadout::GetDistanceToReadout = driftVelocity * time (readout plane and sense from
-    /// the readout), or direction * driftVelocity * time if the readout defines no distance.
-    /// Values <= 0 take it from the TRestDetectorMedium at its drift field if there is a medium, otherwise
-    /// they disable the drift: the hits are placed on the channel position.
-    TRestWithUnits fDriftVelocity = 0;
-
-    /// Name of the TRestDetectorMedium giving the drift velocity when driftVelocity <= 0. It can be omitted
-    /// if the manager contains a single one.
-    std::string fMediumName = "";
-
-    /// Axis and sense of the drift from the readout into the drift volume (Z, -Z, X, ...; as the legacy
-    /// plane normal). Only used if the readout defines no distance: otherwise the axis and the sense come
-    /// from the readout normal (e.g. a Micromegas with normal [0, -1, 0] drifts along Y). The drift only
-    /// fills it for channels where the readout leaves it undefined (NaN), so channels of detectors without
-    /// drift keep their position.
-    std::string fDriftAxis = "Z";
 
     /// Method used to extract the hits from each signal: onlyMax, tripleMax, tripleMaxAverage, gaussFit,
     /// landauFit, agetFit, integral, qCenter (one hit per signal), all (one hit per point) or intWindow
@@ -82,8 +62,7 @@ class TRestDetectorSignalToHitsProcess : public TRestEventProcess {
 
     /// \brief Reads the parameters from the YAML node.
     void LoadConfig() override;
-    /// \brief Gets the readout and, if driftVelocity <= 0, the drift velocity of the medium (written to the
-    /// metadata).
+    /// \brief Gets the readout (written to the metadata).
     void InitProcess() override;
     /// \brief Creates the hits of the signals with the chosen method.
     /// \return false if no hit is created.

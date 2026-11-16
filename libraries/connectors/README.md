@@ -17,7 +17,7 @@ disabled); the library is not built if no class is enabled.
 
 | Class | Conversion | Requires | Description |
 | --- | --- | --- | --- |
-| `TRestGeant4ToDetectorHitsProcess` | `TRestGeant4Event` to `TRestDetectorHitsEvent` | geant4, detector | Transfers the Geant4 hits of the selected volumes (the sensitive ones by default) as XYZ hits. |
+| `TRestGeant4ToDetectorHitsProcess` | `TRestGeant4Event` to `TRestDetectorHitsEvent` | geant4, detector | Transfers the Geant4 hits of the selected volumes (the sensitive ones by default) as XYZ hits, with their times relative to the first energy deposit of the Geant4 event (observable `TimeOffset`, its absolute time). |
 | `TRestRawToDetectorSignalProcess` | `TRestRawSignalEvent` to `TRestDetectorSignalEvent` | raw, detector | Converts ADC samples into time and amplitude points, optionally with zero suppression; channel activity observables. |
 | `TRestDetectorSignalToRawSignalProcess` | `TRestDetectorSignalEvent` to `TRestRawSignalEvent` | detector, raw | Digitizes the signals: samples in an acquisition window from a trigger time, in ADC units with saturation (simulation to raw data). |
 | `TRestDetectorHitsToTrackProcess` | `TRestDetectorHitsEvent` to `TRestTrackEvent` | detector, track | Groups in tracks the hits closer than a distance, optionally attaching the isolated low energy hits (time walk). |
@@ -54,7 +54,7 @@ files to be generated first (see the comments at the top of each file).
 | File | Description |
 | --- | --- |
 | `Geant4ToHits.yaml` | `TRestGeant4Event` (restG4 output) to `TRestDetectorHitsEvent`. |
-| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout. |
+| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout, with their z reconstructed from the arrival time. |
 | `Geant4ToRaw.yaml` | Full simulation chain: Geant4 hits, drift, smearing, readout signals, shaping, digitization and noise, to raw signals analysed as the data. |
 | `Geant4ToRawVeto.yaml` | Raw signals of the vetoes with the acquisition window of the Micromegas (trigger time from an observable). |
 | `RawToHits.yaml` | `TRestRawSignalEvent` to `TRestDetectorSignalEvent` to `TRestDetectorHitsEvent`. |

@@ -12,6 +12,8 @@
 #include "Math/Vector3D.h"
 #include "TRestMetadata.h"
 
+class TRestManager;
+
 class TFile;
 class TRandom;
 class TRestDetectorGainTable;
@@ -419,6 +421,18 @@ class TRestDetectorMedium : public TRestMetadata {
     inline const TRestDetectorWLSResponse* GetWLSResponse() const { return fWLS.get(); }
     /// \brief Wavelength shifting response; throws if the medium has no `wls` (user is for the message)
     const TRestDetectorWLSResponse& GetWLSResponse(const std::string& user) const;
+
+    /// \brief Whether the medium has the response of that key: "charge", "light" or "wls".
+    bool HasResponse(const std::string& response) const;
+
+    /// \brief The medium a process uses for a response ("charge", "light" or "wls"): the medium name of the
+    /// manager, which must have that response, or, if name is empty, the only medium with that response
+    /// (nullptr if there is none). Throws if name is not found, if it has not the response or if name is
+    /// empty and several media have it. user (the process) and field (its field with the name) are for the
+    /// messages.
+    static const TRestDetectorMedium* Find(const TRestManager& manager, const std::string& name,
+                                           const std::string& response, const std::string& user,
+                                           const std::string& field = "medium");
 
     /// \brief YAML of the medium stored in its file (name, state, components)
     YAML::Node GetDefinition() const;

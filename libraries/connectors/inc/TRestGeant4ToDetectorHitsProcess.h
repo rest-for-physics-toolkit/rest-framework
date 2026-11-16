@@ -18,6 +18,9 @@ class TRestGeant4ToDetectorHitsProcess : public TRestEventProcess {
    private:
     /// IDs (TRestGeant4Metadata volume map) of the volumes matching fVolumes, or of the sensitive ones
     std::set<int> fVolumeIDs;
+    /// Observable TimeOffset: time of the first energy deposit of the Geant4 event, the origin of the times
+    /// of the hits
+    double fTimeOffset = 0;  //!
 
    public:
     /// Regular expressions of the physical (or, if none matches, logical) volumes whose hits are

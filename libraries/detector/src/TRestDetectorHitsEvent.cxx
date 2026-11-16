@@ -50,7 +50,7 @@ TRestHits* TRestDetectorHitsEvent::GetXZHits() {
             fXZData.x.push_back((float)GetX(i));
             fXZData.y.push_back((float)GetY(i));
             fXZData.z.push_back((float)GetZ(i));
-            fXZData.time.push_back((float)GetTime(i));
+            fXZData.time.push_back(GetTime(i));
             fXZData.energy.push_back((float)GetEnergy(i));
             fXZData.type.push_back((int)REST_HitType::XZ);
         }
@@ -66,7 +66,7 @@ TRestHits* TRestDetectorHitsEvent::GetYZHits() {
             fYZData.x.push_back((float)GetX(i));
             fYZData.y.push_back((float)GetY(i));
             fYZData.z.push_back((float)GetZ(i));
-            fYZData.time.push_back((float)GetTime(i));
+            fYZData.time.push_back(GetTime(i));
             fYZData.energy.push_back((float)GetEnergy(i));
             fYZData.type.push_back((int)REST_HitType::YZ);
         }
@@ -82,7 +82,7 @@ TRestHits* TRestDetectorHitsEvent::GetXYZHits() {
             fXYZData.x.push_back((float)GetX(i));
             fXYZData.y.push_back((float)GetY(i));
             fXYZData.z.push_back((float)GetZ(i));
-            fXYZData.time.push_back((float)GetTime(i));
+            fXYZData.time.push_back(GetTime(i));
             fXYZData.energy.push_back((float)GetEnergy(i));
             fXYZData.type.push_back((int)REST_HitType::XYZ);
         }

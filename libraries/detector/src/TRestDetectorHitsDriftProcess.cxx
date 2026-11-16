@@ -2,12 +2,15 @@
 /// Converts the energy of each hit into ionization electrons (energy / wValue of the medium, with the
 /// chosen fluctuations) and diffuses each electron with the TRestDetectorMedium at its drift field
 /// (driftField of its charge; gaussian diffusion and attachment, from a transport table of the medium or its
-/// fixed parameters; the values used are written to the metadata of the process). Each surviving electron
-/// becomes a hit with the diffused position and the time of the original hit (only the position changes,
-/// the drift time is added when converting to signals) and the energy of its electrons: the electrons of a
-/// hit carry the fluctuated number of electrons times the W-value (the energy of the hit without
-/// fluctuations), so the fluctuation is kept. A hit whose number of electrons fluctuates to 0 or less is
-/// removed.
+/// fixed parameters; the values used are written to the metadata of the process) and drifts it to the
+/// readout. Each surviving electron becomes a hit on the readout (its diffused position projected on the
+/// readout plane, TRestDetectorReadout::ProjectToReadout, where the readout gives its channel) at its arrival
+/// time, the time of the original hit plus its diffused distance to the readout over the drift velocity of
+/// the medium, with the energy of its electrons: the electrons of a hit carry the fluctuated number of
+/// electrons times the W-value (the energy of the hit without fluctuations), so the fluctuation is kept. A
+/// hit whose number of electrons fluctuates to 0 or less is removed. TRestDetectorHitsToSignalProcess then
+/// gives the signals; the drift coordinate is recovered from the time by
+/// TRestDetectorHitsTimeProjectionProcess (e.g. to look at the drifted electrons in 3D).
 ///
 /// The drift distance and its direction are given by TRestDetectorReadout::GetDistanceToReadout (e.g. the
 /// Micromegas plane and its normal). Hits without a distance or outside the drift volume (distance < 0 or
@@ -20,8 +23,8 @@
 /// (veto hits are split beforehand) and there is no microscopic Garfield drift: in a uniform field it uses
 /// the same transport table as the gaussian diffusion (microscopic simulations are done with restGarfield).
 ///
-/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (name,
-/// optional if there is only one), fluctuations ("fano", "poisson" or "none"), maxHits (1000, 0: no
+/// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (empty:
+/// the only one with `charge`), fluctuations ("fano", "poisson" or "none"), maxHits (1000, 0: no
 /// limit), seed (0: random seed; otherwise the generator is re-seeded at each event from the seed and the
 /// event and subevent IDs, TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number
 /// of threads).
@@ -58,6 +61,7 @@ static const bool TRestDetectorHitsDriftProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("longDiff", &P::fLongitudinalDiffusion);
     reg.RegisterField<P>("transDiff", &P::fTransversalDiffusion);
     reg.RegisterField<P>("attachment", &P::fAttachment);
+    reg.RegisterField<P>("driftVelocity", &P::fDriftVelocity);
     return true;
 }();
 
@@ -109,8 +113,8 @@ void TRestDetectorHitsDriftProcess::InitProcess() {
     fReadout = readouts->SelectReadout(fReadoutName, "TRestDetectorHitsDriftProcess");
 
     const std::string user = "TRestDetectorHitsDriftProcess";
-    const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium");
+    const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "charge", user);
+    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium with charge");
     fCharge = &medium->GetChargeResponse(user);
     if (fCharge->GetWValue() <= 0) {
         throw std::runtime_error(user + ": the charge of the medium '" + medium->GetName() +
@@ -124,6 +128,11 @@ void TRestDetectorHitsDriftProcess::InitProcess() {
     fLongitudinalDiffusion = fCharge->GetLongitudinalDiffusion();
     fTransversalDiffusion = fCharge->GetTransversalDiffusion();
     fAttachment = fCharge->GetAttachment();
+    fDriftVelocity = fCharge->GetDriftVelocity();
+    if (fDriftVelocity <= 0) {
+        throw std::runtime_error(user + ": the charge of the medium '" + medium->GetName() +
+                                 "' gives no drift velocity");
+    }
     // The stored metadata keeps the medium and the transport used
     UpdateYAMLFromParams<TRestDetectorHitsDriftProcess>(fNode);
 
@@ -182,13 +191,12 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
                                                               fAttachment, fRandom)) {
                 continue;
             }
-            // Kept between the readout plane and the cathode
-            const double diffusedDistance = fReadout->GetDistanceToReadout(electron);
-            if (diffusedDistance < 0) electron -= diffusedDistance * normal;
-            if (hasCathode && diffusedDistance > maxDistance)
-                electron -= (diffusedDistance - maxDistance) * normal;
-            outputEvent->AddHit(electron, electronEnergy, inputEvent->GetTime(n), inputEvent->GetType(n),
-                                inputEvent->GetParticleID(n));
+            // Kept between the readout plane and the cathode, then collected on the readout plane
+            double diffusedDistance = std::max(0.0, fReadout->GetDistanceToReadout(electron));
+            if (hasCathode) diffusedDistance = std::min(diffusedDistance, maxDistance);
+            const double arrival = inputEvent->GetTime(n) + diffusedDistance / fDriftVelocity;
+            outputEvent->AddHit(fReadout->ProjectToReadout(electron), electronEnergy, arrival,
+                                inputEvent->GetType(n), inputEvent->GetParticleID(n));
         }
     }
 

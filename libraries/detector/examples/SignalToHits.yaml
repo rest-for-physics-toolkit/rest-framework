@@ -1,4 +1,5 @@
-# Signal -> hits pipeline: TRestDetectorSignalEvent (input file) -> TRestDetectorHitsEvent.
+# Signal -> hits pipeline: TRestDetectorSignalEvent (input file) -> TRestDetectorHitsEvent, with the drift
+# coordinate reconstructed from the time (timeProjection).
 #   restManager --c SignalToHits.yaml --i <file with TRestDetectorSignalEvent>
 # The readout is IAXO.root of rest-common-readouts (by URL, downloaded once and cached).
 
@@ -33,5 +34,8 @@ manager:
     signalToHits:
       class: "TRestDetectorSignalToHitsProcess"
       readout: "IAXO_D1_Readout"
-      driftVelocity: 0.5
       method: "onlyMax"
+    timeProjection:
+      class: "TRestDetectorHitsTimeProjectionProcess"
+      readout: "IAXO_D1_Readout"
+      driftVelocity: 0.5

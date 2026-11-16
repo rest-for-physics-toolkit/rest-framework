@@ -1,6 +1,9 @@
 #ifndef TRESTGEANT4EVENT_H
 #define TRESTGEANT4EVENT_H
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <map>
 #include <string>
 #include <tuple>
@@ -180,7 +183,7 @@ class TRestGeant4Event : public TRestEvent {
     std::vector<float>* fPtr_hitY = nullptr;
     std::vector<float>* fPtr_hitZ = nullptr;
     std::vector<float>* fPtr_hitEnergy = nullptr;
-    std::vector<float>* fPtr_hitTime = nullptr;
+    std::vector<double>* fPtr_hitTime = nullptr;
     std::vector<int>* fPtr_hitType = nullptr;
     std::vector<int>* fPtr_hitProcessID = nullptr;
     std::vector<int>* fPtr_hitVolumeID = nullptr;
@@ -343,6 +346,20 @@ class TRestGeant4Event : public TRestEvent {
     TRestHits GetEventHits() const {
         return TRestHits(const_cast<TRestHitsData*>(&fEventData.hitsStorage), 0,
                          static_cast<int>(fEventData.hitsStorage.x.size()));
+    }
+
+    /// \brief Time of the first energy deposit of the event (the earliest hit with energy > 0, in any
+    /// volume), 0 without deposits. It is the time origin of the processes that read the event
+    /// (TRestGeant4ToDetectorHitsProcess, TRestGeant4AnalysisProcess): their times are relative to it, the
+    /// same for every detector of the event, so that the times of a radioactive decay (~1e13 us after the
+    /// generation) become those of the detector.
+    double GetFirstDepositTime() const {
+        const auto& hits = fEventData.hitsStorage;
+        double first = std::numeric_limits<double>::infinity();
+        for (size_t h = 0; h < hits.time.size(); h++) {
+            if (hits.energy[h] > 0) first = std::min(first, hits.time[h]);
+        }
+        return std::isfinite(first) ? first : 0;
     }
 
     /// \brief Energy deposited in all the volumes (keV)

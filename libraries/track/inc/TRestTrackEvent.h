@@ -84,7 +84,7 @@ class TRestTrackEvent : public TRestEvent {
     std::vector<float>* fPtrX = nullptr;         //!
     std::vector<float>* fPtrY = nullptr;         //!
     std::vector<float>* fPtrZ = nullptr;         //!
-    std::vector<float>* fPtrTime = nullptr;      //!
+    std::vector<double>* fPtrTime = nullptr;     //!
     std::vector<float>* fPtrEnergy = nullptr;    //!
     std::vector<int>* fPtrType = nullptr;        //!
     std::vector<float>* fPtrSigmaX = nullptr;    //!

@@ -213,6 +213,19 @@ TEST(Geant4Event, TracksHitsAndEnergies) {
 
     EXPECT_THROW(event.GetTrackByID(99), std::runtime_error);
     EXPECT_THROW(event.GetTrack(10), std::out_of_range);
+
+    // Times in double precision (a radioactive decay, ~1e13 us) and the first deposit as time origin: the
+    // earliest hit with energy (the hits without energy do not count)
+    auto& hits = event.fEventData.hitsStorage;
+    for (size_t h = 0; h < hits.time.size(); h++) hits.time[h] = 4e13 + 0.25 * h;
+    size_t firstWithEnergy = 0;
+    while (hits.energy[firstWithEnergy] <= 0) firstWithEnergy++;
+    hits.time[firstWithEnergy] = 4e13 - 1;
+    EXPECT_DOUBLE_EQ(event.GetFirstDepositTime(), 4e13 - 1);
+    const size_t last = hits.time.size() - 1;
+    EXPECT_DOUBLE_EQ(hits.time[last] - hits.time[last - 1], 0.25);  // not lost as with float
+    TRestGeant4Event empty;
+    EXPECT_DOUBLE_EQ(empty.GetFirstDepositTime(), 0);
 }
 
 TEST(Geant4Event, ParentsAndSecondaries) {

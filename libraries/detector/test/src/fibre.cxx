@@ -1,10 +1,10 @@
 /// Unit tests of the fibre readout (TRestFibreReadout) and of the light processes: the primary scintillation
 /// (TRestDetectorScintillationProcess, light yield of the medium) and the collection of the light by the
 /// channels and its photoelectrons (TRestDetectorLightCollectionProcess, models localCapture and attenuation,
-/// quantum efficiency) and the photoelectrons to signals with the scintillation time profile of each particle
-/// (TRestDetectorLightToSignalProcess). The readout is a box of 100 mm with two families of fibres of pitch
-/// 20 mm, built in memory; the attenuation model uses a minimal readout of the test (a bar read at x = 0).
-/// The processes get the readout and the medium from a TRestManager created from a YAML string.
+/// quantum efficiency, a hit per photoelectron with the scintillation time profile of its particle) and their
+/// signals (TRestDetectorHitsToSignalProcess). The readout is a box of 100 mm with two families of fibres of
+/// pitch 20 mm, built in memory; the attenuation model uses a minimal readout of the test (a bar read at
+/// x = 0). The processes get the readout and the medium from a TRestManager created from a YAML string.
 
 #include <TFile.h>
 #include <TGraph.h>
@@ -12,7 +12,6 @@
 #include <TRestDetectorHitsEvent.h>
 #include <TRestDetectorHitsToSignalProcess.h>
 #include <TRestDetectorLightCollectionProcess.h>
-#include <TRestDetectorLightToSignalProcess.h>
 #include <TRestDetectorMedium.h>
 #include <TRestDetectorReadoutManager.h>
 #include <TRestDetectorScintillationProcess.h>
@@ -28,6 +27,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -374,9 +374,10 @@ TEST(DetectorLightCollectionProcess, LocalCaptureByTheFibres) {
     TRestDetectorHitsEvent collected;
     ASSERT_TRUE(process->ProcessEvent(photons, collected));
     EXPECT_EQ(analysis.Get<int>("lightCollection_NHitsWithoutChannel"), 1);
-    ASSERT_EQ(collected.GetNumberOfHits(), 3u);
+    // A hit per photoelectron, of charge 1
     const double total = analysis.Get<double>("lightCollection_NPhotoelectrons");
-    EXPECT_NEAR(collected.GetTotalEnergy(), total, 1e-9);
+    ASSERT_EQ(collected.GetNumberOfHits(), static_cast<size_t>(total));
+    EXPECT_NEAR(collected.GetTotalEnergy(), total, 1e-6);
     EXPECT_NEAR(total, 600, 5 * std::sqrt(600.));
     std::set<int> channels;
     for (size_t n = 0; n < collected.GetNumberOfHits(); n++) {
@@ -406,10 +407,9 @@ TEST(DetectorLightCollectionProcess, LocalCaptureByTheFibres) {
     TRestDetectorHitsEvent onFibre, guidedOutput;
     onFibre.AddHit(0, 0, 30, 10000, 2);
     ASSERT_TRUE(guided->ProcessEvent(onFibre, guidedOutput));
-    ASSERT_EQ(guidedOutput.GetNumberOfHits(), 1u);
     const double expected = 10000 * std::exp(-0.5);
-    EXPECT_NEAR(guidedOutput.GetEnergy(0), expected, 5 * std::sqrt(expected));
-    EXPECT_NEAR(guidedOutput.GetTime(0), 2.5, 1e-9);
+    EXPECT_NEAR(guidedOutput.GetNumberOfHits(), expected, 5 * std::sqrt(expected));
+    EXPECT_NEAR(guidedOutput.GetTime(0), 2.5, 1e-6);
     EXPECT_NEAR(guidedOutput.GetY(0), 50, 1e-9);  // at the read end
     // wlsMedium only for localCapture, and it needs a wls response
     EXPECT_ANY_THROW(MakeProcess<TRestDetectorLightCollectionProcess>(
@@ -460,10 +460,9 @@ TEST(DetectorLightCollectionProcess, AttenuationToTheReadout) {
     photons.AddHit(200, 0, 0, 10000, 1);  // no channel
     TRestDetectorHitsEvent collected;
     ASSERT_TRUE(process->ProcessEvent(photons, collected));
-    ASSERT_EQ(collected.GetNumberOfHits(), 1u);
     const double expected = 10000 * std::exp(-0.5);
-    EXPECT_NEAR(collected.GetEnergy(0), expected, 5 * std::sqrt(expected));
-    EXPECT_NEAR(collected.GetTime(0), 1.5, 1e-9);
+    EXPECT_NEAR(collected.GetNumberOfHits(), expected, 5 * std::sqrt(expected));
+    EXPECT_NEAR(collected.GetTime(0), 1.5, 1e-6);
     EXPECT_NEAR(collected.GetX(0), 50, 1e-9);
     EXPECT_EQ(analysis.Get<int>("lightCollection_NHitsWithoutChannel"), 1);
 
@@ -474,9 +473,8 @@ TEST(DetectorLightCollectionProcess, AttenuationToTheReadout) {
     onFibre.AddHit(0, 0, 30, 10000, 0);
     TRestDetectorHitsEvent output;
     ASSERT_TRUE(fibres->ProcessEvent(onFibre, output));
-    ASSERT_EQ(output.GetNumberOfHits(), 1u);
-    EXPECT_NEAR(output.GetEnergy(0), expected, 5 * std::sqrt(expected));
-    EXPECT_NEAR(output.GetTime(0), 0.5, 1e-9);
+    EXPECT_NEAR(output.GetNumberOfHits(), expected, 5 * std::sqrt(expected));
+    EXPECT_NEAR(output.GetTime(0), 0.5, 1e-6);
 }
 
 TEST(DetectorLightCollectionProcess, QuantumEfficiency) {
@@ -492,9 +490,9 @@ TEST(DetectorLightCollectionProcess, QuantumEfficiency) {
     photons.AddHit(0, 0, 30, 10000, 1);
     TRestDetectorHitsEvent photoelectrons;
     ASSERT_TRUE(process->ProcessEvent(photons, photoelectrons));
-    ASSERT_EQ(photoelectrons.GetNumberOfHits(), 1u);
-    EXPECT_NEAR(photoelectrons.GetEnergy(0), 4000, 5 * std::sqrt(10000 * 0.4 * 0.6));
-    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"), photoelectrons.GetEnergy(0));
+    EXPECT_NEAR(photoelectrons.GetNumberOfHits(), 4000, 5 * std::sqrt(10000 * 0.4 * 0.6));
+    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"),
+                     photoelectrons.GetNumberOfHits());
 
     auto blind = MakeProcess<TRestDetectorLightCollectionProcess>(
         detector, analysis, "lightCollection",
@@ -514,12 +512,11 @@ TEST(DetectorLightProcesses, FromEnergyToHitsOfTheFibres) {
     auto collection = MakeProcess<TRestDetectorLightCollectionProcess>(
         detector, analysis, "lightCollection",
         "{captureProbability: \"0.2+0*x\", maxDistance: 15mm, quantumEfficiency: 0.5, seed: 3}");
-    // The medium has no charge: no drift for the fibres
+    // Generic processes: no medium and no drift
     auto hitsToSignal =
         MakeProcess<TRestDetectorHitsToSignalProcess>(detector, analysis, "hitsToSignal", "{}");
     auto signalToHits = MakeProcess<TRestDetectorSignalToHitsProcess>(detector, analysis, "signalToHits",
                                                                       "{method: integral}");
-    EXPECT_DOUBLE_EQ(signalToHits->fDriftVelocity, 0);
 
     TRestDetectorHitsEvent hits;
     hits.AddHit(0, 0, 30, 10, 4);
@@ -545,65 +542,108 @@ TEST(DetectorLightProcesses, FromEnergyToHitsOfTheFibres) {
     }
     EXPECT_EQ(xz, 1);
     EXPECT_EQ(yz, 2);
+
+    // The media are found by response: with a scintillator (light) and WLS fibres (wls) no name is needed
+    auto withFibres = MakeDetector("{lightYield: 100}",
+                                   "fibres:\n"
+                                   "  class: TRestDetectorMedium\n"
+                                   "  name: Y11\n"
+                                   "  state: solid\n"
+                                   "  wls: {attenuationLength: 100 mm, lightSpeed: 100 mm/us}\n");
+    const auto& manager = *withFibres.manager;
+    EXPECT_EQ(TRestDetectorMedium::Find(manager, "", "light", "test")->GetName(), "LS");
+    EXPECT_EQ(TRestDetectorMedium::Find(manager, "", "wls", "test")->GetName(), "Y11");
+    EXPECT_EQ(TRestDetectorMedium::Find(manager, "", "charge", "test"), nullptr);
+    EXPECT_TRUE(TRestDetectorMedium::Find(manager, "Y11", "wls", "test")->HasResponse("wls"));
+    EXPECT_ANY_THROW(TRestDetectorMedium::Find(manager, "Y11", "light", "test"));    // without light
+    EXPECT_ANY_THROW(TRestDetectorMedium::Find(manager, "Other", "light", "test"));  // not found
+    EXPECT_ANY_THROW(TRestDetectorMedium::Find(manager, "", "optics", "test"));      // unknown response
+    EXPECT_NO_THROW(
+        MakeProcess<TRestDetectorScintillationProcess>(withFibres, analysis, "scintillation", "{}"));
+    EXPECT_NO_THROW(MakeProcess<TRestDetectorLightCollectionProcess>(
+        withFibres, analysis, "lightCollection",
+        "{captureProbability: \"0.2+0*x\", maxDistance: 15mm, wlsMedium: Y11}"));
+    // Two media with light: the name is needed
+    auto twoScintillators = MakeDetector("{lightYield: 100}",
+                                         "other:\n"
+                                         "  class: TRestDetectorMedium\n"
+                                         "  name: BC408\n"
+                                         "  state: solid\n"
+                                         "  light: {lightYield: 10}\n");
+    EXPECT_ANY_THROW(
+        MakeProcess<TRestDetectorScintillationProcess>(twoScintillators, analysis, "scintillation", "{}"));
+    EXPECT_NO_THROW(MakeProcess<TRestDetectorScintillationProcess>(twoScintillators, analysis,
+                                                                   "scintillation", "{medium: BC408}"));
 }
 
-TEST(DetectorLightToSignalProcess, ScintillationTimePerParticle) {
+TEST(DetectorLightCollectionProcess, PhotoelectronTimesPerParticle) {
     // Default profile: 10 ns; alpha: 100 ns (times in us)
     auto detector = MakeDetector(
         "{lightYield: 100, scintillation: [{components: [{decayTime: 10 ns}]},"
         "{particles: [alpha], components: [{decayTime: 100 ns}]}]}");
     AnalysisTree analysis;
-    auto process = MakeProcess<TRestDetectorLightToSignalProcess>(
-        detector, analysis, "lightToSignal",
-        "{seed: 4, observables: [NPhotoelectrons, NHitsWithoutChannel]}");
+    // Every photon on a fibre within 5 mm reaches its SiPM and gives a photoelectron
+    const std::string capture = "captureProbability: \"1+0*x\", maxDistance: 5mm";
+    auto process = MakeProcess<TRestDetectorLightCollectionProcess>(
+        detector, analysis, "lightCollection",
+        "{" + capture + ", seed: 4, observables: [NPhotoelectrons, NHitsWithoutChannel]}");
     EXPECT_EQ(process->fMediumName, "LS");
 
-    // 2000 photoelectrons of an electron on the fibre 7 (along Y, x = 0, z = 30) and of an alpha on the
-    // fibre 35 (along X, y = 0, z = 20), at t = 1 us
+    // 2000 photons of an electron on the fibre 7 (along Y, x = 0, z = 30) and of an alpha on the fibre 35
+    // (along X, y = 0, z = 20), at t = 1 us
+    TRestDetectorHitsEvent photons;
+    photons.SetID(2);
+    photons.AddHit(0, 0, 30, 2000, 1, TRestHitsData::REST_HitType::XYZ, 11);
+    photons.AddHit(10, 0, 20, 2000, 1, TRestHitsData::REST_HitType::XYZ, 1000020040);
+    photons.AddHit(0, 60, 50, 10, 1);  // outside the readout
     TRestDetectorHitsEvent photoelectrons;
-    photoelectrons.SetID(2);
-    photoelectrons.AddHit(0, 0, 30, 2000, 1, TRestHitsData::REST_HitType::XYZ, 11);
-    photoelectrons.AddHit(10, 0, 20, 2000, 1, TRestHitsData::REST_HitType::XYZ, 1000020040);
-    photoelectrons.AddHit(0, 60, 50, 10, 1);  // outside the readout
-    TRestDetectorSignalEvent signals;
-    ASSERT_TRUE(process->ProcessEvent(photoelectrons, signals));
-    EXPECT_EQ(signals.GetID(), 2);
-    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightToSignal_NPhotoelectrons"), 4000);
-    EXPECT_EQ(analysis.Get<int>("lightToSignal_NHitsWithoutChannel"), 1);
-    ASSERT_EQ(signals.GetNumberOfSignals(), 2);
+    ASSERT_TRUE(process->ProcessEvent(photons, photoelectrons));
+    EXPECT_EQ(photoelectrons.GetID(), 2);
+    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"), 4000);
+    EXPECT_EQ(analysis.Get<int>("lightCollection_NHitsWithoutChannel"), 1);
+    ASSERT_EQ(photoelectrons.GetNumberOfHits(), 4000u);
 
-    // Mean arrival time of each signal: 1 us + the decay time of the profile of its particle
-    auto meanTime = [&signals](int id) {
-        const auto& signal = signals.GetSignalByID(id);
-        double sum = 0, charge = 0;
-        for (int i = 0; i < signal.GetNPoints(); i++) {
-            const auto [time, amplitude] = signal.GetPoint(i);
-            EXPECT_GE(time, 1);
-            sum += time * amplitude;
-            charge += amplitude;
+    // Mean time of the photoelectrons of each channel: 1 us + the decay time of the profile of its particle
+    auto meanTimes = [&detector](const TRestDetectorHitsEvent& event) {
+        std::map<int, std::pair<double, double>> sums;  // channel: (time * charge, charge)
+        for (size_t n = 0; n < event.GetNumberOfHits(); n++) {
+            const auto p = event.GetPosition(n);
+            auto& [weighted, charge] = sums[detector.readout->GetChannelFromPosition(p.X(), p.Y(), p.Z())];
+            EXPECT_GE(event.GetTime(n), 1);
+            weighted += event.GetTime(n) * event.GetEnergy(n);
+            charge += event.GetEnergy(n);
         }
-        EXPECT_DOUBLE_EQ(charge, 2000);
-        return sum / charge;
+        std::map<int, double> means;
+        for (const auto& [channel, sum] : sums) means[channel] = sum.first / sum.second;
+        return means;
     };
-    ASSERT_TRUE(signals.HasSignalID(7));
-    ASSERT_TRUE(signals.HasSignalID(35));
-    EXPECT_NEAR(meanTime(7), 1.010, 5 * 0.010 / std::sqrt(2000.));
-    EXPECT_NEAR(meanTime(35), 1.100, 5 * 0.100 / std::sqrt(2000.));
+    auto means = meanTimes(photoelectrons);
+    ASSERT_EQ(means.size(), 2u);
+    EXPECT_NEAR(means[7], 1.010, 5 * 0.010 / std::sqrt(2000.));
+    EXPECT_NEAR(means[35], 1.100, 5 * 0.100 / std::sqrt(2000.));
+    for (size_t n = 0; n < photoelectrons.GetNumberOfHits(); n++) {
+        EXPECT_DOUBLE_EQ(photoelectrons.GetEnergy(n), 1);
+    }
 
-    // Same seed and event: the same signals
-    TRestDetectorSignalEvent again;
-    ASSERT_TRUE(process->ProcessEvent(photoelectrons, again));
-    EXPECT_EQ(again.GetSignalByID(7).GetNPoints(), signals.GetSignalByID(7).GetNPoints());
+    // Same seed and event: the same photoelectrons
+    TRestDetectorHitsEvent again;
+    ASSERT_TRUE(process->ProcessEvent(photons, again));
+    ASSERT_EQ(again.GetNumberOfHits(), photoelectrons.GetNumberOfHits());
+    EXPECT_DOUBLE_EQ(again.GetTime(10), photoelectrons.GetTime(10));
 
-    // Sampling: the times rounded down to multiples of 50 ns
-    auto sampled = MakeProcess<TRestDetectorLightToSignalProcess>(detector, analysis, "lightToSignal",
-                                                                  "{seed: 4, sampling: 50 ns}");
-    TRestDetectorSignalEvent binned;
-    ASSERT_TRUE(sampled->ProcessEvent(photoelectrons, binned));
-    const auto& signal = binned.GetSignalByID(35);
-    for (int i = 0; i < signal.GetNPoints(); i++) {
-        const double bins = signal.GetPoint(i).first / 0.05;
-        EXPECT_NEAR(bins, std::round(bins), 1e-6);
+    // The signals (generic TRestDetectorHitsToSignalProcess): 2000 photoelectrons in each channel
+    auto hitsToSignal = MakeProcess<TRestDetectorHitsToSignalProcess>(detector, analysis, "hitsToSignal",
+                                                                      "{sampling: 50 ns}");
+    TRestDetectorSignalEvent signals;
+    ASSERT_TRUE(hitsToSignal->ProcessEvent(photoelectrons, signals));
+    ASSERT_EQ(signals.GetNumberOfSignals(), 2);
+    for (int id : {7, 35}) {
+        ASSERT_TRUE(signals.HasSignalID(id));
+        double charge = 0;
+        for (int i = 0; i < signals.GetSignalByID(id).GetNPoints(); i++) {
+            charge += signals.GetSignalByID(id).GetPoint(i).second;
+        }
+        EXPECT_NEAR(charge, 2000, 1e-6);
     }
 
     // WLS fibres: each photoelectron also delayed by the re-emission (8 ns more on average)
@@ -613,36 +653,36 @@ TEST(DetectorLightToSignalProcess, ScintillationTimePerParticle) {
                                    "  name: Y11\n"
                                    "  state: solid\n"
                                    "  wls: {decayTime: 8 ns}\n");
-    auto shifted = MakeProcess<TRestDetectorLightToSignalProcess>(withFibres, analysis, "lightToSignal",
-                                                                  "{medium: LS, wlsMedium: Y11, seed: 4}");
-    TRestDetectorSignalEvent delayed;
-    ASSERT_TRUE(shifted->ProcessEvent(photoelectrons, delayed));
-    const auto& electron = delayed.GetSignalByID(7);
-    double sum = 0, charge = 0;
-    for (int i = 0; i < electron.GetNPoints(); i++) {
-        sum += electron.GetPoint(i).first * electron.GetPoint(i).second;
-        charge += electron.GetPoint(i).second;
-    }
-    EXPECT_NEAR(sum / charge, 1.018, 5 * 0.013 / std::sqrt(2000.));
-    // A medium without wls
-    TRestDetectorLightToSignalProcess noWLS("lightToSignal", YAML::Load("{medium: LS, wlsMedium: LS}"));
+    auto shifted = MakeProcess<TRestDetectorLightCollectionProcess>(
+        withFibres, analysis, "lightCollection", "{" + capture + ", wlsMedium: Y11, seed: 4}");
+    TRestDetectorHitsEvent delayed;
+    ASSERT_TRUE(shifted->ProcessEvent(photons, delayed));
+    EXPECT_NEAR(meanTimes(delayed)[7], 1.018, 5 * 0.013 / std::sqrt(2000.));
+    // A wlsMedium without wls
+    TRestDetectorLightCollectionProcess noWLS("lightCollection",
+                                              YAML::Load("{" + capture + ", wlsMedium: LS}"));
     noWLS.SetManager(withFibres.manager.get());
     EXPECT_THROW(noWLS.Initialize(), std::runtime_error);
 
     // Gain spread: the charge of each photoelectron Gauss(1, 0.3), 2000 of them on the fibre 7
-    auto spread = MakeProcess<TRestDetectorLightToSignalProcess>(detector, analysis, "lightToSignal",
-                                                                 "{seed: 4, gainSpread: 0.3}");
-    TRestDetectorSignalEvent fluctuating;
-    ASSERT_TRUE(spread->ProcessEvent(photoelectrons, fluctuating));
-    const auto& fibre7 = fluctuating.GetSignalByID(7);
+    auto spread = MakeProcess<TRestDetectorLightCollectionProcess>(
+        detector, analysis, "lightCollection", "{" + capture + ", seed: 4, gainSpread: 0.3}");
+    TRestDetectorHitsEvent fluctuating;
+    ASSERT_TRUE(spread->ProcessEvent(photons, fluctuating));
     double charge7 = 0;
-    for (int i = 0; i < fibre7.GetNPoints(); i++) charge7 += fibre7.GetPoint(i).second;
+    for (size_t n = 0; n < fluctuating.GetNumberOfHits(); n++) {
+        const auto p = fluctuating.GetPosition(n);
+        if (detector.readout->GetChannelFromPosition(p.X(), p.Y(), p.Z()) == 7) {
+            charge7 += fluctuating.GetEnergy(n);
+        }
+    }
     EXPECT_NEAR(charge7, 2000, 5 * 0.3 * std::sqrt(2000.));
     EXPECT_NE(charge7, 2000);
-    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightToSignal_NPhotoelectrons"), 4000);
+    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"), 4000);
 
-    // Negative jitter
-    TRestDetectorLightToSignalProcess failing("lightToSignal", YAML::Load("{timeJitter: -1 ns}"));
-    failing.SetManager(detector.manager.get());
-    EXPECT_THROW(failing.Initialize(), std::runtime_error);
+    // Negative jitter or gain spread
+    EXPECT_ANY_THROW(
+        TRestDetectorLightCollectionProcess("c", YAML::Load("{" + capture + ", timeJitter: -1 ns}")));
+    EXPECT_ANY_THROW(
+        TRestDetectorLightCollectionProcess("c", YAML::Load("{" + capture + ", gainSpread: -1}")));
 }

@@ -26,8 +26,8 @@ class TRestDetectorScintillationProcess : public TRestEventProcess {
     double fNPhotons = 0;  //!
 
    public:
-    /// Name of the TRestDetectorMedium with the light response (lightYield). It can be omitted if the
-    /// manager contains a single medium.
+    /// Name of the TRestDetectorMedium with the light response (lightYield). Empty: the only
+    /// medium with `light`.
     std::string fMediumName = "";
 
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event

@@ -3,7 +3,7 @@
 This library is used to define the detector: the readout topology (Micromegas planes or GDML volumes) that
 maps positions to channels, and the medium with its charge and light response. It also implements the
 processes of event reconstruction from real detector data (signal shaping, recovery, peak finding, signals
-to hits) and of emulation of the physical response of the detector (electron drift and diffusion,
+to hits, drift coordinate from the time) and of emulation of the physical response of the detector (electron drift and diffusion,
 avalanche, smearing, light attenuation, spatial transformations, hits to signals).
 
 The detector library (`RestDetector`) describes the detector of rest-for-physics-toolkit and the processing of
@@ -48,7 +48,7 @@ A readout gives the channel of a position and the position of a channel, the dis
 | --- | --- |
 | `TRestDetectorMedium` | A material (gas, liquid or solid) at its pressure and temperature, with its medium file (tables of restGarfield) and its responses (`charge`, `light`, `wls`: wavelength shifting with `attenuationLength`, `lightSpeed` and `decayTime`, e.g. WLS fibres). |
 | `TRestDetectorChargeResponse` | Ionisation (W-value, Fano factor), electron transport at the drift field (from the tables or fixed parameters) and avalanche gain tables of a medium. |
-| `TRestDetectorLightResponse` | Scintillation light of a medium: light yield (photons per keV) and propagation to the readout in a transparent scintillator (attenuation length and effective light speed). |
+| `TRestDetectorLightResponse` | Scintillation light of a medium: light yield (photons per keV), `scintillation` time profiles per particle (components with `fraction`, `riseTime`, `decayTime`; the one without `particles` is the default) and propagation to the readout in a transparent scintillator (attenuation length and effective light speed). |
 | `TRestDetectorTransportTable` | Drift velocity, diffusion, Townsend and attachment coefficients versus the field (configuration of restGarfield and one table of the medium file), scaled with E/p for gases. |
 | `TRestDetectorGainTable` | Mean avalanche gain and Polya parameter versus the amplification field for a gap (configuration of restGarfield and one table of the medium file). |
 | `TRestDetectorTransportManager` | Top section of a restGarfield configuration: a medium and the transport and gain tables to compute for it. |
@@ -59,27 +59,43 @@ Hits processes (`TRestDetectorHitsEvent` to `TRestDetectorHitsEvent`):
 
 | Class | Description |
 | --- | --- |
-| `TRestDetectorHitsDriftProcess` | Converts the energy of the hits into ionisation electrons (Fano or Poisson fluctuations) and drifts them to the readout with the diffusion and attachment of the medium. |
+| `TRestDetectorHitsDriftProcess` | Converts the energy of the hits into ionisation electrons (Fano or Poisson fluctuations) and drifts them to the readout with the diffusion and attachment of the medium: hits on the readout plane at their arrival time (drift velocity of the medium). |
+| `TRestDetectorHitsTimeProjectionProcess` | Inverse of the drift: the coordinate along the readout normal from the time of the hits (`driftVelocity`, or the one of the medium), e.g. after `TRestDetectorSignalToHitsProcess`; an X strip hit becomes XZ. Observable `NHitsWithoutDrift`. |
 | `TRestDetectorAvalancheProcess` | Multiplies the drifted electrons by the avalanche gain of the amplification gap, with Polya fluctuations, from a gain table of the medium. |
 | `TRestDetectorHitsSmearingProcess` | Applies the energy resolution of the detector (one gaussian gain per event), optionally without the Fano part. |
 | `TRestDetectorHitsTransformationProcess` | Scales the energy and mirrors, rotates and translates the hit positions. |
 | `TRestDetectorScintillationProcess` | Primary scintillation: the energy of each hit becomes scintillation photons, Poisson(E · lightYield of the medium). Observable `NPhotons`. |
-| `TRestDetectorLightCollectionProcess` | Collection of the photons by the readout channels and their photoelectrons (`quantumEfficiency` of the photosensors, binomial), with a model per scintillator: `localCapture` (opaque, e.g. LiquidO: the channels within `maxDistance` capture them with `captureProbability(r)`, a formula or a graph of an optical simulation, multinomial; with `wlsMedium`, attenuated and delayed along the fibre to its read end by the `wls` response of the fibres) or `attenuation` (transparent, e.g. vetoes: the photons reach the readout of their channel attenuated and delayed with the distance, light response of the medium). Observables `NPhotoelectrons`, `NHitsWithoutChannel`. Replaces legacy `TRestDetectorLightAttenuationProcess`. |
-| `TRestDetectorLightToSignalProcess` | Photoelectrons to signals (hits → `TRestDetectorSignalEvent`): each photoelectron adds its charge (1, or Gauss(1, `gainSpread`) for the gain fluctuation of the photosensor) to the signal of its channel at the time of its hit plus the emission time sampled from the scintillation profile of its particle (`scintillation` of the medium), the re-emission delay of the `wls` response of `wlsMedium` (e.g. WLS fibres) and the Gaussian `timeJitter` of the photosensor; optional `sampling`. With `TRestDetectorSignalShapingProcess` (single photoelectron response, e.g. `exponential` of a few ns for a PMT) the pulses have the decay of the scintillation. Observables `NPhotoelectrons`, `NHitsWithoutChannel`. |
+| `TRestDetectorLightCollectionProcess` | Collection of the photons by the readout channels and their photoelectrons (`quantumEfficiency` of the photosensors, binomial), with a model per scintillator: `localCapture` (opaque, e.g. LiquidO: the channels within `maxDistance` capture them with `captureProbability(r)`, a formula or a graph of an optical simulation, multinomial; with `wlsMedium`, attenuated and delayed along the fibre to its read end by the `wls` response of the fibres) or `attenuation` (transparent, e.g. vetoes: the photons reach the readout of their channel attenuated and delayed with the distance, light response of the medium). Each photoelectron is a hit with its time (the arrival time plus the emission time sampled from the scintillation profile of its particle, `scintillation` of the medium with `light`, the re-emission delay of the `wls` response of `wlsMedium` and the Gaussian `timeJitter` of the photosensor) and its charge (1, or Gauss(1, `gainSpread`) for the gain fluctuation of the photosensor); `TRestDetectorHitsToSignalProcess` gives the signals and `TRestDetectorSignalShapingProcess` (single photoelectron response, e.g. `exponential` of a few ns for a PMT) the pulses with the decay of the scintillation. Observables `NPhotoelectrons`, `NHitsWithoutChannel`. Replaces legacy `TRestDetectorLightAttenuationProcess`. |
 | `TRestDetectorHitsAnalysisProcess` | Observables of the hits: number, energy, mean position, sigma, skewness, gaussian sigma, fiducial energy, and per projection with balances. |
 
 Signal processes:
 
 | Class | Input → output | Description |
 | --- | --- | --- |
-| `TRestDetectorHitsToSignalProcess` | hits → signals | Collects the hits in the readout channels at their arrival time (drift velocity of the medium); observable `NHitsRejected`. |
+| `TRestDetectorHitsToSignalProcess` | hits → signals | Generic: adds the energy of each hit to the signal of the channel at its position, at its time (no drift: the hits are already on the readout, e.g. after `TRestDetectorHitsDriftProcess`); observable `NHitsRejected`. |
 | `TRestDetectorSignalShapingProcess` | signals → signals | Convolves the signals with the response of the electronics in physical time units (gaus, exponential, shaper, shaperSin). |
 | `TRestDetectorSignalRecoveryProcess` | signals → signals | Recovers the signals of dead channels from their adjacent channels, preserving the charge. |
 | `TRestDetectorSignalPeaksFinderProcess` | signals → signals | Finds the peaks of all the signals and groups them in time coincidence windows (observables of the peaks and windows). |
-| `TRestDetectorSignalToHitsProcess` | signals → hits | Reconstructs hits from the signals with the channel positions and the drift velocity (methods `tripleMaxAverage`, `gaussFit`, `integral`, `intWindow`...). |
+| `TRestDetectorSignalToHitsProcess` | signals → hits | Generic: hits at the channel positions with the energy and time of the pulses (methods `tripleMaxAverage`, `gaussFit`, `integral`, `intWindow`...); the drift coordinate is added by `TRestDetectorHitsTimeProjectionProcess`. |
 
 The configuration keys, the observables and a YAML example of each process are given in its class
 documentation.
+
+### Chains
+
+`TRestDetectorHitsToSignalProcess` and `TRestDetectorSignalToHitsProcess` are generic (channel, energy and
+time, the same for charge and light); the physics of each detector is in its own processes, which find
+the medium by the response they use (`charge`, `light` or `wls`): with `medium` (or `wlsMedium`) that
+one, without it the only medium with that response, so a gas, a scintillator and its fibres need no names
+unless two media have the same response.
+
+| Detector | Simulation (Geant4 hits → signals) | Analysis (signals → hits; data and simulated raw signals) |
+| --- | --- | --- |
+| Charge (TPC, Micromegas) | `TRestDetectorHitsDriftProcess` (electrons on the readout plane at their arrival time), `TRestDetectorHitsSmearingProcess` or `TRestDetectorAvalancheProcess`, `TRestDetectorHitsToSignalProcess`, `TRestDetectorSignalShapingProcess` | `TRestDetectorSignalToHitsProcess`, `TRestDetectorHitsTimeProjectionProcess` (drift coordinate from the time) |
+| Light (scintillators, fibres) | `TRestDetectorScintillationProcess`, `TRestDetectorLightCollectionProcess` (photoelectrons with their time and charge), `TRestDetectorHitsToSignalProcess`, `TRestDetectorSignalShapingProcess` | `TRestDetectorSignalToHitsProcess` (e.g. `integral` or `onlyMax`) |
+
+The conversions to raw signals and back (`TRestDetectorSignalToRawSignalProcess`,
+`TRestRawToDetectorSignalProcess`) are in the [connectors library](../connectors/README.md).
 
 ## Datasets
 
@@ -117,7 +133,7 @@ is generated here.
 | `GDMLReadout.yaml`, `veto.dec` | Veto readout from the GDML of the IAXO restG4 example, with the light guides as readout volumes. |
 | `ReadoutManager.yaml` | `TRestDetectorReadoutManager` section loading both readouts (IAXO-D1 of rest-common-readouts and the veto), the Micromegas one as data readout. |
 | `iaxo_readout_output.root`, `veto_readout_output.root` | Readout files generated by the macros. |
-| `SignalToHits.yaml` | Pipeline `TRestDetectorSignalEvent` → `TRestDetectorHitsEvent` with the IAXO-D1 readout. |
+| `SignalToHits.yaml` | Pipeline `TRestDetectorSignalEvent` → `TRestDetectorHitsEvent` with the IAXO-D1 readout and the drift reconstruction. |
 | `SignalRecovery.yaml` | Recovery of dead channels of the IAXO-D1 readout. |
 | `SignalPeaks.yaml` | Peaks and coincidence windows of the signals. |
 | `DataSetCalibration.yaml` | Energy calibration of datasets with `TRestDataSetCalibration` and a `TRestDataSetGainMap`, with plots; its outputs are the inputs of `examples/DataSetLogOdds.yaml` and `examples/DataSetTMVA.yaml`. |

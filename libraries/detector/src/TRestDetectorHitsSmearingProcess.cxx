@@ -15,7 +15,7 @@
 /// its own pipeline) and the optional Fano subtraction.
 ///
 /// Parameters: energyReference (5.9 keV), resolutionReference (FWHM in %, 15), subtractFano (false),
-/// medium (name, optional if there is only one, only with subtractFano), seed (0: random seed; otherwise
+/// medium (only with subtractFano; empty: the only one with `charge`), seed (0: random seed; otherwise
 /// the generator is re-seeded at each event from the seed and the event and subevent IDs,
 /// TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number of threads).
 ///
@@ -96,8 +96,10 @@ void TRestDetectorHitsSmearingProcess::InitProcess() {
     if (fSubtractFano) {
         if (!fManager) throw std::runtime_error("TRestDetectorHitsSmearingProcess: no TRestManager");
         const std::string user = "TRestDetectorHitsSmearingProcess";
-        const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-        if (!medium) throw std::runtime_error(user + ": subtractFano needs a TRestDetectorMedium");
+        const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "charge", user);
+        if (!medium) {
+            throw std::runtime_error(user + ": subtractFano needs a TRestDetectorMedium with charge");
+        }
         fCharge = &medium->GetChargeResponse(user);
         if (fCharge->GetWValue() <= 0) {
             throw std::runtime_error(user + ": subtractFano needs the wValue of the charge of '" +

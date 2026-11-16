@@ -15,6 +15,7 @@
 #include <TRestDetectorHitsDriftProcess.h>
 #include <TRestDetectorHitsEvent.h>
 #include <TRestDetectorHitsSmearingProcess.h>
+#include <TRestDetectorHitsTimeProjectionProcess.h>
 #include <TRestDetectorHitsToSignalProcess.h>
 #include <TRestDetectorHitsTransformationProcess.h>
 #include <TRestDetectorMedium.h>
@@ -650,13 +651,16 @@ TEST(DetectorHitsDriftProcess, ElectronsWithoutFluctuations) {
     ASSERT_TRUE(drift.ProcessEvent(input, output));
 
     EXPECT_EQ(output.GetID(), 1);
-    // energy / W electrons, each one with the energy W, at the position of the hit (no diffusion)
+    EXPECT_DOUBLE_EQ(drift.fDriftVelocity, 10);  // from the medium
+    // energy / W electrons, each one with the energy W, on the readout plane below the hit (no diffusion)
+    // at its arrival time 0.5 + 20 / 10
     EXPECT_EQ(output.GetNumberOfHits(), (size_t)std::lround(5.9 / 0.0262));
     EXPECT_NEAR(TotalEnergy(output), 5.9, 1e-3);
     for (size_t n = 0; n < output.GetNumberOfHits(); n++) {
         EXPECT_NEAR(output.GetX(n), 1, 1e-5);
-        EXPECT_NEAR(output.GetZ(n), 20, 1e-5);
-        EXPECT_NEAR(output.GetTime(n), 0.5, 1e-6);
+        EXPECT_NEAR(output.GetY(n), 2, 1e-5);
+        EXPECT_NEAR(output.GetZ(n), 0, 1e-5);
+        EXPECT_NEAR(output.GetTime(n), 2.5, 1e-6);
     }
 
     // maxHits: each electron carries the energy of several
@@ -691,17 +695,22 @@ TEST(DetectorHitsDriftProcess, DiffusionIsSeeded) {
     ASSERT_EQ(first.GetNumberOfHits(), second.GetNumberOfHits());
     for (size_t n = 0; n < first.GetNumberOfHits(); n++) {
         EXPECT_FLOAT_EQ(first.GetX(n), second.GetX(n));
-        EXPECT_FLOAT_EQ(first.GetZ(n), second.GetZ(n));
+        EXPECT_FLOAT_EQ(first.GetTime(n), second.GetTime(n));
     }
-    // Fano fluctuation of the number of electrons and the diffusion around the hit
+    // Fano fluctuation of the number of electrons and the diffusion around the hit: transversal in the
+    // position on the plane, longitudinal in the arrival time (distance / 10, between the plane and the
+    // cathode)
     EXPECT_NEAR(TotalEnergy(first), 5.9, 1.0);
-    EXPECT_NEAR(first.GetMeanPositionZ(), 30, 0.3);
     EXPECT_NEAR(first.GetMeanPositionX(), 0, 0.3);
     EXPECT_GT(first.GetSigmaX(), 0);
+    double meanTime = 0;
     for (size_t n = 0; n < first.GetNumberOfHits(); n++) {
-        EXPECT_GE(first.GetZ(n), -1e-6);
-        EXPECT_LE(first.GetZ(n), kThickness / 2 + kGasThickness + 1e-4);
+        EXPECT_NEAR(first.GetZ(n), 0, 1e-5);
+        EXPECT_GE(first.GetTime(n), -1e-6);
+        EXPECT_LE(first.GetTime(n), (kThickness / 2 + kGasThickness) / 10 + 1e-4);
+        meanTime += first.GetTime(n) / first.GetNumberOfHits();
     }
+    EXPECT_NEAR(meanTime, 3, 0.03);
 
     // Fano fluctuations need fanoFactor > 0
     auto noFano = MakeDetector("{wValue: 26.2 eV, driftVelocity: 10}");
@@ -883,30 +892,30 @@ TEST(DetectorHitsAnalysisProcess, FiducialAndErrors) {
 // Signal processes
 // ============================================================================
 
-TEST(DetectorHitsToSignalProcess, ChannelsAndArrivalTimes) {
+TEST(DetectorHitsToSignalProcess, ChannelsAndTimes) {
     auto detector = MakeDetector(kChargeNoDiffusion);
     AnalysisTree analysis;
     TRestDetectorHitsToSignalProcess process("hitsToSignal", YAML::Load("{observables: [NHitsRejected]}"));
     process.SetManager(detector.manager.get());
     process.SetRunInfo(&analysis.run);
     process.Initialize();
-    EXPECT_DOUBLE_EQ(process.fDriftVelocity, 10);  // from the medium
 
+    // Hits on the readout plane (e.g. drifted by TRestDetectorHitsDriftProcess): the channel at their
+    // position, at their time (no drift)
     const auto xPixel = XStripPixel(2, 1);
     const auto yPixel = YStripPixel(1, 2);
     TRestDetectorHitsEvent hits;
     hits.SetID(5);
-    hits.AddHit(xPixel.X(), xPixel.Y(), 30, 3, 1);  // arrives at 1 + 30 / 10
-    hits.AddHit(xPixel.X(), xPixel.Y(), 30, 1, 1);  // same channel and time: added
-    hits.AddHit(yPixel.X(), yPixel.Y(), 10, 2, 0);
-    hits.AddHit(xPixel.X(), xPixel.Y(), -5, 1, 0);  // behind the plane
-    hits.AddHit(xPixel.X(), xPixel.Y(), 60, 1, 0);  // beyond the cathode
-    hits.AddHit(100, 100, 10, 1, 0);                // no channel
+    hits.AddHit(xPixel.X(), xPixel.Y(), 0, 3, 4);
+    hits.AddHit(xPixel.X(), xPixel.Y(), 0, 1, 4);  // same channel and time: added
+    hits.AddHit(yPixel.X(), yPixel.Y(), 0, 2, 1);
+    hits.AddHit(xPixel.X(), xPixel.Y(), 30, 1, 0);  // in the gas, not on a channel
+    hits.AddHit(100, 100, 0, 1, 0);                 // no channel
 
     TRestDetectorSignalEvent signals;
     ASSERT_TRUE(process.ProcessEvent(hits, signals));
     EXPECT_EQ(signals.GetID(), 5);
-    EXPECT_EQ(analysis.Get<int>("hitsToSignal_NHitsRejected"), 3);
+    EXPECT_EQ(analysis.Get<int>("hitsToSignal_NHitsRejected"), 2);
     ASSERT_EQ(signals.GetNumberOfSignals(), 2);
     ASSERT_TRUE(signals.HasSignalID(XStrip(2)));
     ASSERT_TRUE(signals.HasSignalID(YStrip(1)));
@@ -917,21 +926,22 @@ TEST(DetectorHitsToSignalProcess, ChannelsAndArrivalTimes) {
     EXPECT_NEAR(signals.GetSignalByID(YStrip(1)).GetPoint(0).first, 1, 1e-6);
 
     // Sampling: times rounded down to its multiples
-    TRestDetectorHitsToSignalProcess sampled("hitsToSignal", YAML::Load("{driftVelocity: 4, sampling: 0.5}"));
+    TRestDetectorHitsToSignalProcess sampled("hitsToSignal", YAML::Load("{sampling: 0.5}"));
     sampled.SetManager(detector.manager.get());
     sampled.Initialize();
-    EXPECT_DOUBLE_EQ(sampled.fDriftVelocity, 4);
     TRestDetectorHitsEvent one;
-    one.AddHit(xPixel.X(), xPixel.Y(), 3, 1, 0);  // 0.75 us
+    one.AddHit(xPixel.X(), xPixel.Y(), 0, 1, 0.75);
     TRestDetectorSignalEvent sampledSignals;
     ASSERT_TRUE(sampled.ProcessEvent(one, sampledSignals));
     EXPECT_NEAR(sampledSignals.GetSignal(0).GetPoint(0).first, 0.5, 1e-9);
 
-    // Only rejected hits: no signals
+    // Only rejected hits: no signals. The drift parameters are not keys of this process
     TRestDetectorHitsEvent rejected;
-    rejected.AddHit(100, 100, 10, 1, 0);
+    rejected.AddHit(100, 100, 0, 1, 0);
     TRestDetectorSignalEvent none;
     EXPECT_FALSE(process.ProcessEvent(rejected, none));
+    EXPECT_ANY_THROW(MetadataClassRegistry::Instance().Create("TRestDetectorHitsToSignalProcess", "h",
+                                                              YAML::Load("{driftVelocity: 4}")));
 }
 
 TEST(DetectorSignalShapingProcess, GaussianResponse) {
@@ -1013,12 +1023,22 @@ TEST(DetectorSignalPeaksFinderProcess, PeaksAndWindows) {
     EXPECT_EQ(analysis.Get<std::vector<int>>("peaks_WindowMultiplicity"), (std::vector<int>{2, 1}));
 }
 
+/// A process initialized with the manager of the detector
+template <typename Process>
+std::unique_ptr<Process> Initialized(const Detector& detector, const std::string& yaml) {
+    auto process = std::make_unique<Process>("process", YAML::Load(yaml));
+    process->SetManager(detector.manager.get());
+    process->Initialize();
+    return process;
+}
+
 TEST(DetectorSignalToHitsProcess, IntegralAndQCenter) {
     auto detector = MakeDetector(kChargeNoDiffusion);
-    TRestDetectorSignalToHitsProcess process("signalToHits", YAML::Load("{method: integral}"));
-    process.SetManager(detector.manager.get());
-    process.Initialize();
-    EXPECT_DOUBLE_EQ(process.fDriftVelocity, 10);  // from the medium
+    auto process = Initialized<TRestDetectorSignalToHitsProcess>(detector, "{method: integral}");
+    // The drift is reconstructed afterwards, with the drift velocity of the medium
+    auto reconstruction = Initialized<TRestDetectorHitsTimeProjectionProcess>(detector, "{}");
+    EXPECT_DOUBLE_EQ(reconstruction->fDriftVelocity, 10);
+    EXPECT_EQ(reconstruction->fMediumName, "ArIso");
 
     TRestDetectorSignalEvent signals;
     signals.SetID(9);
@@ -1026,8 +1046,15 @@ TEST(DetectorSignalToHitsProcess, IntegralAndQCenter) {
     signals.AddSignal(YStrip(1), {{0.5, 4}});
     signals.AddSignal(999, {{1, 10}});  // not in the readout: skipped
 
-    TRestDetectorHitsEvent hits;
-    ASSERT_TRUE(process.ProcessEvent(signals, hits));
+    TRestDetectorHitsEvent onReadout, hits;
+    ASSERT_TRUE(process->ProcessEvent(signals, onReadout));
+    EXPECT_EQ(onReadout.GetID(), 9);
+    ASSERT_EQ(onReadout.GetNumberOfHits(), 2u);
+    // Only the coordinates of the channels: X of the X strip, Y of the Y strip
+    EXPECT_EQ(onReadout.GetType(0), HitType::X);
+    EXPECT_TRUE(std::isnan(onReadout.GetZ(0)));
+    EXPECT_EQ(onReadout.GetType(1), HitType::Y);
+    ASSERT_TRUE(reconstruction->ProcessEvent(onReadout, hits));
     EXPECT_EQ(hits.GetID(), 9);
     ASSERT_EQ(hits.GetNumberOfHits(), 2u);
     // X strip: X of the strip, Z from the drift (time of the maximum * velocity)
@@ -1041,12 +1068,12 @@ TEST(DetectorSignalToHitsProcess, IntegralAndQCenter) {
     EXPECT_NEAR(hits.GetY(1), YStripPosition(1), 1e-5);
     EXPECT_NEAR(hits.GetZ(1), 5, 1e-5);
 
-    TRestDetectorSignalToHitsProcess qCenter("signalToHits",
-                                             YAML::Load("{method: qCenter, driftVelocity: 2}"));
-    qCenter.SetManager(detector.manager.get());
-    qCenter.Initialize();
-    TRestDetectorHitsEvent qHits;
-    ASSERT_TRUE(qCenter.ProcessEvent(signals, qHits));
+    auto qCenter = Initialized<TRestDetectorSignalToHitsProcess>(detector, "{method: qCenter}");
+    auto slower = Initialized<TRestDetectorHitsTimeProjectionProcess>(detector, "{driftVelocity: 2}");
+    EXPECT_DOUBLE_EQ(slower->fDriftVelocity, 2);  // given: the medium is not used
+    TRestDetectorHitsEvent qOnReadout, qHits;
+    ASSERT_TRUE(qCenter->ProcessEvent(signals, qOnReadout));
+    ASSERT_TRUE(slower->ProcessEvent(qOnReadout, qHits));
     ASSERT_GE(qHits.GetNumberOfHits(), 1u);
     EXPECT_NEAR(qHits.GetTime(0), (10 + 100 + 60) / 80., 1e-5);
     EXPECT_NEAR(qHits.GetEnergy(0), 80 / 3., 1e-4);
@@ -1054,23 +1081,47 @@ TEST(DetectorSignalToHitsProcess, IntegralAndQCenter) {
 
     EXPECT_THROW(TRestDetectorSignalToHitsProcess("s", YAML::Load("{method: unknownMethod}")),
                  std::exception);
+    // The drift parameters are not keys of SignalToHits
+    EXPECT_ANY_THROW(MetadataClassRegistry::Instance().Create("TRestDetectorSignalToHitsProcess", "s",
+                                                              YAML::Load("{driftVelocity: 2}")));
+
+    // Normal along -Y: the drift fills Y (distance to the readout = velocity * time), the hits keep their Z
+    auto inverted = MakeDetector(kChargeNoDiffusion);
+    auto readout = BuildReadout("[0, -1, 0]");
+    const auto* alongYReadout = readout.get();
+    delete inverted.readouts->fReadoutMap["mmTest"];
+    inverted.readouts->fReadoutMap["mmTest"] = readout.release();
+    auto alongY = Initialized<TRestDetectorHitsTimeProjectionProcess>(inverted, "{}");
+    TRestDetectorHitsEvent xHit, xyHit;
+    xHit.AddHit(3, 0, 7, 1, 2, HitType::XZ);
+    ASSERT_TRUE(alongY->ProcessEvent(xHit, xyHit));
+    EXPECT_EQ(xyHit.GetType(0), HitType::XYZ);
+    EXPECT_NEAR(xyHit.GetX(0), 3, 1e-5);
+    EXPECT_NEAR(xyHit.GetZ(0), 7, 1e-5);
+    EXPECT_NEAR(alongYReadout->GetDistanceToReadout(xyHit.GetPosition(0)), 20, 1e-4);
+
+    // Without driftVelocity the medium must exist
+    TRestDetectorHitsTimeProjectionProcess unknownMedium("r", YAML::Load("{medium: Other}"));
+    unknownMedium.SetManager(detector.manager.get());
+    EXPECT_ANY_THROW(unknownMedium.Initialize());
 }
 
 TEST(DetectorSignalToHitsProcess, RoundTripWithHitsToSignal) {
+    // Drift (one electron, no fluctuations nor diffusion), signals, hits and drift reconstruction
     auto detector = MakeDetector(kChargeNoDiffusion);
-    TRestDetectorHitsToSignalProcess toSignal("hitsToSignal", YAML::Load("{}"));
-    toSignal.SetManager(detector.manager.get());
-    toSignal.Initialize();
-    TRestDetectorSignalToHitsProcess toHits("signalToHits", YAML::Load("{method: integral}"));
-    toHits.SetManager(detector.manager.get());
-    toHits.Initialize();
+    auto drift = Initialized<TRestDetectorHitsDriftProcess>(detector, "{fluctuations: none, maxHits: 1}");
+    auto toSignal = Initialized<TRestDetectorHitsToSignalProcess>(detector, "{}");
+    auto toHits = Initialized<TRestDetectorSignalToHitsProcess>(detector, "{method: integral}");
+    auto reconstruction = Initialized<TRestDetectorHitsTimeProjectionProcess>(detector, "{}");
 
     const auto pixel = YStripPixel(3, 0);
-    TRestDetectorHitsEvent input, output;
+    TRestDetectorHitsEvent input, drifted, onReadout, output;
     input.AddHit(pixel.X(), pixel.Y(), 27, 5.9, 0);
     TRestDetectorSignalEvent signals;
-    ASSERT_TRUE(toSignal.ProcessEvent(input, signals));
-    ASSERT_TRUE(toHits.ProcessEvent(signals, output));
+    ASSERT_TRUE(drift->ProcessEvent(input, drifted));
+    ASSERT_TRUE(toSignal->ProcessEvent(drifted, signals));
+    ASSERT_TRUE(toHits->ProcessEvent(signals, onReadout));
+    ASSERT_TRUE(reconstruction->ProcessEvent(onReadout, output));
     ASSERT_EQ(output.GetNumberOfHits(), 1u);
     EXPECT_NEAR(output.GetY(0), YStripPosition(3), 1e-5);
     EXPECT_NEAR(output.GetZ(0), 27, 1e-4);

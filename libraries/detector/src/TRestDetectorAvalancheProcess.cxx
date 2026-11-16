@@ -14,7 +14,7 @@
 /// (energyReference, resolutionReference: that is TRestDetectorHitsSmearingProcess, not to be used with
 /// this process).
 ///
-/// Parameters: amplificationVoltage, gap, medium (name, optional if there is only one), table (""), seed (0:
+/// Parameters: amplificationVoltage, gap, medium (empty: the only one with `charge`), table (""), seed (0:
 /// random seed; otherwise the generator is re-seeded at each event from the seed and the event and subevent
 /// IDs, TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number of threads).
 ///
@@ -90,8 +90,8 @@ void TRestDetectorAvalancheProcess::InitProcess() {
         throw std::runtime_error(user + ": amplificationVoltage and gap must be > 0");
     }
     if (!fManager) throw std::runtime_error(user + ": no TRestManager");
-    const auto* medium = fManager->FindMetadata<TRestDetectorMedium>(fMediumName, user, "medium");
-    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium");
+    const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "charge", user);
+    if (!medium) throw std::runtime_error(user + ": needs a TRestDetectorMedium with charge");
     fCharge = &medium->GetChargeResponse(user);
     if (fCharge->GetWValue() <= 0) {
         throw std::runtime_error(user + ": the charge of the medium '" + medium->GetName() +
