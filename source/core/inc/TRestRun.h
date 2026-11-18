@@ -44,7 +44,8 @@
 ///   mainDataPath: /data/rest  # prefix of relative output file names
 ///   outputFileName: "R[runNumber]_[runTag].root"   # "/dev/null" (default): nothing written
 ///   outputBasketSize: 1048576 # bytes per branch basket of the output event trees, 0: ROOT default
-///   # outputEvent is written by REST: the last saved event type
+///   # outputEvent is written by REST: the last saved event type; codeVersion, codeCommit and codeClean the
+///   # code that wrote the file (REST_Version)
 /// \endcode
 ///
 /// The run parameters not given in the configuration are taken from the name of the input file
@@ -97,6 +98,13 @@ class TRestRun : public TRestRunInfo {
     std::string fOutputEvent = "";
     /// Current entry of the input file (GetEntry).
     long long fEntry = 0;
+    /// Version of the code that wrote the file (`codeVersion`, REST_Version::GetVersion), set when the output
+    /// file is opened; read from the run of an input file. Not an input of the configuration
+    std::string fCodeVersion = "";
+    /// Commit of the code that wrote the file (`codeCommit`, REST_Version::GetCommit), "unknown" if not known
+    std::string fCodeCommit = "";
+    /// Whether the code that wrote the file had no uncommitted changes (`codeClean`, REST_Version::IsClean)
+    bool fCodeClean = false;
 
     /// Entries of the input analysis tree.
     long long fInputEntries = 0;

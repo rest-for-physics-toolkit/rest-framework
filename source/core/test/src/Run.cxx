@@ -8,6 +8,7 @@
 #include <TRestCut.h>
 #include <TRestRun.h>
 #include <TRestTools.h>
+#include <TRestVersion.h>
 #include <TTree.h>
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
@@ -134,6 +135,11 @@ TEST(Run, WriteAndReadRunFile) {
     EXPECT_EQ(run.GetEntryWithID(4), 4);
     EXPECT_DOUBLE_EQ(run.GetObservable<double>("ana_energy"), 50.);
     EXPECT_EQ(run.GetEntryWithID(99), -1);
+
+    // The code that wrote the file
+    EXPECT_EQ(run.fCodeVersion, REST_Version::GetVersion());
+    EXPECT_EQ(run.fCodeCommit, REST_Version::GetCommit());
+    EXPECT_EQ(run.fCodeClean, REST_Version::IsClean());
 
     // The metadata of the file
     EXPECT_EQ(run.GetMetadata("run")["runNumber"].as<int>(), 12);

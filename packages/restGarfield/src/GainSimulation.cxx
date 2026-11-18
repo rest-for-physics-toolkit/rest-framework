@@ -15,6 +15,7 @@
 #include "Garfield/SolidBox.hh"
 #include "TFile.h"
 #include "TRestDetectorTransportManager.h"
+#include "TRestVersion.h"
 #include "TransportSimulation.h"
 
 namespace {
@@ -131,6 +132,7 @@ void RunGainSimulation(const TRestDetectorMedium& medium, TRestDetectorGainTable
             char date[32];
             std::strftime(date, sizeof(date), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
             generator["date"] = date;
+            generator["code"] = REST_Version::GetSummary();
 
             // Locked (other processes may write other media or tables) until the file is closed
             const MediumFileLock lock(mediumFile);

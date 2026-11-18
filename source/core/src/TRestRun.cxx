@@ -16,6 +16,7 @@
 
 #include "TRestSystemOfUnits.h"
 #include "TRestTools.h"
+#include "TRestVersion.h"
 #include "TRestYAMLUtils.h"
 
 using namespace TRestTools;
@@ -31,6 +32,9 @@ static const bool TRestRun_FieldsRegistered = []() {
     reg.RegisterField<TRestRun>("outputEvent", &TRestRun::fOutputEvent);
     reg.RegisterField<TRestRun>("inheritInputRun", &TRestRun::fInheritInputRun);
     reg.RegisterField<TRestRun>("outputBasketSize", &TRestRun::fOutputBasketSize);
+    reg.RegisterField<TRestRun>("codeVersion", &TRestRun::fCodeVersion);
+    reg.RegisterField<TRestRun>("codeCommit", &TRestRun::fCodeCommit);
+    reg.RegisterField<TRestRun>("codeClean", &TRestRun::fCodeClean);
 
     return true;
 }();
@@ -91,7 +95,9 @@ void TRestRun::LoadInputRunParameters() {
     YAML::Node parameters(YAML::NodeType::Map);
     for (const auto& key : kRunParameters)
         if (inputRun[key]) parameters[key] = inputRun[key];
-    for (const std::string key : {"startTime", "endTime", "mergedSubRuns", "entriesSaved"})
+    // The code that wrote the file
+    for (const std::string key :
+         {"startTime", "endTime", "mergedSubRuns", "entriesSaved", "codeVersion", "codeCommit", "codeClean"})
         if (inputRun[key]) parameters[key] = inputRun[key];
     UpdateParamsFromYAML<TRestRun>(parameters);
     if (inputRun["runInfo"] && inputRun["runInfo"].IsMap())
@@ -455,6 +461,12 @@ void TRestRun::OpenOutputFile(std::string fileName, const std::string& option) {
     }
 
     fOutputFile->cd();
+
+    // The code writing the file, stored with the run
+    fCodeVersion = REST_Version::GetVersion();
+    fCodeCommit = REST_Version::GetCommit();
+    fCodeClean = REST_Version::IsClean();
+    if (fNode) UpdateYAMLFromParams<TRestRun>(fNode);
 
     if (option == "UPDATE") {
         return;

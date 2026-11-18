@@ -7,6 +7,7 @@
 ///                [--o|--output <output.root>] [--v|--verbose <level>]
 ///                [--e|--events <n>] [--j|--threads <n>] [--r|--reference <process>=<dataset>]
 ///                [--set <name>=<value>] [--maxRepeated <n>] [--repeatedInterval <s>]
+///    restManager --version
 ///
 /// Reads the TRestManager section of the configuration, applies the command line overrides, runs it
 /// (TRestManager::Run), saves its metadata and draws its plots (TRestManager::RunPlots).
@@ -33,6 +34,9 @@
 /// - `--r`, `--reference`: sets the referenceFileName of a process of the TRestDataSetProcessManager
 ///   (repeatable), e.g. `--r calib=D_00120_00122_Calibration.root`.
 ///
+/// - `--version`: prints the version of the code (REST_Version::GetSummary) and exits; it is also printed at
+///   the start of each execution and stored in the output files.
+///
 /// SIGINT, SIGTERM, SIGHUP and SIGQUIT request a clean stop (TRestManager::RequestStop).
 
 #include <TROOT.h>
@@ -48,6 +52,7 @@
 #include "TRestLogManager.h"
 #include "TRestManager.h"
 #include "TRestSystemOfUnits.h"
+#include "TRestVersion.h"
 #include "TRestYAMLUtils.h"
 
 /// \brief Waits (in its own thread) for one of the signals of waitSet, blocked in the other threads, and
@@ -91,6 +96,10 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--version") {
+            std::cout << REST_Version::GetSummary() << std::endl;
+            return 0;
+        }
         if ((arg == "--c" || arg == "--config") && i + 1 < argc) {
             configPath = argv[++i];
         } else if ((arg == "--i" || arg == "--input") && i + 1 < argc) {
@@ -151,7 +160,7 @@ int main(int argc, char** argv) {
                       << " --c|--config <config.yaml> [--i|--input <input.root>]"
                          " [--o|--output <output.root>] [--v|--verbose <level>]"
                          " [--e|--events <n>] [--j|--threads <n>] [--r|--reference <process>=<dataset>]"
-                         " [--set <name>=<value>] [--maxRepeated <n>] [--repeatedInterval <s>]\n";
+                         " [--set <name>=<value>] [--maxRepeated <n>] [--repeatedInterval <s>] | --version\n";
             return 1;
         }
     }
@@ -161,9 +170,12 @@ int main(int argc, char** argv) {
                   << " --c|--config <config.yaml> [--i|--input <input.root>]"
                      " [--o|--output <output.root>] [--v|--verbose <level>]"
                      " [--e|--events <n>] [--j|--threads <n>] [--r|--reference <process>=<dataset>]"
-                     " [--set <name>=<value>] [--maxRepeated <n>] [--repeatedInterval <s>]\n";
+                     " [--set <name>=<value>] [--maxRepeated <n>] [--repeatedInterval <s>] | --version\n";
         return 1;
     }
+
+    // The code of this execution, in the log (also stored in the output files)
+    std::cout << REST_Version::GetSummary() << std::endl;
 
     try {
         YAML::Node cfg = TRestYAMLUtils::OpenConfigFile(configPath, parameters);

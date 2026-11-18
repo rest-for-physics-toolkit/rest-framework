@@ -13,6 +13,7 @@ restManager --c|--config <config.yaml> [--i|--input <input.root>] [--o|--output 
             [--v|--verbose <level>] [--e|--events <n>] [--j|--threads <n>]
             [--r|--reference <process>=<dataset>] [--set <name>=<value>]
             [--maxRepeated <n>] [--repeatedInterval <s>]
+restManager --version
 ```
 
 | Option | Description |
@@ -27,12 +28,13 @@ restManager --c|--config <config.yaml> [--i|--input <input.root>] [--o|--output 
 | `--set` | Sets a parameter of the `parameters` section for this execution (repeatable; the file is not changed), e.g. `--set meshVoltage=300V`. A parameter not used is an error. |
 | `--maxRepeated` | Similar messages (warning and info) from the same code line within the time window after which the next ones are suppressed (default 10, 0: no suppression; never with verbose debug). |
 | `--repeatedInterval` | Time window of `--maxRepeated` in seconds (default 10, 0: a single window for the whole execution). |
+| `--version` | Prints the version of the code (`VERSION` of the project, commit of the build and whether it had uncommitted changes) and exits. It is also printed at the start and stored in the output files (`codeVersion`, `codeCommit`, `codeClean`). |
 
 SIGINT, SIGTERM, SIGHUP and SIGQUIT stop the processing cleanly. The exit code is 0 on success and 1 on error.
 
 ## restRoot
 
-ROOT prompt with REST loaded.
+ROOT prompt with REST loaded; the version of the code is printed at its start (`REST_Version::GetSummary()`).
 
 ```
 restRoot [ROOT options] [file.root] [macro.C ...]

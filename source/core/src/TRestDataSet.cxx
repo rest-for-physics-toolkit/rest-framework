@@ -131,6 +131,7 @@
 #include "TRestCut.h"
 #include "TRestSystemOfUnits.h"
 #include "TRestTools.h"
+#include "TRestVersion.h"
 #include "TRestYAMLUtils.h"
 
 using TRestYAMLUtils::GetNodeAtPath;
@@ -145,6 +146,9 @@ static const bool TRestDataSet_FieldsRegistered = []() {
     reg.RegisterField<TRestDataSet>("cuts", &TRestDataSet::fCutNames);
     reg.RegisterField<TRestDataSet>("columns", &TRestDataSet::fColumnsConfig);
     reg.RegisterField<TRestDataSet>("outputFileName", &TRestDataSet::fOutputFileName);
+    reg.RegisterField<TRestDataSet>("codeVersion", &TRestDataSet::fCodeVersion);
+    reg.RegisterField<TRestDataSet>("codeCommit", &TRestDataSet::fCodeCommit);
+    reg.RegisterField<TRestDataSet>("codeClean", &TRestDataSet::fCodeClean);
     return true;
 }();
 
@@ -726,14 +730,22 @@ void TRestDataSet::Write(const std::string& fileNamePattern) {
     if (!file || file->IsZombie())
         throw std::runtime_error("TRestDataSet '" + fName + "': cannot open " + fileName);
     fOutputFileName = path;
+    // The code writing the dataset
+    fCodeVersion = REST_Version::GetVersion();
+    fCodeCommit = REST_Version::GetCommit();
+    fCodeClean = REST_Version::IsClean();
     if (fOpened) {
         // A dataset file opened: its metadata (its TRestCut, the dataset processes applied...) and its
-        // configuration, with this output
+        // configuration, with this output and this code
         for (const auto& entry : fInputMetadata) {
             const std::string instance = entry.first.as<std::string>();
             YAML::Node config = TRestYAMLUtils::Detach(entry.second);
-            if (config.IsMap() && config["class"] && config["class"].as<std::string>() == GetClassName())
+            if (config.IsMap() && config["class"] && config["class"].as<std::string>() == GetClassName()) {
                 config["outputFileName"] = path;
+                config["codeVersion"] = fCodeVersion;
+                config["codeCommit"] = fCodeCommit;
+                config["codeClean"] = fCodeClean;
+            }
             TRestMetadata::WriteMetadata(file.get(), instance, config);
         }
     } else {

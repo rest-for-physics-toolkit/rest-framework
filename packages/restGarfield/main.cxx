@@ -2,6 +2,7 @@
 /// \brief restGarfield: computes with Garfield++ the tables of a TRestDetectorTransportManager configuration
 ///
 ///    restGarfield config.yaml [--set name=value ...] [--jobs N]
+///    restGarfield --version
 ///
 /// `--set` sets a parameter of the section `parameters` of the configuration for this execution
 /// (repeatable; the file is not changed). `--jobs N` splits the field nodes of each gas transport table in up
@@ -33,6 +34,7 @@
 
 #include "GainSimulation.h"
 #include "TRestDetectorTransportManager.h"
+#include "TRestVersion.h"
 #include "TRestYAMLUtils.h"
 #include "TransportSimulation.h"
 
@@ -40,10 +42,16 @@
 /// transport tables (RunTransportSimulation) and then its gain tables (RunGainSimulation).
 /// \return 0 on success, 1 on a usage error or an exception (the reason is printed).
 int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string(argv[1]) == "--version") {
+        std::cout << REST_Version::GetSummary() << std::endl;
+        return 0;
+    }
     if (argc < 2 || std::string(argv[1]).rfind("--", 0) == 0) {
-        std::cerr << "Usage: restGarfield <config.yaml> [--set name=value ...] [--jobs N]" << std::endl;
+        std::cerr << "Usage: restGarfield <config.yaml> [--set name=value ...] [--jobs N] | --version"
+                  << std::endl;
         return 1;
     }
+    std::cout << REST_Version::GetSummary() << std::endl;
 
     try {
         // --set: the parameters of the configuration for this execution (the file is not changed)

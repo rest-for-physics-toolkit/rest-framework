@@ -15,6 +15,7 @@
 /// * **--tcm**: the commands go to the TCM (`TCM` of the TRestRawDAQMetadata).
 /// * **--set name=value**: the parameters of the configuration for this execution (repeatable).
 /// * **-h, --help**: usage.
+/// * **--version**: the version of the code (also printed at the start and stored in the run files).
 ///
 /// CTRL-C (SIGINT) or SIGTERM aborts the run in progress and ends the interactive console (the files are
 /// closed at exit). An error in a command is written and the session continues; an error in the
@@ -31,11 +32,13 @@
 #include <string>
 
 #include "CommandFetcher.h"
+#include "TRestVersion.h"
 #include "TRestYAMLUtils.h"
 
 namespace {
 const char* kUsage =
-    "Usage: femclient <config.yaml> [-e|--exec <commands file>] [--read-only] [--tcm] [--set name=value ...]";
+    "Usage: femclient <config.yaml> [-e|--exec <commands file>] [--read-only] [--tcm] [--set name=value ...]"
+    " | --version";
 
 void signalHandler(int) {
     // Only async-signal-safe calls (write, atomics) in a signal handler
@@ -68,6 +71,9 @@ int main(int argc, char** argv) {
             } else if (arg == "-h" || arg == "--help") {
                 std::cout << kUsage << std::endl;
                 return 0;
+            } else if (arg == "--version") {
+                std::cout << REST_Version::GetSummary() << std::endl;
+                return 0;
             } else if (arg.rfind("-", 0) != 0 && configFile.empty()) {
                 configFile = arg;
             } else {
@@ -83,6 +89,7 @@ int main(int argc, char** argv) {
         std::cerr << "femclient: no configuration file\n" << kUsage << std::endl;
         return 1;
     }
+    std::cout << REST_Version::GetSummary() << std::endl;
 
     std::signal(SIGINT, signalHandler);   // Ctrl+C
     std::signal(SIGTERM, signalHandler);  // kill <pid>

@@ -12,6 +12,7 @@
 #include <TRestGeant4SpatialGenerator.h>
 #include <TRestRun.h>
 #include <TRestTools.h>
+#include <TRestVersion.h>
 #include <TRestYAMLUtils.h>
 
 #include <regex>
@@ -49,6 +50,8 @@ void ShowUsage() {
          << "there are other convenient optional parameters that override the ones in the configuration file:"
          << endl
          << "\t--help (-h) | show usage (this text)" << endl
+         << "\t--version | show the version of the code (also printed at the start and stored in the output)"
+         << endl
          << "\t--config (-c) example.yaml | specify the YAML configuration file (same as calling restG4 "
             "example.yaml)"
          << endl
@@ -160,6 +163,9 @@ Options ProcessCommandLineOptions(int argc, char* const argv[]) {
         string arg = argv[i];
         if ((arg == "-h") || (arg == "--help")) {
             ShowUsage();
+            exit(0);
+        } else if (arg == "--version") {
+            cout << REST_Version::GetSummary() << endl;
             exit(0);
         } else if ((arg == "-c") || (arg == "--config")) {
             if (i + 1 < argc) {  // Make sure we aren't at the end of argv!
@@ -332,6 +338,7 @@ void CheckSourceParticles(const TRestGeant4Metadata& metadata) {
 void Application::Run(const CommandLineOptions::Options& options) {
     const auto originalDirectory = filesystem::current_path();
 
+    cout << REST_Version::GetSummary() << endl;
     cout << "Current working directory: " << originalDirectory << endl;
 
     CommandLineOptions::PrintOptions(options);

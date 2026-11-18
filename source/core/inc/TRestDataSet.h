@@ -134,6 +134,11 @@ class TRestDataSet : public TRestMetadata {
     YAML::Node fColumnsConfig;
     /// File the dataset is written to (Write; REST_GenerateDataSet if it is not given to the macro)
     std::string fOutputFileName = "";
+    /// Code that wrote the dataset (Write): `codeVersion`, `codeCommit` and `codeClean` (REST_Version); the
+    /// code of each run is in its run file. Not inputs of the configuration
+    std::string fCodeVersion = "";
+    std::string fCodeCommit = "";  ///< `codeCommit`: commit of the code that wrote the dataset
+    bool fCodeClean = false;       ///< `codeClean`: the code had no uncommitted changes
 
     TRestDataSet();  ///< Default constructor (empty dataset).
     /// \brief A dataset file, opened as it is (as TRestRun(inputFileName)); throws if it is not a dataset

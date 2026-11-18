@@ -130,6 +130,7 @@ otherwise be found first).
 | `BUILD_TESTING` | OFF | The tests (GoogleTest). |
 | `REST_WERROR` | OFF | Compiler warnings as errors (recommended for development). |
 | `REST_USE_CCACHE` | ON | `ccache` as compiler launcher if installed (fast rebuilds after reconfiguring or switching branches). |
+| `REST_GIT_COMMIT` | empty | Commit of a build without git (e.g. a tarball or a Docker image without `.git`), stored as the commit of the code; with git it is taken from the checkout. |
 
 The packages are part of the repository (not submodules). To skip them even if their dependencies are
 installed, e.g. `cmake .. -DREST_G4=OFF -DREST_GARFIELD=OFF` (`REST_CRY` depends on `REST_G4`).
@@ -141,6 +142,11 @@ restManager --c config.yaml --i input.root --o output.root   # processing chain 
 restG4 simulation.yaml                                        # Geant4 simulation
 restRoot                                                      # ROOT with the REST libraries and macros
 ```
+
+The executables print the version of the code with `--version` (also at their start): the `VERSION` of
+the project, the commit of the build and whether it had uncommitted changes, obtained at each build. The
+same is stored in the files they write (`codeVersion`, `codeCommit`, `codeClean` of the `TRestRun` and of
+the `TRestDataSet`).
 
 The executables and their options are described in [source/bin](source/bin/README.md). The
 [user guide](doc/UserGuide.md) explains the configuration, the format of the events and of the REST files,

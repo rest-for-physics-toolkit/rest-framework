@@ -2,7 +2,8 @@
 /// CountString, Format, NormalizeOption, ReplaceDelimited, ReplaceIdentifiers...), numbers, times, files
 /// and paths (GetFilesMatchingPattern, GetFullPath, SearchFileInPath, isRootFile...), the automatic run
 /// number and the geometries stored in ROOT files (WriteGeometry, ReadGeometryHash), and the particle names
-/// and IDs of REST_Particles (TRestParticles.h). The files are created in a work directory per test.
+/// and IDs of REST_Particles (TRestParticles.h), and the version of the code (REST_Version). The files are
+/// created in a work directory per test.
 
 #include <TFile.h>
 #include <TGeoManager.h>
@@ -12,12 +13,14 @@
 #include <TNamed.h>
 #include <TRestParticles.h>
 #include <TRestTools.h>
+#include <TRestVersion.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <optional>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -327,4 +330,20 @@ TEST(Tools, Particles) {
     EXPECT_TRUE(Matches(11, "e-"));
     EXPECT_FALSE(Matches(-11, "e-"));
     EXPECT_THROW(Matches(11, "unknown"), std::invalid_argument);
+}
+
+TEST(Version, VersionCommitAndSummary) {
+    // The VERSION of the project and the commit of the build (unknown without git)
+    EXPECT_TRUE(std::regex_match(REST_Version::GetVersion(), std::regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
+        << REST_Version::GetVersion();
+    if (REST_Version::IsCommitKnown()) {
+        EXPECT_TRUE(std::regex_match(REST_Version::GetCommit(), std::regex("[0-9a-f]{40}")))
+            << REST_Version::GetCommit();
+    } else {
+        EXPECT_EQ(REST_Version::GetCommit(), "unknown");
+    }
+    if (!REST_Version::IsCleanKnown()) EXPECT_FALSE(REST_Version::IsClean());
+    const std::string summary = REST_Version::GetSummary();
+    EXPECT_EQ(summary.rfind("rest-for-physics-toolkit " + REST_Version::GetVersion() + " (commit ", 0), 0u)
+        << summary;
 }

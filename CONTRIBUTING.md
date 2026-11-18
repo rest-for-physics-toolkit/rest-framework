@@ -36,6 +36,13 @@ executable (with Garfield++, readline and prometheus-cpp). The unit tests build 
 metadata, datasets) in memory or in temporary files, without external data. Tests that need input data
 (pipelines of the examples) will use data published outside the repository.
 
+## Versions and releases
+
+The version of the code is the `VERSION` of `project()` in CMakeLists.txt; the build adds the commit and
+whether the tracked files had uncommitted changes (cmake/RestVersion.cmake, at each build). A release is
+the tag `vX.Y.Z` of the commit whose `VERSION` is `X.Y.Z` (a different tag on the commit is a warning of
+the build). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
+
 ## Continuous integration
 
 The jobs run in the Docker image of the `rest-docker` repository (ROOT, Geant4, Garfield++, CRY,

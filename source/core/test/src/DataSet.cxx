@@ -14,6 +14,7 @@
 #include <TRestManager.h>
 #include <TRestRunInfo.h>
 #include <TRestTools.h>
+#include <TRestVersion.h>
 #include <TRestYAMLUtils.h>
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
@@ -151,6 +152,10 @@ TEST(DataSet, SelectionCutsColumnsAndWrite) {
     EXPECT_EQ(store["dataSet"]["class"].as<std::string>(), "TRestDataSet");
     EXPECT_EQ(store["highEnergy"]["class"].as<std::string>(), "TRestCut");
     EXPECT_FALSE(store["run"].IsDefined());  // the runs are in RESTDataSetInfo
+    // The code that wrote it
+    EXPECT_EQ(store["dataSet"]["codeVersion"].as<std::string>(), REST_Version::GetVersion());
+    EXPECT_EQ(store["dataSet"]["codeCommit"].as<std::string>(), REST_Version::GetCommit());
+    EXPECT_EQ(store["dataSet"]["codeClean"].as<bool>(), REST_Version::IsClean());
 
     // Opened as it is
     TRestDataSet opened(fileName.string());

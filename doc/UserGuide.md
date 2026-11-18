@@ -50,7 +50,9 @@ restRoot [file.root]
 ```
 
 All the `restManager` options (`--v`, `--r`, `--maxRepeated`...) are listed in
-[source/bin/README.md](../source/bin/README.md).
+[source/bin/README.md](../source/bin/README.md). Every executable prints the version of the code with
+`--version` (the `VERSION` of the project, the commit of the build and whether it had uncommitted changes),
+also at its start; the files keep it in their `TRestRun` and datasets in their `TRestDataSet`.
 
 ### 1.3 A processing from end to end
 
@@ -591,7 +593,7 @@ padded). Any other placeholder is an error (the legacy `[fRunTag]` names no long
 |---|---|---|
 | `<event class>` (e.g. `TRestRawSignalEvent`, `TRestDetectorHitsEvent`) | `TTree` | One tree per stored event type ([section 3](#3-events-and-their-format)), one entry per saved event, with `formatVersion` in its UserInfo. |
 | `AnalysisTree` | `TTree` | One entry per saved event (the same entries as the event trees): the event information branches of 3.1 (`runOrigin`, `subRunOrigin`, `eventID`, `subEventID`, `timeSeconds`, `timeNanoSecs`, `ok`, `subEventTag`), the observables of the input file (unless `inputAnalysisStorage: false`) and the observables of the processes, `<processName>_<observable>`. |
-| `RESTMetadataStore/` | directory | One `TObjString` per metadata instance, named as the instance, with its configuration as YAML (including `class`): the `TRestRun` (with its resolved parameters and file names), the pipeline with its processes, the cuts, readouts, media..., and the metadata of the input file (the history of the processing). |
+| `RESTMetadataStore/` | directory | One `TObjString` per metadata instance, named as the instance, with its configuration as YAML (including `class`): the `TRestRun` (with its resolved parameters and file names, and the code that wrote the file: `codeVersion`, `codeCommit`, `codeClean`), the pipeline with its processes, the cuts, readouts, media..., and the metadata of the input file (the history of the processing). |
 | `Readouts/<instance>/` | directory | With a `TRestDetectorReadoutManager`: each readout used, its geometry (`Geometry`, `GeometryMD5`) and its decoding (`Decodings/`), so the file is self-contained. |
 | `Geometry`, `GeometryMD5` | `TGeoManager`, `TObjString` | Files of restG4 and their analysis: the simulated geometry and its hash. |
 | plot objects | `TCanvas`, histograms | Only if a `TRestAnalysisPlot` has this file as `outputFileName`. |

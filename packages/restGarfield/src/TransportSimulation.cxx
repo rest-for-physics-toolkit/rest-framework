@@ -25,6 +25,7 @@
 #include "TFile.h"
 #include "TRestDetectorMedium.h"
 #include "TRestDetectorTransportManager.h"
+#include "TRestVersion.h"
 
 namespace {
 // Garfield units: V/cm, cm/ns, eV, Torr. REST units: V/mm, mm/us, keV, bar
@@ -318,6 +319,7 @@ void RunTransportSimulation(const TRestDetectorMedium& medium, TRestDetectorTran
         char date[32];
         std::strftime(date, sizeof(date), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
         generator["date"] = date;
+        generator["code"] = REST_Version::GetSummary();
 
         // Locked (other processes may write other media or tables) until the file is closed
         const MediumFileLock lock(mediumFile);

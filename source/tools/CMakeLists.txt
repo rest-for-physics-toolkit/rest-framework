@@ -7,6 +7,25 @@ file(GLOB_RECURSE TOOLS_HEADERS inc/*.h)
 
 add_library(RestTools SHARED ${TOOLS_SOURCES})
 
+# Version of the code (REST_Version, TRestVersion.h): RestVersionInfo.h written
+# at each build by cmake/RestVersion.cmake (only rewritten if it changes)
+set(REST_GIT_COMMIT
+    ""
+    CACHE STRING "Commit of a build without git (e.g. a tarball or an image)")
+set(_version_header ${CMAKE_CURRENT_BINARY_DIR}/generated/RestVersionInfo.h)
+add_custom_target(
+  rest_version
+  COMMAND
+    ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DOUTPUT=${_version_header} -DVERSION=${PROJECT_VERSION}
+    -DGIT_COMMIT=${REST_GIT_COMMIT} -P
+    ${CMAKE_SOURCE_DIR}/cmake/RestVersion.cmake
+  BYPRODUCTS ${_version_header}
+  COMMENT "Version of the code")
+add_dependencies(RestTools rest_version)
+target_include_directories(RestTools
+                           PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
 target_include_directories(
   RestTools PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
                    $<INSTALL_INTERFACE:include>)

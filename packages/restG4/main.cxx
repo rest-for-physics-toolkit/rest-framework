@@ -9,6 +9,7 @@
 /// CommandLineOptions::ProcessCommandLineOptions), which override the values of the configuration:
 ///
 /// * **-h, --help**: usage.
+/// * **--version**: the version of the code (also printed at the start and stored in the output file).
 /// * **-c, --config** file: configuration file (same as the positional argument).
 /// * **-o, --output** file: output file.
 /// * **-n, --events** N: number of events to simulate (1E5 notation accepted).

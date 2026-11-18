@@ -21,6 +21,7 @@
 #include <TRestLogManager.h>
 #include <TRestSystemOfUnits.h>
 #include <TRestTools.h>
+#include <TRestVersion.h>
 #include <TRint.h>
 #include <TStyle.h>
 #include <TSystem.h>
@@ -131,6 +132,7 @@ bool InitializeRestRuntimeFromRestPath() {
 /// \return 1 if the REST runtime cannot be initialized, 0 when the prompt exits.
 int main(int argc, char* argv[]) {
     std::cout << "---------------------Welcome to RESTRoot--------------------\n";
+    std::cout << REST_Version::GetSummary() << "\n";
 
     REST_Units::SetGeoManagerDefaultUnits();
 
