@@ -33,11 +33,15 @@
 ///   photosensor (for a fibre read at both ends, each end is a channel with its own probability): a ROOT
 ///   formula of x = r in mm (e.g. a Gaussian light ball) or a graph or histogram of a ROOT file
 ///   ("file.root:name", e.g. from an optical simulation of Geant4). With wlsMedium (the medium of the fibres
-///   with a `wls` response), the captured photons travel the distance d along the fibre to its read end
-///   (TRestDetectorReadout::GetDistanceToReadout of the channel): Binomial(N, exp(-d / attenuationLength))
-///   of them arrive, at t + d / lightSpeed; without it the captured photons arrive at once (the transport in
-///   the fibre is then part of captureProbability). The output hits are at the position given by the
-///   readout (for a fibre, its read end); their time is that of the hit plus the delay in the fibre.
+///   with a `wls` response), captureProbability is the capture by the fibre and the photons are guided half
+///   in each direction along it (TRestDetectorReadout::GetGuidedLightPaths of the channel): a fibre read at
+///   both ends gives half to each channel; read at one end, half go directly to it, a distance d, and half
+///   to the other end, where a fraction endReflectivity of them is reflected back, a distance 2 L - d (L the
+///   length of the fibre). Of the photons on a path of length d, Binomial(N, R exp(-d / attenuationLength))
+///   arrive (R = 1 for the direct path), at t + d / lightSpeed. Without wlsMedium the captured photons
+///   arrive at once (the transport in the fibre is then part of captureProbability, per channel). The output
+///   hits are at the position given by the readout (for a fibre, its read end); their time is that of the
+///   hit plus the delay in the fibre.
 /// - `attenuation`, transparent scintillator read at one end (e.g. a veto with a light guide and a PMT):
 ///   all the light goes to the channel of the hit (TRestDetectorReadout::GetChannelFromPosition), the
 ///   photons reaching its readout are Binomial(N, exp(-d / attenuationLength)) and they arrive at
@@ -57,7 +61,9 @@
 /// from the seed and the event and subevent IDs).
 ///
 /// Differences with the previous version of restv2: the times and charges of the photoelectrons were given
-/// by TRestDetectorLightToSignalProcess (removed), now TRestDetectorHitsToSignalProcess as for the charge.
+/// by TRestDetectorLightToSignalProcess (removed), now TRestDetectorHitsToSignalProcess as for the charge;
+/// with wlsMedium captureProbability was per channel and all the captured light went to its read end, now it
+/// is per fibre, half in each direction (the reflected half needs endReflectivity).
 ///
 /// Examples:
 ///
@@ -302,7 +308,20 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
     double probabilityLeft = 1;
     bool collected = false;
     for (const auto& channel : channels) {
-        const double probability = GetCaptureProbability(channel.distance);
+        // With WLS fibres the capture is by the fibre, half of the light in each direction: a channel
+        // takes the halves of the paths reaching its photosensor
+        std::vector<TRestDetectorReadout::GuidedLightPath> paths;
+        double probability = GetCaptureProbability(channel.distance);
+        if (fWLS && probability > 0) {
+            paths = fReadout->GetGuidedLightPaths(channel.daqID, position);
+            if (paths.empty()) {
+                throw std::runtime_error("TRestDetectorLightCollectionProcess: the channel " +
+                                         std::to_string(channel.daqID) + " of readout " +
+                                         fReadout->GetName() +
+                                         " has no distance to its readout (needed by wlsMedium)");
+            }
+            probability *= std::min(1.0, paths.size() / 2.0);
+        }
         if (probability <= 0) continue;
         collected = true;
         if (probability > probabilityLeft + 1e-9) {
@@ -319,25 +338,24 @@ void TRestDetectorLightCollectionProcess::CaptureLocally(const XYZVector& positi
             probability >= probabilityLeft ? left : Binomial(fRandom, left, probability / probabilityLeft);
         probabilityLeft -= probability;
         left -= captured;
-        // Along the fibre to its read end
-        int arriving = captured;
-        double arrival = time;
-        if (fWLS && captured > 0) {
-            const double distance = fReadout->GetDistanceToReadout(channel.daqID, position);
-            if (std::isnan(distance)) {
-                throw std::runtime_error("TRestDetectorLightCollectionProcess: the channel " +
-                                         std::to_string(channel.daqID) + " of readout " +
-                                         fReadout->GetName() +
-                                         " has no distance to its readout (needed by wlsMedium)");
-            }
-            const double attenuationLength = fWLS->GetAttenuationLength();
-            if (attenuationLength > 0) {
-                const double survival = std::exp(-distance / attenuationLength);
-                arriving = Binomial(fRandom, captured, survival);
-            }
-            if (fWLS->GetLightSpeed() > 0) arrival += distance / fWLS->GetLightSpeed();
+        if (!fWLS) {
+            AddPhotoelectrons(channel.position, Detect(captured), time, particleID, output);
+            continue;
         }
-        AddPhotoelectrons(channel.position, Detect(arriving), arrival, particleID, output);
+        // Along the fibre to its read end: the captured photons shared equally among the paths
+        int share = captured;
+        for (size_t k = 0; k < paths.size(); k++) {
+            const int onPath =
+                k + 1 == paths.size() ? share : Binomial(fRandom, share, 1.0 / (paths.size() - k));
+            share -= onPath;
+            double survival = paths[k].reflected ? fWLS->GetEndReflectivity() : 1.0;
+            const double attenuationLength = fWLS->GetAttenuationLength();
+            if (attenuationLength > 0) survival *= std::exp(-paths[k].distance / attenuationLength);
+            const double lightSpeed = fWLS->GetLightSpeed();
+            const double arrival = lightSpeed > 0 ? time + paths[k].distance / lightSpeed : time;
+            AddPhotoelectrons(channel.position, Detect(Binomial(fRandom, onPath, survival)), arrival,
+                              particleID, output);
+        }
     }
     if (!collected) fNHitsWithoutChannel++;
 }

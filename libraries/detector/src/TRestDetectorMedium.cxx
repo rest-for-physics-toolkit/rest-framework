@@ -374,6 +374,7 @@ static const bool TRestDetectorWLSResponse_FieldsRegistered = []() {
     reg.RegisterField<W>("attenuationLength", &W::fAttenuationLength);
     reg.RegisterField<W>("lightSpeed", &W::fLightSpeed);
     reg.RegisterField<W>("decayTime", &W::fDecayTime);
+    reg.RegisterField<W>("endReflectivity", &W::fEndReflectivity);
     return true;
 }();
 
@@ -389,6 +390,9 @@ void TRestDetectorWLSResponse::LoadConfig() {
     if (fAttenuationLength < 0 || fLightSpeed < 0 || fDecayTime < 0) {
         throw std::runtime_error(
             "TRestDetectorWLSResponse: attenuationLength, lightSpeed and decayTime must be >= 0");
+    }
+    if (fEndReflectivity < 0 || fEndReflectivity > 1) {
+        throw std::runtime_error("TRestDetectorWLSResponse: endReflectivity must be in [0, 1]");
     }
     UpdateYAMLFromParams<TRestDetectorWLSResponse>(fNode);
 }

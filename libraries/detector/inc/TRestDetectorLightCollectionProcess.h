@@ -74,12 +74,13 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// `captureProbability` (localCapture): probability that a photon produced at a distance r (mm) from a
     /// channel is captured by it and reaches its photosensor, a ROOT formula of x = r (e.g.
     /// "0.03*exp(-x*x/200)") or a graph or histogram of a ROOT file, "file.root:name" (e.g. from an optical
-    /// simulation of Geant4)
+    /// simulation of Geant4). With wlsMedium, the probability that the fibre of the channel captures it (the
+    /// guiding to the photosensor is then given by the `wls` response)
     std::string fCaptureProbability = "";
 
     /// `wlsMedium` (localCapture): name of the TRestDetectorMedium of the fibres, whose `wls` response gives
-    /// the attenuation and delay of the captured light along the fibre to its read end and the re-emission
-    /// time. Empty: none.
+    /// the attenuation and delay of the captured light along the fibre (half in each direction, the end not
+    /// read reflecting endReflectivity of it) to its read end and the re-emission time. Empty: none.
     std::string fWLSMediumName = "";
 
     /// `maxDistance` (localCapture): channels farther than this collect no light

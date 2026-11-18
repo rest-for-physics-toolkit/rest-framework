@@ -256,6 +256,23 @@ class TRestDetectorReadout : public TRestMetadata {
         return GetDistanceToReadout(position);
     }
 
+    /// \brief A path of the light guided to the readout of a channel (GetGuidedLightPaths).
+    struct GuidedLightPath {
+        double distance = 0;     ///< Length of the path from the position to the readout
+        bool reflected = false;  ///< Reflected at the end opposite to the readout
+    };
+    /// \brief The paths of the light guided from a position to the readout of a DAQ channel (e.g. inside a
+    /// wavelength shifting fibre, TRestDetectorLightCollectionProcess with wlsMedium). By default the
+    /// direct one, of length GetDistanceToReadout(daqID, position); TRestFibreReadout adds, for a fibre read
+    /// at one end, the light reflected at the other end.
+    /// \return The paths, empty if the channel has no distance to its readout.
+    virtual std::vector<GuidedLightPath> GetGuidedLightPaths(int daqID,
+                                                             const ROOT::Math::XYZVector& position) const {
+        const double distance = GetDistanceToReadout(daqID, position);
+        if (std::isnan(distance)) return {};
+        return {{distance, false}};
+    }
+
     /// \brief Signed distance from a position to the readout, for queries without a channel (e.g. the drift
     /// of simulated hits, see TRestDetectorHitsDriftProcess).
     /// \return The distance, or NaN if the readout does not define one (default).

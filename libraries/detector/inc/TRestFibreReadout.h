@@ -23,15 +23,19 @@ class TRestFibreFamily : public TRestMetadata {
     /// TRestFibreReadout::WriteGDMLPlacements)
     std::string fVolume = "";
     /// `readoutEnd`: end of the fibres read by a photosensor, "+" (the end at the upper side of the box along
-    /// the axis), "-" (lower side) or "both" (a channel per end)
+    /// the axis), "-" (lower side), "both" (a channel per end), or alternating along alternateAxis, "+-"
+    /// (the first fibre read at +, the next one at -, ...) or "-+"
     std::string fReadoutEnd = "+";
+    /// `alternateAxis`: with readoutEnd "+-" or "-+", the transverse axis ("X", "Y" or "Z") along which
+    /// consecutive fibres alternate their read end (whole rows or columns read at the same end)
+    std::string fAlternateAxis = "";
 
     /// \brief Builds an empty family.
     TRestFibreFamily();
     /// \brief Builds the family from its YAML node (LoadConfig).
     TRestFibreFamily(const std::string& name, const YAML::Node& node);
-    /// \brief Reads the keys; throws if the axis is not X, Y or Z, the pitch is not positive or readoutEnd
-    /// is not +, - or both.
+    /// \brief Reads the keys; throws if the axis is not X, Y or Z, the pitch is not positive, readoutEnd is
+    /// not +, -, both, +- or -+, or alternateAxis is not a transverse axis with +- and -+ (empty otherwise).
     void LoadConfig() override;
     /// \brief Nothing to initialise.
     void Initialize() override {}
@@ -40,10 +44,15 @@ class TRestFibreFamily : public TRestMetadata {
 
     /// \brief Axis of the fibres: 0 X, 1 Y, 2 Z.
     int GetAxis() const { return fAxis == "X" ? 0 : fAxis == "Y" ? 1 : 2; }
-    /// \brief Read ends: {-1}, {+1} or {-1, +1}.
+    /// \brief Read ends: {-1}, {+1} or {-1, +1}; alternating, the end of the first fibre ({+1} for "+-").
     std::vector<int> GetReadoutEnds() const {
         if (fReadoutEnd == "both") return {-1, 1};
-        return {fReadoutEnd == "-" ? -1 : 1};
+        return {fReadoutEnd == "-" || fReadoutEnd == "-+" ? -1 : 1};
+    }
+    /// \brief Axis along which the read end alternates: 0 X, 1 Y, 2 Z, -1 if it does not alternate.
+    int GetAlternateAxis() const {
+        if (fReadoutEnd != "+-" && fReadoutEnd != "-+") return -1;
+        return fAlternateAxis == "X" ? 0 : fAlternateAxis == "Y" ? 1 : 2;
     }
 };
 
@@ -84,8 +93,10 @@ class TRestFibreReadout : public TRestDetectorReadout {
     TRestFibreReadoutParameters fReadoutParams;  ///< `readoutParameters`
 
    private:
-    /// The grid of a family: axis, transverse axes, number of fibres along them, read ends and first
-    /// physical ID (a block of nU * nV channels per read end)
+    /// The grid of a family: axis, transverse axes, number of fibres along them, read ends, first physical
+    /// ID (a block of nU * nV channels per read end) and transverse index (0: i along u, 1: j along v)
+    /// along which the read end alternates (-1: it does not; the fibres with an odd index are read at the
+    /// end opposite to ends[0])
     struct Grid {
         int axis = 2;
         int u = 0;
@@ -94,6 +105,7 @@ class TRestFibreReadout : public TRestDetectorReadout {
         int nV = 0;
         std::vector<int> ends = {1};
         int firstID = 0;
+        int alternate = -1;
     };
     std::vector<Grid> fGrids;  //!
 
@@ -109,6 +121,8 @@ class TRestFibreReadout : public TRestDetectorReadout {
     bool GetFibre(int physicalID, size_t& family, int& i, int& j, int& end) const;
     /// \brief Coordinate along the axis of a family of its end (-1: lower side of the box, +1: upper).
     double GetEndCoordinate(size_t family, int end) const;
+    /// \brief Read end (-1 or +1) of the fibre i, j of a grid for its read end index e.
+    static int GetFibreEnd(const Grid& grid, size_t e, int i, int j);
 
    public:
     /// \brief Constructor.
@@ -157,6 +171,11 @@ class TRestFibreReadout : public TRestDetectorReadout {
     double GetDistanceToReadout(int daqID, const ROOT::Math::XYZVector& position) const override;
     /// The distance without a channel is that of the base class (NaN: the fibres have no drift)
     using TRestDetectorReadout::GetDistanceToReadout;
+    /// \brief Paths of the light guided by the fibre of a channel from a position to its read end: the
+    /// direct one (GetDistanceToReadout) and, if the fibre is read at one end only, the one reflected at
+    /// the other end (2 L - d, L the length of the fibre); empty if it is not a channel.
+    std::vector<GuidedLightPath> GetGuidedLightPaths(int daqID,
+                                                     const ROOT::Math::XYZVector& position) const override;
 
     /// \brief Writes the placements of the fibres (`physvol` elements of the GDML, named fibre_<physical
     /// ID>, with the logical volume `volume` of their family) to a file, to be included as an external

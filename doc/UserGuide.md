@@ -924,8 +924,9 @@ The [detector library](../libraries/detector/README.md) describes the detector:
 - **Readouts** map positions to channels and back: `TRestMicromegasReadout` (strip planes), `TRestGDMLReadout`
   (volumes of a GDML geometry, e.g. vetoes, with a readout volume for the light attenuation) and
   `TRestFibreReadout` (a scintillator crossed by fibre lattices, e.g. LiquidO: the closest fibre, the fibres
-  within a distance, each fibre read at one end or both, `readoutEnd`, and the fibre placements for the
-  GDML of the simulation). A readout is built once from
+  within a distance, each fibre read at one end or both, `readoutEnd`, or at one end alternating by whole
+  rows or columns, `readoutEnd: "+-"` with `alternateAxis`, and the fibre placements for the GDML of the
+  simulation). A readout is built once from
   its YAML and a decoding file (`daqChannel physicalID` rows) and exported to a ROOT file with the macros
   `REST_Detector_GenerateMicromegasReadout`, `REST_Detector_GenerateGDMLReadout` and
   `REST_Detector_GenerateFibreReadout`; the pipelines load it with a `TRestDetectorReadoutManager`
@@ -937,12 +938,14 @@ The [detector library](../libraries/detector/README.md) describes the detector:
   `effectiveLightSpeed`, and `scintillation`: time profiles of the emission per particle, each a list of
   `components` with `fraction`, `riseTime` and `decayTime`, the one without `particles` the default; the
   particle of each hit is its `fHitParticleID`) and a `wls` response for wavelength shifters such as WLS
-  fibres (`attenuationLength` and `lightSpeed` along them, `decayTime` of the re-emission). The light is
+  fibres (`attenuationLength` and `lightSpeed` along them, `decayTime` of the re-emission,
+  `endReflectivity` of the ends not read). The light is
   simulated in two processes:
   `TRestDetectorScintillationProcess` (photons produced) and `TRestDetectorLightCollectionProcess` (photons
   reaching each channel and their photoelectrons with the quantum efficiency: `localCapture` for opaque
-  scintillators such as LiquidO, with `wlsMedium` the attenuation and delay along the fibres to their read
-  end, `attenuation` for transparent ones read at an end such as the vetoes; a hit per photoelectron, with
+  scintillators such as LiquidO, with `wlsMedium` the capture by the fibre, half of the light in each
+  direction, attenuated and delayed along the fibre to its read end, the half going to an end not read
+  reflected with `endReflectivity`, `attenuation` for transparent ones read at an end such as the vetoes; a hit per photoelectron, with
   its time from the scintillation profile of its particle, the re-emission of the `wlsMedium` and the
   `timeJitter` of the photosensor, and its charge with the `gainSpread` of the photosensor), followed by the
   generic `TRestDetectorHitsToSignalProcess` and `TRestDetectorSignalShapingProcess` (single photoelectron

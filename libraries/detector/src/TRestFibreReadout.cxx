@@ -28,8 +28,11 @@
 /// Each read end of a fibre is a channel (`readoutEnd`: "+", the end on the upper face of the box along
 /// the axis, "-" the lower one, or "both"): the physical IDs are consecutive, family by family, and inside a
 /// family firstID + e * nU * nV + i * nV + j (e the index of the read end, 0 for "-" if both are read, i, j
-/// the indices along the first and second transverse axes). Without `decodingFile`, the DAQ ID of each
-/// channel is its physical ID.
+/// the indices along the first and second transverse axes). The fibres can also be read at one end
+/// alternating by whole rows or columns (e.g. LiquidO): `readoutEnd` "+-" or "-+" with `alternateAxis`, a
+/// transverse axis of the family; the fibres with an even index along it are read at the first end ("+"
+/// for "+-") and those with an odd index at the other one (one channel per fibre, IDs firstID + i * nV + j).
+/// Without `decodingFile`, the DAQ ID of each channel is its physical ID.
 ///
 /// A fibre measures its two transverse coordinates: GetPositionFromChannel gives them, with the coordinate
 /// along the fibre NaN, so the hits reconstructed from the signals of the fibres along Y are XZ hits and
@@ -39,6 +42,9 @@
 /// GetDistanceToReadout(channel, position) the distance along the fibre from the position to it, the path of
 /// the light inside the fibre (attenuation and delay of the `wls` response of the fibre medium in
 /// TRestDetectorLightCollectionProcess); without a channel there is no distance (no drift).
+/// GetGuidedLightPaths adds, for a fibre read at one end, the path of the light going to the other end and
+/// reflected there (2 L - d, L the length of the fibre; its reflectivity is `endReflectivity` of the `wls`
+/// response).
 ///
 /// The readout gives only the geometry: GetChannelsInRange gives the fibres closer than a distance to a
 /// position (in the plane transverse to each fibre, one channel per read end, at the read end), used by the
@@ -53,7 +59,7 @@
 /// scintillator, so the simulation and the readout share the same fibres.
 ///
 /// Parameters: decodingFile (optional) and, in `readoutParameters`, size, position and fibres (axis, pitch,
-/// offset, volume, readoutEnd).
+/// offset, volume, readoutEnd, alternateAxis).
 ///
 /// Example (LiquidO prototype of 1.5 m, fibres along Y and along X in alternated layers 10 mm apart):
 ///
@@ -73,9 +79,12 @@
 ///            pitch: 20mm
 ///            offset: [5mm, 5mm]
 ///            volume: "fibreXVolume"
+///            readoutEnd: "+-"
+///            alternateAxis: "Z"
 ///
 /// The fibres along Y (axis Y: transverse Z and X) are at z = 15 + 20 k, x = -735 + 20 i; those along X
-/// (transverse Y and Z) at y = -745 + 20 i, z = 5 + 20 k (mm).
+/// (transverse Y and Z) at y = -745 + 20 i, z = 5 + 20 k (mm), the layers at z = 5, 45, ... read at
+/// x = +750 mm and those at z = 25, 65, ... at x = -750 mm.
 
 using ROOT::Math::XYZVector;
 
@@ -110,6 +119,7 @@ static const bool TRestFibreReadout_FieldsRegistered = []() {
     reg.RegisterField<F>("offset", &F::fOffset);
     reg.RegisterField<F>("volume", &F::fVolume);
     reg.RegisterField<F>("readoutEnd", &F::fReadoutEnd);
+    reg.RegisterField<F>("alternateAxis", &F::fAlternateAxis);
     return true;
 }();
 
@@ -131,8 +141,18 @@ void TRestFibreFamily::LoadConfig() {
         throw std::runtime_error(prefix + "axis must be X, Y or Z, not '" + fAxis + "'");
     }
     if (fPitch <= 0) throw std::runtime_error(prefix + "pitch must be positive");
-    if (fReadoutEnd != "+" && fReadoutEnd != "-" && fReadoutEnd != "both") {
-        throw std::runtime_error(prefix + "readoutEnd must be +, - or both, not '" + fReadoutEnd + "'");
+    const bool alternating = fReadoutEnd == "+-" || fReadoutEnd == "-+";
+    if (fReadoutEnd != "+" && fReadoutEnd != "-" && fReadoutEnd != "both" && !alternating) {
+        throw std::runtime_error(prefix + "readoutEnd must be +, -, both, +- or -+, not '" + fReadoutEnd +
+                                 "'");
+    }
+    if (alternating && ((fAlternateAxis != "X" && fAlternateAxis != "Y" && fAlternateAxis != "Z") ||
+                        fAlternateAxis == fAxis)) {
+        throw std::runtime_error(prefix + "readoutEnd " + fReadoutEnd +
+                                 " needs alternateAxis, X, Y or Z and not the axis of the fibres");
+    }
+    if (!alternating && !fAlternateAxis.empty()) {
+        throw std::runtime_error(prefix + "alternateAxis is only for readoutEnd +- or -+");
     }
     UpdateYAMLFromParams<TRestFibreFamily>(fNode);
 }
@@ -204,6 +224,8 @@ void TRestFibreReadout::BuildGrids() {
         grid.nU = count[0];
         grid.nV = count[1];
         grid.ends = family.GetReadoutEnds();
+        const int alternateAxis = family.GetAlternateAxis();
+        grid.alternate = alternateAxis < 0 ? -1 : alternateAxis == grid.u ? 0 : 1;
         grid.firstID = firstID;
         firstID += grid.nU * grid.nV * static_cast<int>(grid.ends.size());
         fGrids.push_back(grid);
@@ -227,6 +249,12 @@ double TRestFibreReadout::GetEndCoordinate(size_t family, int end) const {
     return GetMinimum(axis) + (end > 0 ? static_cast<double>(fReadoutParams.fSize[axis]) : 0.0);
 }
 
+int TRestFibreReadout::GetFibreEnd(const Grid& grid, size_t e, int i, int j) {
+    const int end = grid.ends[e];
+    if (grid.alternate < 0) return end;
+    return (grid.alternate == 0 ? i : j) % 2 == 0 ? end : -end;
+}
+
 double TRestFibreReadout::GetFibreCoordinate(size_t family, int t, int index) const {
     const auto& grid = fGrids[family];
     const int axis = t == 0 ? grid.u : grid.v;
@@ -241,9 +269,9 @@ bool TRestFibreReadout::GetFibre(int physicalID, size_t& family, int& i, int& j,
         const int local = physicalID - grid.firstID;
         if (local < 0 || local >= fibres * static_cast<int>(grid.ends.size())) continue;
         family = f;
-        end = grid.ends[local / fibres];
         i = (local % fibres) / grid.nV;
         j = (local % fibres) % grid.nV;
+        end = GetFibreEnd(grid, local / fibres, i, j);
         return true;
     }
     return false;
@@ -415,7 +443,7 @@ std::vector<TRestDetectorReadout::ChannelInRange> TRestFibreReadout::GetChannels
                     if (daqID < 0) continue;
                     // The read end of the fibre
                     double end[3];
-                    end[grid.axis] = GetEndCoordinate(f, grid.ends[e]);
+                    end[grid.axis] = GetEndCoordinate(f, GetFibreEnd(grid, e, i, j));
                     end[grid.u] = u;
                     end[grid.v] = v;
                     channels.push_back({daqID, distance, XYZVector(end[0], end[1], end[2])});
@@ -444,6 +472,19 @@ double TRestFibreReadout::GetDistanceToReadout(int daqID, const XYZVector& posit
     int i, j, end;
     if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return kNaN;
     return std::abs(GetEndCoordinate(family, end) - Component(position, fGrids[family].axis));
+}
+
+std::vector<TRestDetectorReadout::GuidedLightPath> TRestFibreReadout::GetGuidedLightPaths(
+    int daqID, const XYZVector& position) const {
+    const int physicalID = GetPhysicalID(daqID);
+    size_t family;
+    int i, j, end;
+    if (physicalID < 0 || !GetFibre(physicalID, family, i, j, end)) return {};
+    const double direct = std::abs(GetEndCoordinate(family, end) - Component(position, fGrids[family].axis));
+    // Read at both ends, the light going to the other end is the one of the other channel
+    if (fGrids[family].ends.size() > 1) return {{direct, false}};
+    const double length = fReadoutParams.fSize[fGrids[family].axis];
+    return {{direct, false}, {2 * length - direct, true}};
 }
 
 bool TRestFibreReadout::WriteGDMLPlacements(const std::string& fileName) const {

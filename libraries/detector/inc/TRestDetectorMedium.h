@@ -92,7 +92,7 @@ class TRestDetectorChargeResponse : public TRestMetadata {
 
     /// \brief Returns the class name, "TRestDetectorChargeResponse".
     std::string GetClassName() const override { return "TRestDetectorChargeResponse"; }
-    /// \brief Reads the parameters; throws if one of them is negative.
+    /// \brief Reads the parameters; throws if one of them is negative or endReflectivity is above 1.
     void LoadConfig() override;
     /// \brief Nothing to initialise.
     void Initialize() override {}
@@ -289,11 +289,14 @@ class TRestDetectorLightResponse : public TRestMetadata {
 ///   those guided, d the distance along the medium to the readout (0: no attenuation).
 /// - lightSpeed: speed of the guided light along the medium, the delay is d / lightSpeed (0: no delay).
 /// - decayTime: decay time of the re-emission, each photon is delayed by Exp(decayTime) (0: no delay).
+/// - endReflectivity: fraction of the light reflected at an end not read (e.g. a mirrored fibre end read
+///   at the other one, TRestDetectorReadout::GetGuidedLightPaths), 0 (default) to 1.
 ///
 ///      wls:
 ///        attenuationLength: 3.5 m
 ///        lightSpeed: 170 mm/ns
 ///        decayTime: 8 ns
+///        endReflectivity: 0.8
 class TRestDetectorWLSResponse : public TRestMetadata {
    public:
     /// `attenuationLength`: attenuation length along the medium (0: none)
@@ -302,6 +305,8 @@ class TRestDetectorWLSResponse : public TRestMetadata {
     TRestWithUnits fLightSpeed = 0;  // mm/us
     /// `decayTime`: decay time of the re-emission (0: no delay)
     TRestWithUnits fDecayTime = 0;  // us
+    /// `endReflectivity`: fraction of the light reflected at an end not read (0 to 1)
+    double fEndReflectivity = 0;
 
     /// \brief Builds an empty response.
     TRestDetectorWLSResponse();
@@ -321,6 +326,8 @@ class TRestDetectorWLSResponse : public TRestMetadata {
     inline double GetLightSpeed() const { return fLightSpeed; }
     /// \brief Decay time of the re-emission (us).
     inline double GetDecayTime() const { return fDecayTime; }
+    /// \brief Fraction of the light reflected at an end not read.
+    inline double GetEndReflectivity() const { return fEndReflectivity; }
     /// \brief Samples the re-emission delay of a photon (us): Exp(decayTime), 0 without decay time.
     double GetReemissionTime(TRandom& random) const;
 };

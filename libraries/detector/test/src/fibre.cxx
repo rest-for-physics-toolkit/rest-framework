@@ -220,6 +220,11 @@ TEST(FibreReadout, ReadAtBothEnds) {
     EXPECT_NEAR(readout.GetReadoutPosition(60).X(), 50, 1e-9);
     EXPECT_NEAR(readout.GetDistanceToReadout(35, {10, 0, 20}), 60, 1e-9);
     EXPECT_NEAR(readout.GetDistanceToReadout(60, {10, 0, 20}), 40, 1e-9);
+    // Read at both ends: only the direct path to each end (the other direction is the other channel)
+    const auto bothPaths = readout.GetGuidedLightPaths(35, {10, 0, 20});
+    ASSERT_EQ(bothPaths.size(), 1u);
+    EXPECT_NEAR(bothPaths[0].distance, 60, 1e-9);
+    EXPECT_FALSE(bothPaths[0].reflected);
     // The channel of the end closer to the position; both ends measure the same coordinates
     EXPECT_EQ(readout.GetChannelFromPosition(10, 0, 20), 60);
     EXPECT_EQ(readout.GetChannelFromPosition(-10, 0, 20), 35);
@@ -238,6 +243,47 @@ TEST(FibreReadout, ReadAtBothEnds) {
     EXPECT_EQ(ids, std::set<int>({7, 35, 36, 60, 61}));
 
     node["readoutParameters"]["fibres"][1]["readoutEnd"] = "middle";
+    EXPECT_ANY_THROW(TRestFibreReadout("fibreTest", node));
+}
+
+TEST(FibreReadout, ReadAtAlternateEnds) {
+    // The fibres along Y read at one end alternating along X: x = -40, 0, 40 (j even) at y = +50,
+    // x = -20, 20 (j odd) at y = -50; one channel per fibre
+    auto node = ReadoutNode();
+    node["readoutParameters"]["fibres"][0]["readoutEnd"] = "+-";
+    node["readoutParameters"]["fibres"][0]["alternateAxis"] = "X";
+    TRestFibreReadout readout("fibreTest", node);
+    readout.BuildGeometry();
+    EXPECT_EQ(readout.GetNumberOfChannels(), 50);
+    EXPECT_NEAR(readout.GetReadoutPosition(7).Y(), 50, 1e-9);   // x = 0
+    EXPECT_NEAR(readout.GetReadoutPosition(8).Y(), -50, 1e-9);  // x = 20
+    EXPECT_NEAR(readout.GetReadoutPosition(6).Y(), -50, 1e-9);  // x = -20
+    EXPECT_NEAR(readout.GetDistanceToReadout(8, {20, 10, 30}), 60, 1e-9);
+    // Read at one end: the direct path and the one reflected at the other end (2 * 100 - 60)
+    const auto paths = readout.GetGuidedLightPaths(8, {20, 10, 30});
+    ASSERT_EQ(paths.size(), 2u);
+    EXPECT_NEAR(paths[0].distance, 60, 1e-9);
+    EXPECT_FALSE(paths[0].reflected);
+    EXPECT_NEAR(paths[1].distance, 140, 1e-9);
+    EXPECT_TRUE(paths[1].reflected);
+    const auto channels = readout.GetChannelsInRange({20, 0, 30}, 5);
+    ASSERT_EQ(channels.size(), 1u);
+    EXPECT_EQ(channels[0].daqID, 8);
+    EXPECT_NEAR(channels[0].position.Y(), -50, 1e-9);
+    // "-+": the other way round
+    node["readoutParameters"]["fibres"][0]["readoutEnd"] = "-+";
+    TRestFibreReadout reversed("fibreTest", node);
+    reversed.BuildGeometry();
+    EXPECT_NEAR(reversed.GetReadoutPosition(7).Y(), -50, 1e-9);
+    EXPECT_NEAR(reversed.GetReadoutPosition(8).Y(), 50, 1e-9);
+
+    // alternateAxis: needed, transverse, and only when alternating
+    node["readoutParameters"]["fibres"][0]["alternateAxis"] = "Y";
+    EXPECT_ANY_THROW(TRestFibreReadout("fibreTest", node));
+    node["readoutParameters"]["fibres"][0].remove("alternateAxis");
+    EXPECT_ANY_THROW(TRestFibreReadout("fibreTest", node));
+    node["readoutParameters"]["fibres"][0]["readoutEnd"] = "+";
+    node["readoutParameters"]["fibres"][0]["alternateAxis"] = "X";
     EXPECT_ANY_THROW(TRestFibreReadout("fibreTest", node));
 }
 
@@ -322,6 +368,11 @@ TEST(DetectorMedium, LightYield) {
     for (int i = 0; i < 10000; i++) mean += wls.GetReemissionTime(random) / 10000;
     EXPECT_NEAR(mean, 0.008, 5 * 0.008 / 100);
     EXPECT_ANY_THROW(TRestDetectorMedium("Y11", YAML::Load("{state: solid, wls: {decayTime: -1 ns}}")));
+    // Reflectivity of the ends not read: 0 by default, at most 1
+    EXPECT_DOUBLE_EQ(wls.GetEndReflectivity(), 0);
+    TRestDetectorMedium mirrored("Y11", YAML::Load("{state: solid, wls: {endReflectivity: 0.9}}"));
+    EXPECT_DOUBLE_EQ(mirrored.GetWLSResponse("test").GetEndReflectivity(), 0.9);
+    EXPECT_ANY_THROW(TRestDetectorMedium("Y11", YAML::Load("{state: solid, wls: {endReflectivity: 1.5}}")));
     EXPECT_ANY_THROW(TRestDetectorMedium("LS", YAML::Load("{state: liquid, light: {lightYield: -1}}")));
 }
 
@@ -393,8 +444,9 @@ TEST(DetectorLightCollectionProcess, LocalCaptureByTheFibres) {
     TRestDetectorHitsEvent output;
     EXPECT_THROW(tooLarge->ProcessEvent(photons, output), std::runtime_error);
 
-    // WLS fibres: the photons captured by the fibre 7 travel 50 mm along it to its read end (y = +50),
-    // exp(-50 / 100) of them arrive, 0.5 us later
+    // WLS fibres: the fibre 7 (read at y = +50) captures the photons; half of them travel 50 mm along it
+    // to its read end, exp(-50 / 100) of them arrive, 0.5 us later; the other half go to the other end,
+    // not reflected (endReflectivity 0)
     auto withFibres = MakeDetector("{lightYield: 100}",
                                    "fibres:\n"
                                    "  class: TRestDetectorMedium\n"
@@ -407,10 +459,34 @@ TEST(DetectorLightCollectionProcess, LocalCaptureByTheFibres) {
     TRestDetectorHitsEvent onFibre, guidedOutput;
     onFibre.AddHit(0, 0, 30, 10000, 2);
     ASSERT_TRUE(guided->ProcessEvent(onFibre, guidedOutput));
-    const double expected = 10000 * std::exp(-0.5);
+    const double expected = 5000 * std::exp(-0.5);
     EXPECT_NEAR(guidedOutput.GetNumberOfHits(), expected, 5 * std::sqrt(expected));
-    EXPECT_NEAR(guidedOutput.GetTime(0), 2.5, 1e-6);
+    for (size_t n = 0; n < guidedOutput.GetNumberOfHits(); n++) {
+        EXPECT_NEAR(guidedOutput.GetTime(n), 2.5, 1e-6);
+    }
     EXPECT_NEAR(guidedOutput.GetY(0), 50, 1e-9);  // at the read end
+    // A reflective end: half of the other half come back, 150 mm along the fibre, 1.5 us later
+    auto mirrored = MakeDetector("{lightYield: 100}",
+                                 "fibres:\n"
+                                 "  class: TRestDetectorMedium\n"
+                                 "  name: Y11\n"
+                                 "  state: solid\n"
+                                 "  wls: {attenuationLength: 100 mm, lightSpeed: 100 mm/us, "
+                                 "endReflectivity: 0.5}\n");
+    auto reflecting = MakeProcess<TRestDetectorLightCollectionProcess>(
+        mirrored, analysis, "lightCollection",
+        "{captureProbability: \"1+0*x\", maxDistance: 5mm, wlsMedium: Y11, seed: 5}");
+    TRestDetectorHitsEvent reflectedOutput;
+    ASSERT_TRUE(reflecting->ProcessEvent(onFibre, reflectedOutput));
+    int direct = 0, reflected = 0;
+    for (size_t n = 0; n < reflectedOutput.GetNumberOfHits(); n++) {
+        if (std::abs(reflectedOutput.GetTime(n) - 2.5) < 1e-6) direct++;
+        if (std::abs(reflectedOutput.GetTime(n) - 3.5) < 1e-6) reflected++;
+    }
+    EXPECT_EQ(direct + reflected, static_cast<int>(reflectedOutput.GetNumberOfHits()));
+    EXPECT_NEAR(direct, expected, 5 * std::sqrt(expected));
+    const double expectedReflected = 5000 * 0.5 * std::exp(-1.5);
+    EXPECT_NEAR(reflected, expectedReflected, 5 * std::sqrt(expectedReflected));
     // wlsMedium only for localCapture, and it needs a wls response
     EXPECT_ANY_THROW(MakeProcess<TRestDetectorLightCollectionProcess>(
         withFibres, analysis, "lightCollection", "{model: attenuation, medium: LS, wlsMedium: Y11}"));
@@ -657,7 +733,8 @@ TEST(DetectorLightCollectionProcess, PhotoelectronTimesPerParticle) {
         withFibres, analysis, "lightCollection", "{" + capture + ", wlsMedium: Y11, seed: 4}");
     TRestDetectorHitsEvent delayed;
     ASSERT_TRUE(shifted->ProcessEvent(photons, delayed));
-    EXPECT_NEAR(meanTimes(delayed)[7], 1.018, 5 * 0.013 / std::sqrt(2000.));
+    // (half of the photons, those going to the end not read, are lost)
+    EXPECT_NEAR(meanTimes(delayed)[7], 1.018, 5 * 0.013 / std::sqrt(1000.));
     // A wlsMedium without wls
     TRestDetectorLightCollectionProcess noWLS("lightCollection",
                                               YAML::Load("{" + capture + ", wlsMedium: LS}"));
