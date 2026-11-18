@@ -446,7 +446,8 @@ are not migrated.
 | TRestGDMLParser | Namespace TRestGDMLParser (tools) |
 | TRestSystemOfUnits | Same header, namespace REST_Units, TRestWithUnits for configuration fields |
 | TRestTools | Namespace TRestTools |
-| TRestStringHelper, TRestStringOutput, TRestReflector, TRestVersion | TRestTools, TRestYAMLUtils, TRestLogManager, TRestMetadataFieldRegistry |
+| TRestStringHelper, TRestStringOutput, TRestReflector | TRestTools, TRestYAMLUtils, TRestLogManager, TRestMetadataFieldRegistry |
+| TRestVersion (REST_RELEASE, REST_GIT_COMMIT... macros of the configuration), the version and commit of TRestRun/TRestMetadata | Namespace REST_Version (TRestVersion.h): version of `project()`, commit and clean state obtained at each build; stored as `codeVersion`, `codeCommit`, `codeClean` of TRestRun and TRestDataSet, never checked when reading |
 | TRestPhysics | TRestConstants (and TRestTools) |
 | TRestDataBase | To be migrated, postponed until a real database exists (`runNumber: auto` covers the run number) |
 | TRestMesh, TRestMetadataPlot, TRestMessenger, TRestComplex | Not migrated |

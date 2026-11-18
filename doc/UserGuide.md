@@ -563,6 +563,7 @@ run:
 | `entriesSaved` | REST | Entries written in the file. |
 | `mergedSubRuns` | REST | Subruns of a file merged with `REST_MergeRuns` (empty for a single subrun). |
 | `outputEvent` | REST | Last event type saved, selected when the file is opened. |
+| `codeVersion`, `codeCommit`, `codeClean` | REST | Code that wrote the file: the version (`VERSION` of the project), the commit of the build ("unknown" without git) and whether it had no uncommitted changes. Read from the run of an input file, not inherited; never checked. |
 
 How each parameter is obtained:
 
@@ -626,7 +627,8 @@ root [1] REST_MergeRuns("Simulation_seed*.root", "Simulation.root")
 - **Subruns of a run**: the files must have the same `runNumber`, consecutive `subRunNumber` (also of files
   already merged), the same trees and branches and the same processing (all the metadata but the `TRestRun`).
   The merged `TRestRun` has the first `subRunNumber`, `mergedSubRuns` with all of them, the earliest
-  `startTime`, the latest `endTime` and the sum of `entriesSaved`.
+  `startTime`, the latest `endTime` and the sum of `entriesSaved`; `codeVersion`, `codeCommit` and
+  `codeClean` are those of the first subrun (the code that wrote the data).
 - **Simulations** (files with a `TRestGeant4Metadata`) of the same configuration with different seeds (e.g.
   parallel `restG4 -s` jobs) are merged as one simulation: `nEvents` (and the CRY exposure) are added, a
   repeated seed is an error, and the `eventID` of each file is shifted by the events of the previous ones.
@@ -794,7 +796,7 @@ E.g. `D_[runStart]_[runEnd]_[runTag|Mixed].root` → `D_00010_00012_Calibration.
 | `AnalysisTree` | `TTree` | The selected entries and columns, with `runIndex` (`int`). The columns added by dataset processes are also here. |
 | `RESTDataSetInfo` | `TObjString` | The runs, a YAML list in the order of `runIndex`; each element has `run` (its `TRestRunInfo`: numbers, tags, `runInfo`, times, `entriesSaved`), `fileName`, `entries` (of the run file), `selectedEntries` (in the dataset) and `processing` (index in `RESTDataSetProcessing`). |
 | `RESTDataSetProcessing` | `TObjString` | The different processings of the runs (configurations of their `TRestEventProcessManager`), a YAML list. |
-| `RESTMetadataStore/` | directory | The `TRestDataSet` (with `filePattern` and the file as `outputFileName`), the `TRestCut` used, the metadata of the first input file with runs selected (processing, readouts, `TRestGeant4Metadata`...; not its `TRestRun`) and, for a processed dataset, the dataset pipeline and each dataset process with its results. |
+| `RESTMetadataStore/` | directory | The `TRestDataSet` (with `filePattern`, the file as `outputFileName` and the code that wrote it: `codeVersion`, `codeCommit`, `codeClean`; the code of each run is in its run file), the `TRestCut` used, the metadata of the first input file with runs selected (processing, readouts, `TRestGeant4Metadata`...; not its `TRestRun`) and, for a processed dataset, the dataset pipeline and each dataset process with its results. |
 | `Readouts/`, `Geometry` | | The readouts and geometry of that input file; a `TRestDetectorReadoutManager` with `inputFileName: "Dataset.root"` loads a readout of the dataset. |
 | `RESTDataSetStore/<class>/<name>/` | directory | Objects of each dataset process (spectra, fits, PDFs, ROC curves...). |
 

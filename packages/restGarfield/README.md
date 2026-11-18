@@ -32,7 +32,12 @@ cmake -DREST_GARFIELD=ON ..
 
 ```
 restGarfield <config.yaml> [--set name=value ...] [--jobs N]
+restGarfield --version
 ```
+
+`--version` prints the version of the code, also printed at the start; each table keeps in its `generator`
+(entry of the table in the metadata of the medium file) the configuration used, the `program`, the `date`
+and the `code` (version, commit and clean state of restGarfield).
 
 `--set` overrides a parameter of the `parameters` section for this execution (repeatable). `--jobs N`
 splits the field nodes of each gas transport table in up to N processes, each computing a contiguous part

@@ -84,7 +84,9 @@ below), and the options of each section are documented in the classes of the gea
 
 ## Usage
 
-Typing `restG4 -h` will show all available options.
+Typing `restG4 -h` will show all available options. `restG4 --version` prints the version of the code
+(also printed at the start, and stored in the output file: `codeVersion`, `codeCommit` and `codeClean` of
+its `TRestRun`).
 
 ### Basic Usage
 

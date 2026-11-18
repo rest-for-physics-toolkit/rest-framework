@@ -162,7 +162,8 @@ void MergeSimulationTrees(const std::vector<RunFile>& runFiles, const std::vecto
 /// TRestManager (TFileMerger), in subrun order; the other objects (readouts, geometry) are copied from the
 /// first subrun. The TRestRun of the merged file is the one of the first
 /// subrun with subRunNumber the first one, mergedSubRuns all of them, startTime the earliest, endTime the
-/// latest, entriesSaved the sum and outputFileName the merged file.
+/// latest, entriesSaved the sum and outputFileName the merged file; its codeVersion, codeCommit and
+/// codeClean are those of the first subrun (the code that wrote the data, not the one merging it).
 ///
 /// Simulations (files with a TRestGeant4Metadata, restG4 outputs or their analysis) of the same
 /// configuration with different seeds (e.g. restG4 --seed in parallel jobs) are merged as a single

@@ -20,6 +20,7 @@ femclient restDAQ.yaml -e commands.txt  # commands of a file
 femclient restDAQ.yaml --tcm            # commands to the TCM
 femclient restDAQ.yaml --read-only      # fopen, fclose and addMetadata do nothing
 femclient restDAQ.yaml --set name=value # parameters of the configuration
+femclient --version                     # version of the code (also printed at the start)
 ```
 
 The configuration file can also be given with `-c`/`--config-file`. A command file (`-e`, `exec`) has one
@@ -56,7 +57,8 @@ and a TRestRun (`runNumber: auto`, a new number in each `fopen`; tags; `runInfo`
 REST run files with the events in the tree `TRestRawSignalEvent`, written as TRestRawDAQSignalEvent: the
 signals plus, for each FEM, its id, event counter, timestamp (10 ns ticks) and number of signals (branches
 `fFEMIDs`, `fFEMEventCounts`, `fFEMTimestamps`, `fFEMNSignals`). They are read as plain TRestRawSignalEvent by
-restManager, the browser and the macros. The TRestRun and the TRestRawDAQMetadata are stored as metadata.
+restManager, the browser and the macros. The TRestRun (with the code that wrote the file: `codeVersion`, `codeCommit`, `codeClean`) and the
+TRestRawDAQMetadata are stored as metadata.
 
 The files are saved every 1000 events (or 60 s), so they can be followed while they are taken with the event
 display of the connectors library: `restRoot` and `REST_DAQViewer("analysis.yaml", "file.root")`

@@ -31,6 +31,10 @@ links it. Its contents are free functions grouped in namespaces, plus the loggin
   (PDG encodings, as stored in the events), nuclei (Z, A) and the matching of a particle to a name of a
   configuration (`ion`: any nucleus). Used by TRestGeant4PhysicsInfo for the particles not in a simulation
   and by the scintillation profiles of the detector media.
+- `REST_Version` (TRestVersion.h): the version of the code (the `VERSION` of the project), the commit of the
+  build and whether it had uncommitted changes, obtained at each build by `cmake/RestVersion.cmake`
+  (`REST_GIT_COMMIT` for a build without git); stored in the run and dataset files and printed by the
+  executables (`--version`, `GetSummary`).
 - `TRestGDMLParser` (TRestGDMLParser.h): GDML geometries with their entities expanded and the configuration
   parameters applied to their constants and entities; `--update-gdml` of restG4 writes the parameters
   back into the GDML files.

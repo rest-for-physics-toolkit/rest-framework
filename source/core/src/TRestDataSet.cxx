@@ -64,7 +64,8 @@
 /// * RESTDataSetProcessing: the different processings of the runs, a TObjString with a YAML list (each one
 ///   instance -> configuration of the TRestEventProcessManager); datasets merged join their lists;
 /// * RESTMetadataStore: this TRestDataSet (filePattern: what it was generated from, outputFileName: the
-///   file) and the TRestCut used; also the metadata of the first input file with runs selected (processing,
+///   file, and codeVersion, codeCommit and codeClean: the code that wrote it, REST_Version) and the TRestCut
+///   used; also the metadata of the first input file with runs selected (processing,
 ///   readouts, TRestGeant4Metadata...), but its TRestRun (each run is in RESTDataSetInfo) and the
 ///   TRestDataSet it comes from (a dataset as input);
 /// * Readouts and Geometry: the readouts (TRestDetectorReadout::Export) and the geometry (restG4) of that

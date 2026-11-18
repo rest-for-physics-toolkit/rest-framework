@@ -26,7 +26,7 @@ metadata from it.
 | `TRestMetadataFieldRegistry` | Registered fields (YAML key ↔ member) of each class; unknown keys in a configuration throw. |
 | `TRestMetadataStore` | The metadata of a REST file recreated as objects (e.g. readouts, geometry). |
 | `TRestRunInfo` | Description of a run: numbers, tags, `runInfo`, times, entries. |
-| `TRestRun` | A `TRestRunInfo` plus the input/output ROOT files, event trees, `AnalysisTree` and observables. |
+| `TRestRun` | A `TRestRunInfo` plus the input/output ROOT files, event trees, `AnalysisTree` and observables; stores the code that wrote the file (`codeVersion`, `codeCommit`, `codeClean`, REST_Version). |
 
 ### Processing
 
@@ -42,7 +42,7 @@ metadata from it.
 
 | Class | Role |
 |---|---|
-| `TRestDataSet` | Selected analysis trees of several runs (or merged datasets) in one tree, with the `TRestRunInfo` of each run (`runIndex`), built with RDataFrame. |
+| `TRestDataSet` | Selected analysis trees of several runs (or merged datasets) in one tree, with the `TRestRunInfo` of each run (`runIndex`), built with RDataFrame; stores the code that wrote it (`codeVersion`, `codeCommit`, `codeClean`). |
 | `TRestDataSetProcess` | Abstract base of the dataset processes: parameters computed on a reference dataset, columns added to the processed one. |
 | `TRestDataSetProcessManager` | Pipeline of dataset processes, writing the processed dataset once. |
 | `TRestAnalysisPlot` | Combined canvas of text panels and histograms of the observables of run files or datasets. |
