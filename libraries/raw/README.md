@@ -79,7 +79,7 @@ The examples are in `examples/`; the paths are relative to the repository root.
 | --- | --- |
 | `MultiFEMINOSToRaw.yaml` | Decodes a `.aqs` file of the Feminos cards into `TRestRawSignalEvent` (`RawSignals.root`). |
 | `FeminosRootToRaw.yaml` | Reads a ROOT file of feminos-daq and runs the chain to tracks: common noise reduction, raw to detector signals, hits and track analysis (processes of the detector, connectors and track libraries). It loads the readout `IAXO.root` and the transport tables `ArIso.root` (medium `Ar99_iC4H10_1`) of [rest-common-readouts](https://github.com/rest-for-physics-toolkit/rest-common-readouts) and [rest-common-transport](https://github.com/rest-for-physics-toolkit/rest-common-transport) by URL. |
-| `RawSignalAnalysis.yaml` | Raw signal analysis (`TRestRawSignalAnalysisProcess`, all its observables) of a file with `TRestRawSignalEvent`, keeping its run. |
+| `RawSignalAnalysis.yaml` | Raw signal analysis (`TRestRawSignalAnalysisProcess`, all its observables) of a file with `TRestRawSignalEvent`, keeping its run; optional (commented) zero suppression offset removal and shaping before it. |
 | `VetoAnalysis.yaml` | Veto analysis (legacy `TRestRawVetoAnalysisProcess`) with the existing processes: keeps the veto channels, corrects their baseline and computes their amplitude and peak time; the comments give the legacy observables as expressions. |
 
 ```
@@ -88,3 +88,22 @@ restManager --c libraries/raw/examples/FeminosRootToRaw.yaml --i R01234_....root
 restManager --c libraries/raw/examples/RawSignalAnalysis.yaml --i <file with TRestRawSignalEvent>
 restManager --c libraries/raw/examples/VetoAnalysis.yaml --i <file with TRestRawSignalEvent>
 ```
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestRawBaseLineCorrectionProcess` | `libraries/raw/examples/VetoAnalysis.yaml` |
+| `TRestRawCommonNoiseReductionProcess` | `examples/FemDAQToTracks.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |
+| `TRestRawFemDAQToSignalProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml` |
+| `TRestRawFeminosRootToSignalProcess` | `libraries/raw/examples/FeminosRootToRaw.yaml` |
+| `TRestRawMultiFEMINOSToSignalProcess` | `libraries/raw/examples/MultiFEMINOSToRaw.yaml` |
+| `TRestRawSignalAddNoiseProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestRawSignalAnalysisProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/DAQViewer.yaml`, `libraries/raw/examples/RawSignalAnalysis.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
+| `TRestRawSignalChannelSelectionProcess` | `examples/TREXDMToTracks.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
+| `TRestRawSignalRecoverSaturationProcess` | `examples/TREXDMToTracks.yaml` |
+| `TRestRawSignalShapingProcess` | `libraries/raw/examples/RawSignalAnalysis.yaml` (commented) |
+| `TRestRawZeroSupressionToRawProcess` | `libraries/raw/examples/RawSignalAnalysis.yaml` (commented) |

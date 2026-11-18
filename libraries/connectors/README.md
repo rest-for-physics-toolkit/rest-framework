@@ -54,10 +54,10 @@ files to be generated first (see the comments at the top of each file).
 | File | Description |
 | --- | --- |
 | `Geant4ToHits.yaml` | `TRestGeant4Event` (restG4 output) to `TRestDetectorHitsEvent`. |
-| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout, with their z reconstructed from the arrival time. |
+| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout, with their z reconstructed from the arrival time; optional (commented) transformation of the hits to the frame of the readout and avalanche gain (gain table generated with restGarfield). |
 | `Geant4ToRaw.yaml` | Full simulation chain: Geant4 hits, drift, smearing, readout signals, shaping, digitization and noise, to raw signals analysed as the data. |
 | `Geant4ToRawVeto.yaml` | Raw signals of the vetoes with the acquisition window of the Micromegas (trigger time from an observable). |
-| `RawToHits.yaml` | `TRestRawSignalEvent` to `TRestDetectorSignalEvent` to `TRestDetectorHitsEvent`. |
+| `RawToHits.yaml` | `TRestRawSignalEvent` to `TRestDetectorSignalEvent` to `TRestDetectorHitsEvent`, with a selection of the events (`TRestSelectionProcess` with a `TRestCut` on an observable of the raw to signal conversion). |
 | `HitsToTrack.yaml` | `TRestDetectorHitsEvent` to `TRestTrackEvent`, with hits and track observables, reduction, path minimization and blob analysis. |
 | `DAQViewer.yaml` | Configuration of the DAQ viewer (readouts, pulse parameters and spectrum binning). |
 | `ChannelActivity.yaml` | Plots of the activity per DAQ and readout channel and of the maximum amplitude of the signals (observables of `TRestRawToDetectorSignalProcess`; legacy channel activity process). |
@@ -77,3 +77,15 @@ restRoot
 
 The output of `HitsToTrack.yaml` can be analysed further with the examples of the
 [track library](../track/README.md).
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestDetectorHitsToTrackProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/HitsToTrack.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |
+| `TRestDetectorSignalToRawSignalProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestGeant4ToDetectorHitsProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/Geant4ToHits.yaml`, `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestRawToDetectorSignalProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/RawToHits.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |

@@ -64,3 +64,16 @@ reference of later runs.
 - `examples/DataSetSignalSelection.yaml`: selection of the entries with the BDT score of the 80% of the
   calibration with TRestDataSetSignalSelection.
 - `examples/DataSetTardis.yaml`: time since the previous event with TRestDataSetTardis (libraries/detector).
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestDataSetCalibration` | `libraries/detector/examples/DataSetCalibration.yaml` |
+| `TRestDataSetCombine` | `examples/DataSetCombine.yaml` |
+| `TRestDataSetLogOdds` | `examples/DataSetLogOdds.yaml` |
+| `TRestDataSetSignalSelection` | `examples/DataSetSignalSelection.yaml` |
+| `TRestDataSetTMVA` | `examples/DataSetTMVA.yaml` |

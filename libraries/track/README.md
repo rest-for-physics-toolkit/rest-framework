@@ -80,3 +80,17 @@ restRoot
 
 restManager --c libraries/track/examples/TrackLineDataSetPlots.yaml --i Dataset_TrackLine.root
 ```
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestTrackAnalysisProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/HitsToTrack.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/track/examples/TrackLinearization.yaml` |
+| `TRestTrackBlobAnalysisProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |
+| `TRestTrackLineAnalysisProcess` | `libraries/track/examples/TrackLinearization.yaml` |
+| `TRestTrackLinearizationProcess` | `libraries/track/examples/TrackLinearization.yaml` |
+| `TRestTrackPathMinimizationProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |
+| `TRestTrackReductionProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |

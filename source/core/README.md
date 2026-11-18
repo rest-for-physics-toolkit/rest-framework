@@ -101,3 +101,12 @@ The output files are read back with `TRestRun` (events, `GetObservable`, metadat
   (e.g. `libraries/detector/examples/DataSetCalibration.yaml`) and plots.
 - The class documentation of `TRestDataSet`, `TRestDataSetProcessManager` and `TRestAnalysisPlot`
   (in their `.cxx` files) describes all their keys in detail.
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestSelectionProcess` | `libraries/connectors/examples/RawToHits.yaml` |

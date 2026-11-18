@@ -113,3 +113,13 @@ restManager --c libraries/geant4/examples/Quenching.yaml --i Run00010_CosmicNeut
 restManager --c libraries/geant4/examples/Geant4Analysis.yaml \
     --i libraries/geant4/examples/Run00010_CosmicNeutrons_IAXO_QUENCHING.root
 ```
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestGeant4AnalysisProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/geant4/examples/Geant4Analysis.yaml`, `packages/restG4/examples/02.TREXDM/g4Analysis.yaml`, `packages/restG4/examples/03.Fluorescence/g4Analysis.yaml`, `packages/restG4/examples/08.Alphas/analysis.yaml`, `packages/restG4/examples/11.Xrays/analysis.yaml`, `packages/restG4/examples/14.DetectorResponse/analysis.yaml` |
+| `TRestGeant4QuenchingProcess` | `libraries/geant4/examples/Quenching.yaml` |

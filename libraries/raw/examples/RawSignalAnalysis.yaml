@@ -1,6 +1,9 @@
 # Raw signal analysis (TRestRawSignalAnalysisProcess, all its observables) of a file with TRestRawSignalEvent,
 # keeping the run of the input file (inheritInputRun):
 #   restManager --c libraries/raw/examples/RawSignalAnalysis.yaml --i <file with TRestRawSignalEvent>
+# Optional processes before the analysis (commented, they change the signals): zsToRaw for zero-suppressed
+# data (the first sample sent of each signal taken as its offset) and shaping, to emulate the shaping of
+# other electronics.
 
 manager:
   class: "TRestManager"
@@ -21,6 +24,14 @@ manager:
     verbose: "silent"
     eventsToProcess: 0
     outputEventStorage: true
+#    zsToRaw:
+#      class: "TRestRawZeroSupressionToRawProcess"
+#    shaping:
+#      class: "TRestRawSignalShapingProcess"
+#      shapingType: "shaperSin"   # gaus, exponential, shaper or shaperSin
+#      shapingTime: 10            # bins
+#      gain: 1
+#      baselineRange: [5, 55]
     rawAna:
       class: "TRestRawSignalAnalysisProcess"
       name: "rawAna"

@@ -170,3 +170,26 @@ restManager --c SignalRecovery.yaml --i <signals file>
 restManager --c SignalPeaks.yaml --i <signals file>
 restManager --c DataSetCalibration.yaml --i Dataset_Calibration.root
 ```
+
+### Processes in the examples
+
+The example configurations using each process of this component (paths from the repository root;
+"commented": an optional process of the example, to be uncommented):
+
+| Process | Examples |
+| --- | --- |
+| `TRestDataSetGainMap` | `libraries/detector/examples/DataSetCalibration.yaml` |
+| `TRestDataSetTardis` | `examples/DataSetTardis.yaml`, `examples/TREXDMTardis.yaml` |
+| `TRestDetectorAvalancheProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
+| `TRestDetectorHitsAnalysisProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |
+| `TRestDetectorHitsDriftProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestDetectorHitsSmearingProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestDetectorHitsTimeProjectionProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/RawToHits.yaml`, `libraries/detector/examples/SignalToHits.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |
+| `TRestDetectorHitsToSignalProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestDetectorHitsTransformationProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
+| `TRestDetectorLightCollectionProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml` |
+| `TRestDetectorScintillationProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml` |
+| `TRestDetectorSignalPeaksFinderProcess` | `libraries/detector/examples/SignalPeaks.yaml` |
+| `TRestDetectorSignalRecoveryProcess` | `libraries/detector/examples/SignalRecovery.yaml` |
+| `TRestDetectorSignalShapingProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestDetectorSignalToHitsProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/RawToHits.yaml`, `libraries/detector/examples/SignalToHits.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |
