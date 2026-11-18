@@ -57,7 +57,16 @@ void TRestEventViewer::Embed(TBrowser* b) {
 
 void TRestEventViewer::AddEvent(TRestEvent* ev) { fEvent = ev; }
 
+void TRestEventViewer::ClearCanvasSelection() {
+    if (fCanvas == nullptr) return;
+    fCanvas->SetSelected(nullptr);
+    fCanvas->SetClickSelected(nullptr);
+    fCanvas->SetSelectedPad(nullptr);
+    fCanvas->SetClickSelectedPad(nullptr);
+}
+
 void TRestEventViewer::Plot(const char* option) {
+    ClearCanvasSelection();
     // The pad is the one of the event (DrawEvent), owned by it: the viewer does not create nor delete it
     if (fEvent != nullptr) {
         fPad = fEvent->DrawEvent(option);

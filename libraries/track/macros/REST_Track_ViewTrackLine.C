@@ -29,11 +29,19 @@
 /// \class TrackLineViewer
 /// \brief Event viewer (for TRestBrowser) of the files analysed with TRestTrackLineAnalysisProcess, for the
 /// event type selected in the browser:
-/// - TRestTrackEvent and TRestDetectorHitsEvent: the event (its DrawEvent with the plot option) with a
-///   dashed black line from the origin (open circle) to the end (star) over every view where they are
-///   defined. The origin and end are the observables OriginX/Y/Z and EndX/Y/Z of the entry (branches
-///   processName_OriginX, ...: of the process given, or if none, of the first process that has them);
-///   without them only the event is drawn. With an empty plot option, the hits events are drawn with
+/// - TRestTrackEvent and TRestDetectorHitsEvent: the event (its DrawEvent with the plot option) with
+///   dashed lines from the origin (open circle) to the end (star) over every view where they are defined:
+///   - black, the reconstructed line: observables OriginX/Y/Z and EndX/Y/Z of the entry (branches
+///     processName_OriginX, ...: of the TRestTrackLineAnalysisProcess given, or if none, of the first
+///     process that has them);
+///   - red, the Geant4 origin and end of simulated files: observables EntryX/Y/Z and EndX/Y/Z of a volume
+///     of TRestGeant4AnalysisProcess (branches processName_volume_EntryX, ...: of the prefix given, e.g.
+///     "g4Ana_gas", or if none, of the first one that has them), where the first particle enters or is
+///     created in the volume and where it ends. The Z of the hits is not comparable with the Geant4 one
+///     (on the readout plane after the drift, or reconstructed from the times with its origin at the
+///     trigger), so only the XY view gets the line; the views with Z get dotted lines at the X or Y of
+///     the origin and end (markers at their top) and the 3D view nothing.
+///   Without them only the event is drawn. With an empty plot option, the hits events are drawn with
 ///   "markers(colz)": Z bins of the pulse samples and the 3D view as markers colored by energy
 ///   (TRestDetectorHitsEvent::DrawEvent).
 /// - TRestRawSignalEvent and TRestDetectorSignalEvent: with an empty plot option, the signals in one pad
@@ -46,17 +54,26 @@ class TrackLineViewer : public TRestEventViewer {
    private:
     /// Name of the TRestTrackLineAnalysisProcess of the observables, empty: the first one in the file
     std::string fPrefix;
+    /// Prefix (processName_volume) of the Geant4 observables, empty: the first one in the file
+    std::string fG4Prefix;
 
     /// Pad of the signals split by axis, owned by the viewer (the other pads belong to the events)
     TPad* fSignalsPad = nullptr;
 
     /// \brief Origin and end of the current entry from the analysis tree of the event run.
+    /// \param prefix Prefix of the branches (prefix_observable), empty: the first one with them.
+    /// \param observables Names of the origin and end coordinates (x, y, z of each).
     /// \return False if there is no run, analysis tree or line observables.
-    bool ReadLine(double origin[3], double end[3]) const;
+    bool ReadLine(const std::string& prefix, const char* const observables[6], double origin[3],
+                  double end[3]) const;
 
     /// \brief Draws the line over the view pads under `pad` (recursively), with their axes from the
     /// histogram of each one.
-    void DrawLine(TVirtualPad* pad, const double origin[3], const double end[3]) const;
+    /// \param freeAxis Axis (0, 1, 2) whose coordinate is not comparable with the one of the hits, -1 if
+    /// none: views with it get a dotted line across the view at the origin and at the end (markers at its
+    /// top), the 3D view nothing.
+    void DrawLine(TVirtualPad* pad, const double origin[3], const double end[3], Color_t color,
+                  int freeAxis = -1) const;
 
     /// \brief Readout of the run of the event, nullptr if none.
     TRestDetectorReadout* GetReadout() const;
@@ -68,7 +85,10 @@ class TrackLineViewer : public TRestEventViewer {
    public:
     /// \param prefix Name of the TRestTrackLineAnalysisProcess whose observables are drawn, empty: the first
     /// process of the file with them.
-    explicit TrackLineViewer(const std::string& prefix = "") : fPrefix(prefix) {}
+    /// \param g4Prefix Prefix processName_volume of the TRestGeant4AnalysisProcess observables drawn, empty:
+    /// the first one of the file with them.
+    explicit TrackLineViewer(const std::string& prefix = "", const std::string& g4Prefix = "")
+        : fPrefix(prefix), fG4Prefix(g4Prefix) {}
 
     /// \brief Draws the current event (see the class description).
     /// \param option DrawEvent option of the event; empty for the defaults of this viewer.
@@ -80,28 +100,31 @@ const Style_t kOriginMarker = 24;
 const Style_t kEndMarker = 29;
 const double kMarkerSize = 2.5;
 
-const char* kLineObservables[6] = {"OriginX", "OriginY", "OriginZ", "EndX", "EndY", "EndZ"};
+const char* const kLineObservables[6] = {"OriginX", "OriginY", "OriginZ", "EndX", "EndY", "EndZ"};
+const char* const kGeant4Observables[6] = {"EntryX", "EntryY", "EntryZ", "EndX", "EndY", "EndZ"};
 
-// Branches of the line observables (processName_observable) of the process `prefix`, or if empty of the
-// first process with all of them; empty if they are not in the tree
-std::vector<std::string> GetLineBranches(TTree* tree, const std::string& prefix) {
+// Branches of the line observables (prefix_observable) with the prefix `prefix`, or if empty of the first
+// prefix with all of them; empty if they are not in the tree
+std::vector<std::string> GetLineBranches(TTree* tree, const std::string& prefix,
+                                         const char* const observables[6]) {
     if (!prefix.empty()) {
         std::vector<std::string> names;
-        for (const char* observable : kLineObservables) {
+        for (int i = 0; i < 6; i++) {
+            const char* observable = observables[i];
             const std::string name = prefix + "_" + observable;
             if (!tree->GetBranch(name.c_str())) return {};
             names.push_back(name);
         }
         return names;
     }
-    const std::string suffix = std::string("_") + kLineObservables[0];
+    const std::string suffix = std::string("_") + observables[0];
     TObjArray* branches = tree->GetListOfBranches();
     for (int i = 0; i < branches->GetEntries(); i++) {
         const std::string name = branches->At(i)->GetName();
         if (name.size() <= suffix.size()) continue;
         if (name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0) continue;
         const std::vector<std::string> names =
-            GetLineBranches(tree, name.substr(0, name.size() - suffix.size()));
+            GetLineBranches(tree, name.substr(0, name.size() - suffix.size()), observables);
         if (!names.empty()) return names;
     }
     return {};
@@ -123,16 +146,16 @@ int GetAxis(const char* title) {
 }
 
 template <typename T>
-void SetLineStyle(T* line) {
-    line->SetLineColor(kBlack);
+void SetLineStyle(T* line, Color_t color) {
+    line->SetLineColor(color);
     line->SetLineStyle(2);
     line->SetLineWidth(2);
     line->SetBit(TObject::kCanDelete);
 }
 
 template <typename T>
-void SetMarkerStyle(T* marker) {
-    marker->SetMarkerColor(kBlack);
+void SetMarkerStyle(T* marker, Color_t color) {
+    marker->SetMarkerColor(color);
     marker->SetMarkerSize(kMarkerSize);
     marker->SetBit(TObject::kCanDelete);
 }
@@ -177,13 +200,14 @@ void DrawSplitSignals(const Event& event, const TRestDetectorReadout& readout, T
 }
 }  // namespace
 
-bool TrackLineViewer::ReadLine(double origin[3], double end[3]) const {
+bool TrackLineViewer::ReadLine(const std::string& prefix, const char* const observables[6], double origin[3],
+                               double end[3]) const {
     TRestRun* run = fEvent ? fEvent->GetRestRun() : nullptr;
     TTree* tree = run ? run->fAnalysisTree : nullptr;
     if (!tree) return false;
 
     // Values of the current entry (TRestRun::GetEntry, called by the browser)
-    const std::vector<std::string> names = GetLineBranches(tree, fPrefix);
+    const std::vector<std::string> names = GetLineBranches(tree, prefix, observables);
     if (names.empty()) return false;
     for (int i = 0; i < 3; i++) {
         origin[i] = run->GetObservable<double>(names[i]);
@@ -192,16 +216,17 @@ bool TrackLineViewer::ReadLine(double origin[3], double end[3]) const {
     return true;
 }
 
-void TrackLineViewer::DrawLine(TVirtualPad* pad, const double origin[3], const double end[3]) const {
+void TrackLineViewer::DrawLine(TVirtualPad* pad, const double origin[3], const double end[3], Color_t color,
+                               int freeAxis) const {
     TH1* frame = nullptr;
     for (auto* object : *pad->GetListOfPrimitives()) {
         if (auto* subPad = dynamic_cast<TVirtualPad*>(object)) {
-            DrawLine(subPad, origin, end);
+            DrawLine(subPad, origin, end, color, freeAxis);
         } else if (!frame) {
             frame = dynamic_cast<TH1*>(object);
         }
     }
-    if (!frame) return;
+    if (!frame || (frame->GetDimension() == 3 && freeAxis >= 0)) return;
 
     TVirtualPad* safePad = gPad;
     pad->cd();
@@ -215,29 +240,49 @@ void TrackLineViewer::DrawLine(TVirtualPad* pad, const double origin[3], const d
         auto* line = new TPolyLine3D(2);
         line->SetPoint(0, origin[0], origin[1], origin[2]);
         line->SetPoint(1, end[0], end[1], end[2]);
-        SetLineStyle(line);
+        SetLineStyle(line, color);
         line->Draw();
         for (int i = 0; i < 2; i++) {
             const double* p = i == 0 ? origin : end;
             auto* marker = new TPolyMarker3D(1, i == 0 ? kOriginMarker : kEndMarker);
             marker->SetPoint(0, p[0], p[1], p[2]);
-            SetMarkerStyle(marker);
+            SetMarkerStyle(marker, color);
             marker->Draw();
         }
     } else {
         // Views of the energy against a coordinate have no second axis
         const int u = GetAxis(frame->GetXaxis()->GetTitle());
         const int v = GetAxis(frame->GetYaxis()->GetTitle());
-        if (u >= 0 && v >= 0 && !std::isnan(origin[u]) && !std::isnan(origin[v]) && !std::isnan(end[u]) &&
-            !std::isnan(end[v])) {
+        const bool free = freeAxis >= 0 && (u == freeAxis || v == freeAxis);
+        if (free && u >= 0 && v >= 0) {
+            // Coordinate of the origin and end along the other axis, across the range of the free one
+            const bool vertical = u != freeAxis;
+            const int a = vertical ? u : v;
+            const TAxis* range = vertical ? frame->GetYaxis() : frame->GetXaxis();
+            const double low = range->GetBinLowEdge(range->GetFirst());
+            const double high = range->GetBinUpEdge(range->GetLast());
+            for (int i = 0; i < 2; i++) {
+                const double c = i == 0 ? origin[a] : end[a];
+                if (std::isnan(c)) continue;
+                auto* line = vertical ? new TLine(c, low, c, high) : new TLine(low, c, high, c);
+                SetLineStyle(line, color);
+                line->SetLineStyle(3);
+                line->Draw();
+                auto* marker = vertical ? new TMarker(c, high, i == 0 ? kOriginMarker : kEndMarker)
+                                        : new TMarker(high, c, i == 0 ? kOriginMarker : kEndMarker);
+                SetMarkerStyle(marker, color);
+                marker->Draw();
+            }
+        } else if (u >= 0 && v >= 0 && !std::isnan(origin[u]) && !std::isnan(origin[v]) &&
+                   !std::isnan(end[u]) && !std::isnan(end[v])) {
             auto* line = new TLine(origin[u], origin[v], end[u], end[v]);
-            SetLineStyle(line);
+            SetLineStyle(line, color);
             line->Draw();
             auto* originMarker = new TMarker(origin[u], origin[v], kOriginMarker);
-            SetMarkerStyle(originMarker);
+            SetMarkerStyle(originMarker, color);
             originMarker->Draw();
             auto* endMarker = new TMarker(end[u], end[v], kEndMarker);
-            SetMarkerStyle(endMarker);
+            SetMarkerStyle(endMarker, color);
             endMarker->Draw();
         }
     }
@@ -285,6 +330,7 @@ bool TrackLineViewer::DrawSignals() {
 void TrackLineViewer::Plot(const char* option) {
     // Only this plot in the canvas: the pads of the events are removed, not deleted (each event owns its
     // pad), the signals pad is deleted
+    ClearCanvasSelection();
     fCanvas->cd();
     fCanvas->GetListOfPrimitives()->Clear("nodelete");
     delete fSignalsPad;
@@ -318,13 +364,23 @@ void TrackLineViewer::Plot(const char* option) {
 
     if (className == "TRestTrackEvent" || className == "TRestDetectorHitsEvent") {
         double origin[3], end[3];
-        if (ReadLine(origin, end)) {
-            DrawLine(fPad, origin, end);
+        bool drawn = false;
+        if (ReadLine(fG4Prefix, kGeant4Observables, origin, end)) {
+            // The coordinate along the drift (Z) of the hits is not the Geant4 one
+            DrawLine(fPad, origin, end, kRed, 2);
+            std::cout << "Geant4 entry (" << origin[0] << ", " << origin[1] << ", " << origin[2] << "), end ("
+                      << end[0] << ", " << end[1] << ", " << end[2] << ")" << std::endl;
+            drawn = true;
+        }
+        if (ReadLine(fPrefix, kLineObservables, origin, end)) {
+            DrawLine(fPad, origin, end, kBlack);
             std::cout << "Line origin (" << origin[0] << ", " << origin[1] << ", " << origin[2] << "), end ("
                       << end[0] << ", " << end[1] << ", " << end[2] << ")" << std::endl;
-        } else {
-            std::cout << "TrackLineViewer: no line observables (TRestTrackLineAnalysisProcess) for this "
-                         "entry, drawing only the event"
+            drawn = true;
+        }
+        if (!drawn) {
+            std::cout << "TrackLineViewer: no line observables (TRestTrackLineAnalysisProcess or "
+                         "TRestGeant4AnalysisProcess Entry/End) for this entry, drawing only the event"
                       << std::endl;
         }
     }
@@ -336,7 +392,8 @@ void TrackLineViewer::Plot(const char* option) {
 
 /// \brief Browses the events of a file analysed with TRestTrackLineAnalysisProcess (TRestBrowser: entry,
 /// event ID, event type, selection with observables, previous/next event) with TrackLineViewer: the
-/// track and hits events with the origin and end over them, the raw and detector signal events split
+/// track and hits events with the origin and end over them (reconstructed in black, Geant4 in red for
+/// simulated files), the raw and detector signal events split
 /// in X and Y strips (readout of the file). The event type is chosen in the browser, at start the last
 /// saved event type of the file (TRestRun::GetOutputEvent, e.g. TRestTrackEvent). `prefix` is the name
 /// of the TRestTrackLineAnalysisProcess whose observables are drawn (branches prefix_OriginX, ...); if
@@ -348,6 +405,8 @@ void TrackLineViewer::Plot(const char* option) {
 /// libraries/track/examples/TrackLinearization.yaml).
 /// \param prefix Name of the TRestTrackLineAnalysisProcess instance whose observables are drawn; empty: the
 /// first process of the file with them.
+/// \param g4Prefix Prefix processName_volume of the TRestGeant4AnalysisProcess observables EntryX/Y/Z and
+/// EndX/Y/Z drawn (e.g. "g4Ana_gas"); empty: the first one of the file with them.
 /// \return Always 0 (the browser window stays open).
 ///
 /// Usage in restRoot:
@@ -355,12 +414,14 @@ void TrackLineViewer::Plot(const char* option) {
 /// restRoot
 /// [0] REST_Track_ViewTrackLine("R01234_LINEAR.root")
 /// [1] REST_Track_ViewTrackLine("R01234_LINEAR.root", "trackLineAnalysis")
+/// [2] REST_Track_ViewTrackLine("R00001_ANA_Rn222_gas_AlphaCAMM.root", "", "g4Ana_alpha")
 /// \endcode
 ///
 /// e.g. selection "trackLineAnalysis_Energy > 100000 && trackLineAnalysis_TrackBalance > 0.95" to go only
 /// through those events (branches processName_observable).
-int REST_Track_ViewTrackLine(const std::string& fileName, const std::string& prefix = "") {
-    auto* browser = new TRestBrowser(new TrackLineViewer(prefix));
+int REST_Track_ViewTrackLine(const std::string& fileName, const std::string& prefix = "",
+                             const std::string& g4Prefix = "") {
+    auto* browser = new TRestBrowser(new TrackLineViewer(prefix, g4Prefix));
     browser->OpenFile(fileName);
     return 0;
 }

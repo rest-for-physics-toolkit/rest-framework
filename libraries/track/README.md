@@ -53,7 +53,7 @@ documentation.
 
 | Macro | Description |
 | --- | --- |
-| `REST_Track_ViewTrackLine(fileName, prefix = "")` | Event browser of a file analysed with `TRestTrackLineAnalysisProcess`: track and hits events with the origin and end of the line drawn over them, raw and detector signals split in X and Y strips. |
+| `REST_Track_ViewTrackLine(fileName, prefix = "", g4Prefix = "")` | Event browser of a file analysed with `TRestTrackLineAnalysisProcess`: track and hits events with the origin and end of the line drawn over them (black), and in simulated files the Geant4 origin and end (red) from the `EntryX/Y/Z` and `EndX/Y/Z` observables of a `TRestGeant4AnalysisProcess` volume (`g4Prefix`, e.g. `"g4Ana_gas"`; empty: the first one): a line in the XY view and, as the Z of the hits is not the Geant4 one, dotted lines at their X or Y in the views with Z; raw and detector signals split in X and Y strips. |
 
 ```
 restRoot

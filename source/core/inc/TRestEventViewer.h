@@ -59,6 +59,11 @@ class TRestEventViewer {
     /// \brief Creates the canvas of the viewer (deleting a previous one).
     virtual void Initialize();
 
+    /// \brief Forgets the objects and pads of the canvas under the mouse (selected and click selected),
+    /// before the graphics of the previous plot are deleted: the canvas would use them on the next mouse
+    /// motion (crash in TCanvas::EnterLeave).
+    void ClearCanvasSelection();
+
    public:
     /// \brief Creates the canvas embedded in the right tab of the browser.
     /// \param b ROOT browser, or nullptr for a standalone canvas.
