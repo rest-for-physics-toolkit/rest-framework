@@ -1,11 +1,17 @@
 /// Unit tests of TRestDataSet: generation from small run files written with TRestRun (selection of the runs
 /// with runConditions, TRestCut on the entries, observables, new columns with run parameters), writing and
 /// opening the dataset file, the file name patterns of the runs ([runRange], [runTag|Mixed]...), merging
-/// datasets, and the errors (repeated runs, missing cuts or files). The files are written in a work
-/// directory per test.
+/// datasets, and the errors (repeated runs, missing cuts or files); and TRestAnalysisPlot on a run file (its
+/// histograms, panel and output file). The files are written in a work directory per test.
 
+#include <TCanvas.h>
+#include <TFile.h>
+#include <TH1.h>
+#include <TLatex.h>
+#include <TRestAnalysisPlot.h>
 #include <TRestCut.h>
 #include <TRestDataSet.h>
+#include <TRestManager.h>
 #include <TRestRunInfo.h>
 #include <TRestTools.h>
 #include <TRestYAMLUtils.h>
@@ -237,4 +243,82 @@ TEST(DataSet, Errors) {
     EXPECT_THROW(noPattern.Define("x", "1"), std::runtime_error);
     // An empty run condition
     EXPECT_THROW(TRestDataSet("bad", DataSetConfig(dir, "runConditions: {a: \"\"}\n")), std::runtime_error);
+}
+
+// ---------------------------------------------------------------------------
+// TRestAnalysisPlot: the combined canvas of a run file
+// ---------------------------------------------------------------------------
+
+namespace {
+/// Texts (TLatex) of a pad and of its sub-pads
+void CollectTexts(TVirtualPad* pad, std::vector<std::string>& texts) {
+    for (TObject* object : *pad->GetListOfPrimitives()) {
+        if (auto* latex = dynamic_cast<TLatex*>(object)) texts.emplace_back(latex->GetTitle());
+        if (auto* subPad = dynamic_cast<TVirtualPad*>(object)) CollectTexts(subPad, texts);
+    }
+}
+}  // namespace
+
+TEST(AnalysisPlot, HistogramsPanelAndOutputFile) {
+    const fs::path dir = TestUtils::WorkDir();
+    const std::string runFile = TestUtils::WriteRunFile(dir, TestUtils::RunFile());
+    const std::string cut = "high: {class: TRestCut, conditions: {e: \"ana_energy > 25\"}}\n";
+    TRestManager manager("manager", YAML::Load("class: TRestManager\n" + cut));
+    YAML::Node config = YAML::Load(R"(
+class: TRestAnalysisPlot
+previewPlot: false
+canvasDivisions: [2, 1]
+panels:
+  - labels:
+      - {text: "Entries {entries}", position: [0.1, 0.8]}
+      - {text: "Mean {mean(ana_energy)|%.1f}", position: [0.1, 0.6]}
+      - {text: "Tag {run.runTag}", position: [0.1, 0.4]}
+plots:
+  - name: energy
+    legend: true
+    histos:
+      - {name: all, variables: [{name: ana_energy, range: [0, 60], nBins: 6}]}
+      - {name: high, cuts: [high], variables: [{name: ana_energy, range: [0, 60], nBins: 6}]}
+)");
+    config["outputFileName"] = (dir / "plots_[runTag].root").string();
+    TRestAnalysisPlot plot("plots", config);
+    plot.PlotCombinedCanvas(runFile, &manager);
+
+    // The histograms (all the entries, and those of the cut) and the canvas in the output file
+    const fs::path output = dir / "plots_Test.root";
+    ASSERT_TRUE(fs::exists(output));
+    std::unique_ptr<TFile> file(TFile::Open(output.string().c_str(), "READ"));
+    auto* all = file->Get<TH1>("all");
+    auto* high = file->Get<TH1>("high");
+    ASSERT_NE(all, nullptr);
+    ASSERT_NE(high, nullptr);
+    EXPECT_DOUBLE_EQ(all->GetEntries(), 5);
+    EXPECT_DOUBLE_EQ(high->GetEntries(), 3);
+    EXPECT_DOUBLE_EQ(all->GetBinContent(all->FindBin(20)), 1);
+    EXPECT_DOUBLE_EQ(high->GetBinContent(high->FindBin(20)), 0);
+    // The metadata of the manager in the new file
+    EXPECT_EQ(TRestMetadata::ReadMetadata(file.get(), "high")["class"].as<std::string>(), "TRestCut");
+
+    // The panel with its expressions replaced
+    auto* canvas = file->Get<TCanvas>("plots");
+    ASSERT_NE(canvas, nullptr);
+    std::vector<std::string> texts;
+    CollectTexts(canvas, texts);
+    for (const std::string text : {"Entries 5", "Mean 30.0", "Tag Test"}) {
+        EXPECT_NE(std::find(texts.begin(), texts.end(), text), texts.end()) << text;
+    }
+}
+
+TEST(AnalysisPlot, Errors) {
+    const fs::path dir = TestUtils::WorkDir();
+    const std::string runFile = TestUtils::WriteRunFile(dir, TestUtils::RunFile());
+    // A cut not in the manager
+    TRestAnalysisPlot withCut(
+        "plots", YAML::Load("{class: TRestAnalysisPlot, previewPlot: false, cuts: [missing], plots: "
+                            "[{name: energy, variables: [{name: ana_energy, range: [0, 60]}]}]}"));
+    EXPECT_THROW(withCut.PlotCombinedCanvas(runFile), std::runtime_error);
+    // Unknown key of a plot
+    EXPECT_THROW(TRestAnalysisPlot("plots", YAML::Load("{class: TRestAnalysisPlot, plots: [{name: energy, "
+                                                       "colour: red}]}")),
+                 std::runtime_error);
 }

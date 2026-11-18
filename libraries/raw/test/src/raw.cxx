@@ -1,12 +1,17 @@
 /// Unit tests of libraries/raw (GoogleTest, BUILD_TESTING): TRestRawSignalEvent / TRestRawSignal /
 /// TRestRawSignalData and the processing processes, with events built in memory and the processes configured
 /// from YAML strings. The observables are read from an analysis tree in memory bound to a TRestRun without
-/// files (TRestRun::fOutputAnalysisTree), as the process managers do.
+/// files (TRestRun::fOutputAnalysisTree), as the process managers do. A pipeline (TRestEventProcessManager)
+/// is run by a TRestManager on a small feminos-daq file written in the work directory.
 
+#include <TFile.h>
 #include <TRandom.h>
+#include <TRestEventProcessManager.h>
+#include <TRestManager.h>
 #include <TRestPulseShapeAnalysis.h>
 #include <TRestRawBaseLineCorrectionProcess.h>
 #include <TRestRawCommonNoiseReductionProcess.h>
+#include <TRestRawFeminosRootToSignalProcess.h>
 #include <TRestRawSignalAddNoiseProcess.h>
 #include <TRestRawSignalAnalysisProcess.h>
 #include <TRestRawSignalChannelSelectionProcess.h>
@@ -732,4 +737,122 @@ TEST(RawSignalEvent, CopyHasItsOwnStorage) {
         EXPECT_EQ(event->GetSignal(0).GetSignalID(), 3);
         EXPECT_EQ(event->GetSignal(0).GetData(), (std::vector<short>{1, 2, 3}));
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// TRestEventProcessManager: a pipeline run by TRestManager from a feminos-daq file
+// ---------------------------------------------------------------------------------------------------------
+
+namespace {
+
+/// A feminos-daq ROOT file of 4 events (timestamps 1700000000000 + 1000 * i ms) with the signals 1 and 2:
+/// the even events with a pulse in the signal 1, the odd ones only baseline
+std::string WriteFeminosFile(const std::string& path) {
+    TFile file(path.c_str(), "RECREATE");
+    TTree events("events", "events");
+    unsigned long long timestamp = 0;
+    std::vector<unsigned short> ids, values;
+    events.Branch("timestamp", &timestamp);
+    events.Branch("signal_ids", &ids);
+    events.Branch("signal_values", &values);
+    for (int i = 0; i < 4; i++) {
+        timestamp = 1700000000000ULL + 1000ULL * i;
+        ids = {1, 2};
+        const std::vector<short> first = i % 2 == 0 ? TrianglePulse() : Alternating(512, 250);
+        const std::vector<short> second = Alternating(512, 250);
+        values.assign(first.begin(), first.end());
+        values.insert(values.end(), second.begin(), second.end());
+        events.Fill();
+    }
+    events.Write();
+    TTree run("run", "run");
+    run.Write();
+    return path;
+}
+
+/// A manager running the pipeline: feminos-daq file to raw signals, their analysis and a selection of the
+/// events with a pulse (extra keys of the pipeline appended)
+std::unique_ptr<TRestManager> MakePipeline(const std::string& name, const std::string& pipelineKeys) {
+    const std::string work = std::string(TESTS_WORK_DIR) + "/pipeline_" + name;
+    return std::make_unique<TRestManager>(
+        "manager", YAML::Load("class: TRestManager\n"
+                              "run:\n"
+                              "  class: TRestRun\n"
+                              "  inputFileName: \"" +
+                              WriteFeminosFile(work + "_feminos.root") +
+                              "\"\n"
+                              "  outputFileName: \"" +
+                              work +
+                              "_output.root\"\n"
+                              "withPulse:\n"
+                              "  class: TRestCut\n"
+                              "  conditions: {pulse: \"rawAna_NGoodSignals > 0\"}\n"
+                              "pipeline:\n"
+                              "  class: TRestEventProcessManager\n" +
+                              pipelineKeys +
+                              "  feminos: {class: TRestRawFeminosRootToSignalProcess, useFeminosDaqRunInfo: "
+                              "false}\n"
+                              "  rawAna: {class: TRestRawSignalAnalysisProcess, baselineRange: [5, 55], "
+                              "integralRange: [10, 500], maxOption: onlyMax, "
+                              "observables: [NGoodSignals, MaxPeakAmplitude]}\n"
+                              "  select: {class: TRestSelectionProcess, cuts: [withPulse]}\n"));
+}
+
+/// Runs the pipeline of a manager and closes its output file, as restManager does
+std::string RunPipeline(TRestManager& manager) {
+    manager.Run();
+    manager.SaveMetadata();
+    auto* run = dynamic_cast<TRestRun*>(manager.GetMetadataClass("TRestRun"));
+    if (!run) throw std::runtime_error("no TRestRun in the manager");
+    const std::string output = run->GetOutputFileName();
+    run->CloseFiles();
+    return output;
+}
+
+}  // namespace
+
+TEST(EventProcessManager, PipelineFromAGeneratorWithASelection) {
+    auto manager = MakePipeline("all", "  eventsToProcess: 0\n");
+    auto* pipeline =
+        dynamic_cast<TRestEventProcessManager*>(manager->GetMetadataClass("TRestEventProcessManager"));
+    ASSERT_NE(pipeline, nullptr);
+    EXPECT_TRUE(pipeline->HasGenerator());
+    EXPECT_EQ(pipeline->GetOutputEvent(), "TRestRawSignalEvent");
+
+    // The events with a pulse (0 and 2) are stored, with their observables, and the run times of the file
+    TRestRun output(RunPipeline(*manager));
+    ASSERT_TRUE(output.IsOpen());
+    EXPECT_TRUE(output.HasEvent("TRestRawSignalEvent"));
+    ASSERT_EQ(output.GetEntries(), 2);
+    for (const int entry : {0, 1}) {
+        ASSERT_TRUE(output.GetEntry(entry));
+        EXPECT_EQ(output.GetObservable<int>("eventID"), 2 * entry);
+        EXPECT_EQ(output.GetObservable<int>("rawAna_NGoodSignals"), 1);
+        EXPECT_NEAR(output.GetObservable<double>("rawAna_MaxPeakAmplitude"), 1000, 1e-6);
+    }
+    EXPECT_DOUBLE_EQ(output.GetStartTime(), 1700000000.);
+    EXPECT_DOUBLE_EQ(output.GetEndTime(), 1700000003.);
+    // The configuration of the pipeline is stored
+    EXPECT_EQ(output.GetMetadata("withPulse")["class"].as<std::string>(), "TRestCut");
+    output.CloseFiles();
+
+    // eventsToProcess: only the first event
+    auto first = MakePipeline("first", "  eventsToProcess: 1\n");
+    TRestRun firstOutput(RunPipeline(*first));
+    EXPECT_EQ(firstOutput.GetEntries(), 1);
+    firstOutput.CloseFiles();
+}
+
+TEST(EventProcessManager, Errors) {
+    // The first process needs an input event
+    EXPECT_THROW(TRestEventProcessManager("pipeline", YAML::Load("{select: {class: TRestSelectionProcess}}")),
+                 std::runtime_error);
+    // Unknown key of a process
+    EXPECT_THROW(TRestEventProcessManager(
+                     "pipeline", YAML::Load("{rawAna: {class: TRestRawSignalAnalysisProcess, unknown: 1}}")),
+                 std::runtime_error);
+    // Running without a run
+    const YAML::Node analysis = YAML::Load("{rawAna: {class: TRestRawSignalAnalysisProcess}}");
+    TRestEventProcessManager noRun("pipeline", analysis);
+    EXPECT_THROW(noRun.Run(), std::runtime_error);
 }

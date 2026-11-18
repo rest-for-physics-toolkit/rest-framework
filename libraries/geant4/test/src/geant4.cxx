@@ -1,8 +1,8 @@
 /// Unit tests of the geant4 library (GoogleTest, BUILD_TESTING), without Geant4: TRestGeant4Event and its
 /// tracks filled by hand (as restG4 fills its TRestGeant4EventData), TRestGeant4Metadata, the generator
 /// (also the cry one, with a CRY engine for the tests) and the physics lists from YAML strings, the biasing
-/// volumes, and the quenching process (Birks and Lindhard factors on known values) with a small TGeoManager
-/// geometry built in memory.
+/// volumes, and the quenching (Birks and Lindhard factors on known values) and analysis processes with a
+/// small TGeoManager geometry built in memory.
 
 #include <TGeoManager.h>
 #include <TGeoMaterial.h>
@@ -11,6 +11,7 @@
 #include <TGeoNode.h>
 #include <TGeoVolume.h>
 #include <TRandom3.h>
+#include <TRestGeant4AnalysisProcess.h>
 #include <TRestGeant4BiasingVolume.h>
 #include <TRestGeant4CRY.h>
 #include <TRestGeant4EnergyDistribution.h>
@@ -23,6 +24,8 @@
 #include <TRestGeant4QuenchingProcess.h>
 #include <TRestGeant4SpatialGenerator.h>
 #include <TRestGeant4Track.h>
+#include <TRestRun.h>
+#include <TTree.h>
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
@@ -145,6 +148,18 @@ struct Geometry {
         geometry->CloseGeometry();
     }
     ~Geometry() { delete geometry; }
+};
+
+/// Analysis tree in memory (no file) given to the processes through a TRestRun, to read their observables
+struct AnalysisTree {
+    TRestRun run;
+    std::unique_ptr<TTree> tree;
+
+    AnalysisTree() : tree(std::make_unique<TTree>("AnalysisTree", "AnalysisTree")) {
+        tree->SetDirectory(nullptr);
+        run.fOutputAnalysisTree = tree.get();
+    }
+    ~AnalysisTree() { run.fOutputAnalysisTree = nullptr; }
 };
 
 /// Lindhard quenching factor (as TRestGeant4QuenchingProcess), recoil energy in keV
@@ -733,4 +748,101 @@ TEST(Geant4QuenchingProcess, BirksAndLindhard) {
     // A volume without model (the error of the entry, wrapped by the field registry)
     EXPECT_THROW(TRestGeant4QuenchingProcess("quenching", YAML::Load("{volume: [{name: gas}]}")),
                  std::runtime_error);
+}
+
+TEST(Geant4AnalysisProcess, GlobalAndSelectionObservables) {
+    Geometry geometry;
+    TRestGeant4Metadata metadata(
+        "geant4Metadata", YAML::Load("seed: 1\nactiveVolumes: [{name: gas, sensitive: true}]\n" + kTables));
+    metadata.fGeant4GeometryInfo.LoadGeometry(geometry.geometry);
+
+    // The observables are read from an in-memory analysis tree given through a run without metadata
+    AnalysisTree analysis;
+    TRestRun& run = analysis.run;
+    auto get = [&run](const std::string& name) { return run.GetObservable<double>("g4Ana_" + name); };
+    auto getInt = [&run](const std::string& name) { return run.GetObservable<int>("g4Ana_" + name); };
+    auto getString = [&run](const std::string& name) {
+        return run.GetObservable<std::string>("g4Ana_" + name);
+    };
+
+    // The sensitive volume (gas, without volumes, with the entering particle), the scintillator per
+    // particle and volume, and the elastic scatterings of the neutron in the gas
+    TRestGeant4AnalysisProcess process(
+        "g4Ana", YAML::Load("{observables: [all], selections: [{name: gas, entering: true},"
+                            "{name: scint, volumes: ['^scint$'], splitByParticle: [e-, gamma], "
+                            "entering: true, perVolume: true},"
+                            "{name: elastic, volumes: [gas], particles: [neutron], processes: [hadElastic], "
+                            "interactions: true}]}"));
+    process.SetRunInfo(&run);
+    process.fGeant4Metadata = &metadata;
+    process.Initialize();
+
+    const TRestGeant4Event input = MakeEvent();
+    TRestGeant4Event output;
+    ASSERT_TRUE(process.ProcessEvent(input, output));
+    EXPECT_EQ(output.GetNumberOfTracks(), 4u);
+
+    // Global and primary observables
+    EXPECT_NEAR(get("totalEdep"), 82, 1e-6);
+    EXPECT_NEAR(get("sensitiveVolumeEnergy"), 15, 1e-6);
+    EXPECT_EQ(getInt("nTracks"), 4);
+    EXPECT_NEAR(get("boundingSize"), 101, 1e-6);  // hits with energy from x = -50 to x = 51
+    EXPECT_NEAR(get("energyPrimary"), 1000, 1e-9);
+    EXPECT_NEAR(get("xOriginPrimary"), 50, 1e-6);
+    EXPECT_NEAR(get("zDirectionPrimary"), 1, 1e-12);
+    EXPECT_NEAR(get("thetaPrimary"), 0, 1e-12);
+    EXPECT_EQ(getString("eventPrimaryParticleName"), "neutron");
+    EXPECT_EQ(getString("subEventPrimaryParticleName"), "generator");
+
+    // Scintillator: the electron and the gamma; the neutron, out of it, is the particle entering it
+    EXPECT_NEAR(get("scint_Energy"), 67, 1e-6);
+    EXPECT_EQ(getInt("scint_NTracks"), 2);
+    EXPECT_NEAR(get("scint_MeanPosX"), (10 * -50. + 20 * -49. + 30 * -47. + 7 * -45.) / 67, 1e-6);
+    EXPECT_NEAR(get("scint_FirstHitTime"), 0, 1e-12);
+    EXPECT_NEAR(get("scint_eMinus_Energy"), 60, 1e-6);
+    EXPECT_NEAR(get("scint_gamma_Energy"), 7, 1e-6);
+    EXPECT_NEAR(get("scint_scint_Energy"), 67, 1e-6);
+    EXPECT_NEAR(get("scint_MaxVolumeEnergy"), 67, 1e-6);
+    EXPECT_EQ(getInt("scint_NEntering"), 1);
+    EXPECT_EQ(getString("scint_EntryParticle"), "neutron");
+
+    // Gas: the neutron and the argon recoil; nothing enters it, the neutron is the
+    // primary created in it: its first and last hits in the gas
+    EXPECT_NEAR(get("gas_Energy"), 15, 1e-6);
+    EXPECT_EQ(getInt("gas_NTracks"), 2);
+    EXPECT_NEAR(get("gas_MeanPosX"), 51, 1e-6);
+    EXPECT_EQ(getInt("gas_NEntering"), 0);
+    EXPECT_EQ(getString("gas_EntryParticle"), "neutron");
+    EXPECT_EQ(getString("gas_EntryParentParticle"), "");
+    EXPECT_NEAR(get("gas_EntryX"), 50, 1e-6);
+    EXPECT_NEAR(get("gas_EndX"), 51, 1e-6);
+    EXPECT_NEAR(get("gas_InitialEnergy"), 100, 1e-9);
+
+    // Interactions: the elastic scattering of the neutron, whose track and descendants deposit 82 keV
+    EXPECT_NEAR(get("elastic_Energy"), 10, 1e-6);
+    EXPECT_EQ(getInt("elastic_NInteractions"), 1);
+    const auto& x = run.GetObservable<std::vector<double>>("g4Ana_elastic_InteractionX");
+    ASSERT_EQ(x.size(), 1u);
+    EXPECT_NEAR(x[0], 51, 1e-6);
+    const auto& edep = run.GetObservable<std::vector<double>>("g4Ana_elastic_InteractionTrackEdep");
+    ASSERT_EQ(edep.size(), 1u);
+    EXPECT_NEAR(edep[0], 82, 1e-6);
+
+    // Without selections, one per sensitive entry of activeVolumes, named as it
+    TRestGeant4AnalysisProcess byDefault("g4Default", YAML::Load("{observables: [gas_Energy]}"));
+    byDefault.SetRunInfo(&run);
+    byDefault.fGeant4Metadata = &metadata;
+    byDefault.Initialize();
+    ASSERT_TRUE(byDefault.ProcessEvent(input, output));
+    EXPECT_NEAR(run.GetObservable<double>("g4Default_gas_Energy"), 15, 1e-6);
+
+    // Errors: no metadata, a volume, particle or process not in the simulation, a duplicated name
+    TRestGeant4AnalysisProcess noMetadata("g4Ana", YAML::Load("{}"));
+    EXPECT_THROW(noMetadata.Initialize(), std::runtime_error);
+    for (const std::string& selection : {"{name: a, volumes: ['^pmt$']}", "{name: a, particles: [alpha]}",
+                                         "{name: a, processes: [nCapture]}", "{name: gas}, {name: gas}"}) {
+        TRestGeant4AnalysisProcess wrong("g4Ana", YAML::Load("{selections: [" + selection + "]}"));
+        wrong.fGeant4Metadata = &metadata;
+        EXPECT_THROW(wrong.Initialize(), std::runtime_error) << selection;
+    }
 }

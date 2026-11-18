@@ -250,9 +250,12 @@ void TRestGeant4AnalysisProcess::LoadConfig() {
 }
 
 void TRestGeant4AnalysisProcess::InitProcess() {
-    const auto* metadata =
+    // The metadata of the run or, without one (e.g. no input file), the one given
+    const auto* runMetadata =
         fRunInfo ? dynamic_cast<TRestGeant4Metadata*>(fRunInfo->GetMetadataClass("TRestGeant4Metadata"))
                  : nullptr;
+    if (runMetadata) fGeant4Metadata = runMetadata;
+    const auto* metadata = fGeant4Metadata;
     if (!metadata) throw std::runtime_error("TRestGeant4AnalysisProcess: no TRestGeant4Metadata found");
     fGeometryInfo = &metadata->GetGeant4GeometryInfo();
     const auto& physicsInfo = metadata->GetGeant4PhysicsInfo();

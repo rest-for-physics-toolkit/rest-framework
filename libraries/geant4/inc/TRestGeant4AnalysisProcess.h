@@ -9,6 +9,7 @@
 
 class TRestGeant4Event;
 class TRestGeant4GeometryInfo;
+class TRestGeant4Metadata;
 
 /// \class TRestGeant4SelectionInfo
 /// \brief Selection of the energy deposits of a TRestGeant4Event: volumes (regular expressions), particles
@@ -147,6 +148,8 @@ class TRestGeant4AnalysisProcess : public TRestEventProcess {
     /// sensitive entry of activeVolumes, named as it and with entering. Without entering particle, the
     /// Entry/End/Initial observables are those of the primary created in the volumes
     std::vector<TRestGeant4SelectionInfo> fSelections;
+    /// The simulation metadata: that of the run (InitProcess) or, without one in the run, the one given
+    const TRestGeant4Metadata* fGeant4Metadata = nullptr;  //!
 
     /// \brief Process without configuration.
     TRestGeant4AnalysisProcess();
@@ -157,9 +160,10 @@ class TRestGeant4AnalysisProcess : public TRestEventProcess {
 
     /// \brief Reads the common process keys and `selections`.
     void LoadConfig() override;
-    /// \brief Resolves the selections with the TRestGeant4Metadata of the run (volume, particle and process
-    /// IDs; the default ones from the sensitive `activeVolumes`) and registers the observables. Throws for
-    /// a volume list without match, an unknown particle or process, or a missing metadata.
+    /// \brief Resolves the selections with the TRestGeant4Metadata of the run, or fGeant4Metadata if the run
+    /// has none (volume, particle and process IDs; the default ones from the sensitive `activeVolumes`) and
+    /// registers the observables. Throws for a volume list without match, an unknown particle or process, or
+    /// a missing metadata.
     void InitProcess() override;
     /// \brief Copies the input event to the output and computes the observables of the event.
     /// \return Always true (the event is not rejected).

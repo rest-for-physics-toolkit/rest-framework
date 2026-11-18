@@ -1,6 +1,7 @@
 /// Unit tests of the detector library (GoogleTest, BUILD_TESTING): the hits and signal events, a Micromegas
-/// readout built in memory (with a decoding file written in the work directory) and its export/import, the
-/// medium with fixed transport parameters, and the hits and signal processes fed with events built by hand.
+/// readout built in memory (with a decoding file written in the work directory) and its export/import, a
+/// GDML readout of a small geometry, the medium with fixed transport parameters or a gain table, and the
+/// hits and signal processes fed with events built by hand.
 /// The processes that need a readout or a medium get them from a TRestManager created from a YAML string,
 /// with the readout added to its TRestDetectorReadoutManager; the observables are read from an in-memory
 /// analysis tree given to the process through a TRestRun.
@@ -10,7 +11,9 @@
 #include <TROOT.h>
 #include <TRandom3.h>
 #include <TRestDataSet.h>
+#include <TRestDataSetGainMap.h>
 #include <TRestDataSetTardis.h>
+#include <TRestDetectorAvalancheProcess.h>
 #include <TRestDetectorHitsAnalysisProcess.h>
 #include <TRestDetectorHitsDriftProcess.h>
 #include <TRestDetectorHitsEvent.h>
@@ -26,6 +29,7 @@
 #include <TRestDetectorSignalShapingProcess.h>
 #include <TRestDetectorSignalToHitsProcess.h>
 #include <TRestDetectorTransportManager.h>
+#include <TRestGDMLReadout.h>
 #include <TRestManager.h>
 #include <TRestMicromegasReadout.h>
 #include <TRestRun.h>
@@ -509,6 +513,112 @@ TEST(DetectorReadoutManager, WritesOnlyTheDataReadout) {
     std::unique_ptr<TFile> file(TFile::Open(allPlanes.c_str(), "READ"));
     EXPECT_TRUE(TRestMetadata::ReadMetadata(file.get(), "plane0").IsMap());
     EXPECT_TRUE(TRestMetadata::ReadMetadata(file.get(), "plane1").IsMap());
+}
+
+namespace {
+/// GDML of the TRestGDMLReadout tests (mm): two copies of a module, at x = -200 and at x = 200 rotated 180
+/// degrees around X, each one with a scintillator (local z = -20) and its light guide (local z = 60)
+std::string WriteVetoGeometry() {
+    const auto* test = ::testing::UnitTest::GetInstance()->current_test_info();
+    const std::string path = std::string(TESTS_WORK_DIR) + "/veto_" + test->name() + ".gdml";
+    std::ofstream out(path);
+    out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+           "<gdml>\n"
+           "<define/>\n"
+           "<materials>\n"
+           "  <element name=\"Hydrogen\" formula=\"H\" Z=\"1\"><atom value=\"1.008\"/></element>\n"
+           "  <material name=\"Plastic\" state=\"solid\"><D value=\"1.03\"/>"
+           "<fraction n=\"1\" ref=\"Hydrogen\"/></material>\n"
+           "</materials>\n"
+           "<solids>\n"
+           "  <box name=\"worldBox\" x=\"1000\" y=\"1000\" z=\"1000\" lunit=\"mm\"/>\n"
+           "  <box name=\"moduleBox\" x=\"100\" y=\"100\" z=\"200\" lunit=\"mm\"/>\n"
+           "  <box name=\"scintillatorBox\" x=\"50\" y=\"50\" z=\"100\" lunit=\"mm\"/>\n"
+           "  <box name=\"guideBox\" x=\"50\" y=\"50\" z=\"20\" lunit=\"mm\"/>\n"
+           "</solids>\n"
+           "<structure>\n"
+           "  <volume name=\"scintillatorVolume\"><materialref ref=\"Plastic\"/>"
+           "<solidref ref=\"scintillatorBox\"/></volume>\n"
+           "  <volume name=\"lightGuideVolume\"><materialref ref=\"Plastic\"/>"
+           "<solidref ref=\"guideBox\"/></volume>\n"
+           "  <volume name=\"moduleVolume\"><materialref ref=\"Plastic\"/><solidref ref=\"moduleBox\"/>\n"
+           "    <physvol name=\"scintillator\"><volumeref ref=\"scintillatorVolume\"/>"
+           "<position name=\"scintillatorPosition\" z=\"-20\" unit=\"mm\"/></physvol>\n"
+           "    <physvol name=\"lightGuide\"><volumeref ref=\"lightGuideVolume\"/>"
+           "<position name=\"guidePosition\" z=\"60\" unit=\"mm\"/></physvol>\n"
+           "  </volume>\n"
+           "  <volume name=\"World\"><materialref ref=\"Plastic\"/><solidref ref=\"worldBox\"/>\n"
+           "    <physvol name=\"module0\"><volumeref ref=\"moduleVolume\"/>"
+           "<position name=\"module0Position\" x=\"-200\" unit=\"mm\"/></physvol>\n"
+           "    <physvol name=\"module1\"><volumeref ref=\"moduleVolume\"/>"
+           "<position name=\"module1Position\" x=\"200\" unit=\"mm\"/>"
+           "<rotation name=\"module1Rotation\" x=\"180\" unit=\"deg\"/></physvol>\n"
+           "  </volume>\n"
+           "</structure>\n"
+           "<setup name=\"Default\" version=\"1.0\"><world ref=\"World\"/></setup>\n"
+           "</gdml>\n";
+    return path;
+}
+
+/// A TRestGDMLReadout of the veto geometry: the scintillators are the channels 10 + module (DAQ 300 and
+/// 301), with readoutInfo extra keys appended to the entry
+std::unique_ptr<TRestGDMLReadout> BuildVetoReadout(const std::string& readoutInfo) {
+    const auto* test = ::testing::UnitTest::GetInstance()->current_test_info();
+    const std::string decoding = std::string(TESTS_WORK_DIR) + "/veto_" + test->name() + ".dec";
+    std::ofstream(decoding) << "# daqChannel physicalID\n300\t10\n301\t11\n";
+    auto readout = std::make_unique<TRestGDMLReadout>(
+        "veto", YAML::Load("name: veto\n"
+                           "decodingFile: \"" +
+                           decoding +
+                           "\"\n"
+                           "readoutParameters:\n"
+                           "  gdmlFileName: \"" +
+                           WriteVetoGeometry() +
+                           "\"\n"
+                           "  readoutInfo:\n"
+                           "    - {volume: \"module(\\\\d)/scintillator\", offset: 10" +
+                           readoutInfo + "}\n"));
+    readout->BuildGeometry();
+    return readout;
+}
+}  // namespace
+
+TEST(DetectorReadout, GDMLChannelsAndReadoutVolumes) {
+    const auto readout = BuildVetoReadout(", readoutVolume: lightGuide");
+    // Physical ID offset + the module number captured by the expression
+    EXPECT_EQ(readout->GetPhysicalID(300), 10);
+    EXPECT_EQ(readout->GetPhysicalID(301), 11);
+    ASSERT_EQ(readout->fPhysicalIDToReadoutPath.size(), 2u);
+
+    // Channel volumes and their readout volumes in the global frame (the second module rotated)
+    const auto channel0 = readout->GetPositionFromChannel(300);
+    const auto channel1 = readout->GetPositionFromChannel(301);
+    EXPECT_NEAR((channel0 - XYZVector(-200, 0, -20)).R(), 0, 1e-9);
+    EXPECT_NEAR((channel1 - XYZVector(200, 0, 20)).R(), 0, 1e-9);
+    EXPECT_NEAR((readout->GetReadoutPosition(300) - XYZVector(-200, 0, 60)).R(), 0, 1e-9);
+    EXPECT_NEAR((readout->GetReadoutPosition(301) - XYZVector(200, 0, -60)).R(), 0, 1e-9);
+    EXPECT_NEAR(readout->GetDistanceToReadout(300, XYZVector(-200, 0, -20)), 80, 1e-9);
+    EXPECT_NEAR(readout->GetDistanceToReadout(301, XYZVector(200, 0, 0)), 60, 1e-9);
+    // The hits are not drifted
+    EXPECT_TRUE(std::isnan(readout->GetDistanceToReadout(XYZVector(-200, 0, -20))));
+
+    // Positions in the scintillators give their channels; outside them (light guide, world), none
+    EXPECT_EQ(readout->GetChannelFromPosition(-200, 10, -30), 300);
+    EXPECT_EQ(readout->GetChannelFromPosition(200, -10, 30), 301);
+    EXPECT_EQ(readout->GetChannelFromPosition(-200, 0, 60), -1);
+    EXPECT_EQ(readout->GetChannelFromPosition(0, 0, 0), -1);
+}
+
+TEST(DetectorReadout, GDMLWithoutReadoutVolume) {
+    const auto readout = BuildVetoReadout("");
+    EXPECT_EQ(readout->GetPhysicalID(301), 11);
+    EXPECT_TRUE(readout->fPhysicalIDToReadoutPath.empty());
+    EXPECT_TRUE(std::isnan(readout->GetReadoutPosition(300).X()));
+    EXPECT_TRUE(std::isnan(readout->GetDistanceToReadout(300, XYZVector(-200, 0, -20))));
+
+    // Errors: a readout volume not in the module, an invalid expression
+    EXPECT_THROW(BuildVetoReadout(", readoutVolume: notAVolume"), std::runtime_error);
+    EXPECT_THROW(BuildVetoReadout(", readoutVolume: \"(lightGuide\""), std::runtime_error);
 }
 
 TEST(DetectorMedium, FixedChargeResponse) {
@@ -1239,6 +1349,85 @@ TEST(DetectorTransportTable, SeveralMediaInAFile) {
     }
 }
 
+TEST(DetectorAvalancheProcess, PolyaGainFromTheTable) {
+    // Gain table of a 128 um gap at 1 bar and 293.15 K: gain 100 -> 1000 and theta 0.5 -> 1.5 from 2000 to
+    // 4000 V/mm
+    const std::string fileName = std::string(TESTS_WORK_DIR) + "/detector_test_gain.root";
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        TRestDetectorGainTable table;
+        table.fMedium = "ArIsoGain";
+        table.fTableGap = 0.128;
+        table.fFields = {2000., 4000.};
+        table.fGain = {100., 1000.};
+        table.fTheta = {0.5, 1.5};
+        table.Write(file.get(), YAML::Load("{name: ArIsoGain, state: gas}"), YAML::Load("{}"), {});
+    }
+    const auto manager =
+        std::make_unique<TRestManager>("manager", YAML::Load("class: TRestManager\n"
+                                                             "gas:\n"
+                                                             "  class: TRestDetectorMedium\n"
+                                                             "  name: ArIsoGain\n"
+                                                             "  mediumFile: \"" +
+                                                             fileName +
+                                                             "\"\n"
+                                                             "  charge: {wValue: 26.2 eV}\n"));
+    auto makeAvalanche = [&manager](const std::string& config) {
+        auto avalanche = std::make_unique<TRestDetectorAvalancheProcess>("avalanche", YAML::Load(config));
+        avalanche->SetManager(manager.get());
+        return avalanche;
+    };
+
+    // 384 V / 128 um = 3000 V/mm: gain and theta interpolated (log G and theta linear in the field)
+    auto avalanche = makeAvalanche("{amplificationVoltage: 384 V, gap: 128 um, seed: 5}");
+    avalanche->Initialize();
+    EXPECT_EQ(avalanche->fMediumName, "ArIsoGain");
+    EXPECT_EQ(avalanche->fTable, "1bar_293.15K_gap128um_E20000-40000Vcm");
+    EXPECT_NEAR(avalanche->fGain, std::sqrt(100. * 1000.), 1e-6);
+    EXPECT_NEAR(avalanche->fTheta, 1, 1e-9);
+
+    // One electron per hit: Polya gains, mean G and relative variance 1 / (theta + 1)
+    const double wValue = 0.0262, gain = avalanche->fGain;
+    const int n = 20000;
+    double sum = 0, sum2 = 0;
+    for (int i = 0; i < n; i++) {
+        TRestDetectorHitsEvent input, output;
+        input.SetID(i);
+        input.AddHit(1, 2, 3, wValue, 0.5);
+        ASSERT_TRUE(avalanche->ProcessEvent(input, output));
+        ASSERT_EQ(output.GetNumberOfHits(), 1u);
+        const double ratio = output.GetEnergy(0) / wValue / gain;
+        sum += ratio;
+        sum2 += ratio * ratio;
+    }
+    const double mean = sum / n;
+    EXPECT_NEAR(mean, 1, 0.02);
+    EXPECT_NEAR(sum2 / n - mean * mean, 0.5, 0.03);
+
+    // A hit of 1000 electrons: the gain per electron of the sum, same position and time; seeded per event
+    TRestDetectorHitsEvent input, first, second;
+    input.SetID(3);
+    input.AddHit(1, 2, 3, 1000 * wValue, 0.5);
+    input.AddHit(0, 0, 0, 0);  // no electrons: removed
+    ASSERT_TRUE(avalanche->ProcessEvent(input, first));
+    ASSERT_TRUE(avalanche->ProcessEvent(input, second));
+    ASSERT_EQ(first.GetNumberOfHits(), 1u);
+    EXPECT_DOUBLE_EQ(first.GetEnergy(0), second.GetEnergy(0));
+    EXPECT_NEAR(first.GetEnergy(0) / (1000 * wValue * gain), 1, 5 / std::sqrt(2000.));
+    EXPECT_NEAR(first.GetX(0), 1, 1e-6);
+    EXPECT_NEAR(first.GetTime(0), 0.5, 1e-9);
+
+    // Errors: field out of the range of the table, no table with the gap, no voltage, no manager
+    EXPECT_THROW(makeAvalanche("{amplificationVoltage: 600 V, gap: 128 um}")->Initialize(),
+                 std::runtime_error);
+    EXPECT_THROW(makeAvalanche("{amplificationVoltage: 300 V, gap: 100 um}")->Initialize(),
+                 std::runtime_error);
+    EXPECT_THROW(makeAvalanche("{gap: 128 um}")->Initialize(), std::runtime_error);
+    TRestDetectorAvalancheProcess noManager("avalanche",
+                                            YAML::Load("{amplificationVoltage: 384 V, gap: 128 um}"));
+    EXPECT_THROW(noManager.Initialize(), std::runtime_error);
+}
+
 // ---------------------------------------------------------------------------
 // TRestDataSetTardis
 // ---------------------------------------------------------------------------
@@ -1460,4 +1649,128 @@ TEST(DataSetTardis, Errors) {
     TRestDataSetTardis withChannels(
         "tardis", YAML::Load("{class: TRestDataSetTardis, channels: rawToSignal_SignalsPhysicalID}"));
     EXPECT_THROW(withChannels.Apply(dataSet), std::runtime_error);
+}
+
+// ---------------------------------------------------------------------------
+// TRestDataSetGainMap
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A dataset of one run with the columns charge, posX and posY: 6000 events in each half of the readout
+/// (posX in (-10, 0) with 100 per keV, posX in (0, 10) with 200 per keV), 6 of every 7 of the peak of
+/// 22.5 keV and the others of the peak of 8 keV (sigma 3 %), and 10 events without position (NaN)
+std::string WriteGainMapDataSet() {
+    const auto* test = ::testing::UnitTest::GetInstance()->current_test_info();
+    const std::string path = std::string(TESTS_WORK_DIR) + "/gainmap_" + test->name() + ".root";
+    TFile file(path.c_str(), "RECREATE");
+    TTree tree("AnalysisTree", "AnalysisTree");
+    int runIndex = 0, eventID = 0;
+    double charge = 0, posX = 0, posY = 0;
+    tree.Branch("runIndex", &runIndex);
+    tree.Branch("eventID", &eventID);
+    tree.Branch("charge", &charge);
+    tree.Branch("posX", &posX);
+    tree.Branch("posY", &posY);
+    TRandom3 random(17);
+    for (int i = 0; i < 12010; i++) {
+        eventID = i;
+        const double energy = i % 7 == 0 ? 8 : 22.5;
+        const bool right = i % 2 == 1;
+        const double mean = energy * (right ? 200 : 100);
+        charge = random.Gaus(mean, 0.03 * mean);
+        posX = i >= 12000 ? kNaN : (right ? random.Uniform(0, 10) : random.Uniform(-10, 0));
+        posY = random.Uniform(-10, 10);
+        tree.Fill();
+    }
+    tree.Write();
+    TObjString runs("- run: {runNumber: 1}\n  fileName: a.root\n  entries: 12010\n  processing: 0\n");
+    file.WriteTObject(&runs, "RESTDataSetInfo");
+    return path;
+}
+
+const std::string kGainMapConfig =
+    "{class: TRestDataSetGainMap, verbose: error, observable: charge, spatialObservableX: posX, "
+    "spatialObservableY: posY, splitX: [-10, 0, 10], splitY: [-10, 10], range: [0, 6000], nBins: 600, "
+    "peaks: [{energy: 22.5 keV}, {energy: 8 keV}]}";
+
+}  // namespace
+
+TEST(DataSetGainMap, SegmentsCalibratedWithTheirGain) {
+    const std::string path = WriteGainMapDataSet();
+    TRestDataSet dataSet(path);
+    TRestDataSetGainMap gainMap("gainMap", YAML::Load(kGainMapConfig));
+    EXPECT_EQ(gainMap.GetNumberOfSegmentsX(), 2);
+    EXPECT_EQ(gainMap.GetNumberOfSegmentsY(), 1);
+    gainMap.ObtainParameters(dataSet, nullptr);
+
+    // energy = slope * charge + intercept: 1 keV per 100 on the left, per 200 on the right
+    EXPECT_EQ(gainMap.GetSegment(-5, 0), std::make_pair(0, 0));
+    EXPECT_EQ(gainMap.GetSegment(5, 0), std::make_pair(1, 0));
+    EXPECT_EQ(gainMap.GetSegment(20, 0), std::make_pair(1, 0));  // outside: the last segment
+    EXPECT_NEAR(gainMap.GetSlope(-5, 0), 0.01, 1e-4);
+    EXPECT_NEAR(gainMap.GetSlope(5, 0), 0.005, 5e-5);
+    EXPECT_NEAR(gainMap.GetIntercept(-5, 0), 0, 0.2);
+    EXPECT_NEAR(gainMap.GetIntercept(5, 0), 0, 0.2);
+    // The whole readout: the windows from the maximum of its spectrum (the 22.5 keV peak on the left)
+    EXPECT_NEAR(gainMap.fFullSlope, 0.01, 1e-4);
+
+    // Spectra of the segments and linear fits of the two peaks
+    ASSERT_NE(gainMap.GetSegmentSpectrum(1, 0), nullptr);
+    EXPECT_NEAR(gainMap.GetSegmentSpectrum(1, 0)->Integral(), 6000, 1);
+    ASSERT_NE(gainMap.GetSegmentLinearFit(0, 0), nullptr);
+    EXPECT_EQ(gainMap.GetSegmentLinearFit(0, 0)->GetN(), 2);
+    EXPECT_EQ(gainMap.GetSegmentSpectrum(2, 0), nullptr);
+
+    // The columns: calibrated with the segment of the event (NaN without position) and the whole readout
+    gainMap.Apply(dataSet);
+    EXPECT_EQ(gainMap.GetEnergyColumn(), "gainMap_Energy");
+    const auto charge = *dataSet.GetDataFrame().Take<double>("charge");
+    const auto posX = *dataSet.GetDataFrame().Take<double>("posX");
+    const auto energy = *dataSet.GetDataFrame().Take<double>("gainMap_Energy");
+    const auto full = *dataSet.GetDataFrame().Take<double>("gainMap_EnergyNoSegmentation");
+    ASSERT_EQ(energy.size(), 12010u);
+    for (size_t i = 0; i < energy.size(); i++) {
+        EXPECT_NEAR(full[i], gainMap.fFullSlope * charge[i] + gainMap.fFullIntercept, 1e-9);
+        if (std::isnan(posX[i])) {
+            EXPECT_TRUE(std::isnan(energy[i]));
+            continue;
+        }
+        EXPECT_NEAR(energy[i], gainMap.GetSlope(posX[i], 0) * charge[i] + gainMap.GetIntercept(posX[i], 0),
+                    1e-9);
+    }
+
+    // A refit of a peak of a segment keeps its calibration
+    gainMap.RefitAt(5, 0, 22.5, {4000, 5000});
+    EXPECT_NEAR(gainMap.GetSlope(5, 0), 0.005, 5e-5);
+
+    // Stored in the dataset and read back with its objects
+    gainMap.UpdateFile(path);
+    TRestDataSetGainMap read;
+    read.ReadFromFile(path, "gainMap");
+    EXPECT_NEAR(read.GetSlope(5, 0), gainMap.GetSlope(5, 0), 1e-12);
+    EXPECT_NEAR(read.fFullSlope, gainMap.fFullSlope, 1e-12);
+    ASSERT_NE(read.GetSegmentSpectrum(0, 0), nullptr);
+    EXPECT_NEAR(read.GetSegmentSpectrum(0, 0)->Integral(), 6000, 1);
+}
+
+TEST(DataSetGainMap, Errors) {
+    YAML::Node noPeaks = YAML::Load(kGainMapConfig);
+    noPeaks.remove("peaks");
+    EXPECT_THROW(TRestDataSetGainMap("gainMap", noPeaks), std::runtime_error);
+    YAML::Node badSplit = YAML::Load(kGainMapConfig);
+    badSplit["splitX"] = YAML::Load("[0, 0]");
+    EXPECT_THROW(TRestDataSetGainMap("gainMap", badSplit), std::runtime_error);
+    YAML::Node noSpatial = YAML::Load(kGainMapConfig);
+    noSpatial.remove("spatialObservableY");
+    EXPECT_THROW(TRestDataSetGainMap("gainMap", noSpatial), std::runtime_error);
+
+    // Segments without edges need the readout of the dataset (none here)
+    YAML::Node segments = YAML::Load(kGainMapConfig);
+    segments.remove("splitX");
+    segments.remove("splitY");
+    segments["segments"] = YAML::Load("[2, 2]");
+    TRestDataSetGainMap withoutReadout("gainMap", segments);
+    TRestDataSet dataSet(WriteGainMapDataSet());
+    EXPECT_THROW(withoutReadout.ObtainParameters(dataSet, nullptr), std::runtime_error);
 }

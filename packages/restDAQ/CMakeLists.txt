@@ -55,3 +55,8 @@ target_link_libraries(
 install(TARGETS femclient RUNTIME DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/
         DESTINATION examples/restDAQ)
+
+# Unit tests (BUILD_TESTING): frames decoded and configurations read
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()

@@ -17,5 +17,11 @@ target_link_libraries(
                        ${ROOT_TARGET_LIBRARIES} yaml-cpp::yaml-cpp)
 
 install(TARGETS restGarfield RUNTIME DESTINATION bin)
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/examples/
         DESTINATION examples/restGarfield)
+
+# Unit tests (BUILD_TESTING): the tables computed with small grids
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()

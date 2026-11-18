@@ -18,19 +18,23 @@
 - Format: `pre-commit run --all-files` (clang-format with the line limit of 110, cmake-format, black and
   basic checks); `pre-commit install` runs it at each commit.
 - Tests: build with `-DBUILD_TESTING=ON` and run `ctest` (all), `ctest -L <component>` (one component:
-  tools, core, analysis, raw, detector, track, geant4, connectors, restG4) or `make check` (build and run
-  all). New features need unit tests in the `test/` directory of their component (see below).
+  tools, core, analysis, raw, detector, track, geant4, connectors, restG4, restGarfield, restDAQ) or
+  `make check` (build and run all). New features need unit tests in the `test/` directory of their
+  component (see below).
 - Documentation: Doxygen in the `.cxx` of each class (keys, results, example), the README of the
   component, the user guide (doc/UserGuide.md) for the formats and keys, and MIGRATION_GUIDE.md for what
-  comes from legacy.
+  comes from legacy. Each process is used in an example configuration (`examples/` of its component or of
+  the repository; an optional process may be commented), listed in the table "Processes in the examples"
+  of the README of its component.
 
 ## Tests
 
 Each component has a `test/` directory with a GoogleTest executable (`<component>Tests`, sources in
 `test/src/*.cxx`) added with `rest_add_tests(<component> <libraries>)` (cmake/RestTests.cmake): each test
-has the label of its component. The unit tests build their inputs (events, metadata, datasets) in memory or
-in temporary files, without external data. Tests that need input data (pipelines of the examples) will use
-data published outside the repository.
+has the label of its component; the packages restGarfield and restDAQ compile their sources into their test
+executable (with Garfield++, readline and prometheus-cpp). The unit tests build their inputs (events,
+metadata, datasets) in memory or in temporary files, without external data. Tests that need input data
+(pipelines of the examples) will use data published outside the repository.
 
 ## Continuous integration
 

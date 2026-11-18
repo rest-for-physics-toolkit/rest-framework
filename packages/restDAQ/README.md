@@ -95,3 +95,9 @@ A Prometheus server (`prometheusAddress`, default `0.0.0.0:8080`, empty for none
 run number (`run_number`), the rate (`event_rate`), the events (`events_total`) and the events with the FEMs
 out of sync (`desync_events_total`), plus the file name (`run_filename_info`, label `filename`) and the YAML
 dump of the configuration (`run_metadata_info`, label `metadata`) of the run as labels.
+
+## Tests
+
+With `BUILD_TESTING` (`test/`, ctest label `restDAQ`), without electronics: a FEMINOS data frame built in
+memory is split into events and decoded into a TRestRawSignalEvent, and the configuration of a run (RunConfig)
+is read from a YAML file.
