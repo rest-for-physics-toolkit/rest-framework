@@ -12,6 +12,11 @@
 /// gives the signals; the drift coordinate is recovered from the time by
 /// TRestDetectorHitsTimeProjectionProcess (e.g. to look at the drifted electrons in 3D).
 ///
+/// With `diffusion: false` the hits are not split into electrons nor diffused: each hit is projected whole
+/// on the readout at t + d / v, d its distance to the readout, with its charge fluctuated as above and
+/// attenuated by the mean attachment, exp(-attachment * d) (faster, e.g. to check the geometry and the
+/// readout; maxHits is not used).
+///
 /// The drift distance and its direction are given by TRestDetectorReadout::GetDistanceToReadout (e.g. the
 /// Micromegas plane and its normal). Hits without a distance or outside the drift volume (distance < 0 or
 /// beyond TRestDetectorReadout::GetMaxDistanceToReadout, the cathode) are removed. Diffused electrons are
@@ -25,9 +30,9 @@
 ///
 /// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (empty:
 /// the only one with `charge`), fluctuations ("fano", "poisson" or "none"), maxHits (1000, 0: no
-/// limit), seed (0: random seed; otherwise the generator is re-seeded at each event from the seed and the
-/// event and subevent IDs, TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number
-/// of threads).
+/// limit), diffusion (true), seed (0: random seed; otherwise the generator is re-seeded at each event from
+/// the seed and the event and subevent IDs, TRestDetectorHitsEvent::EventSeed, so the result does not
+/// depend on the number of threads).
 ///
 /// Example:
 ///
@@ -57,6 +62,7 @@ static const bool TRestDetectorHitsDriftProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("medium", &P::fMediumName);
     reg.RegisterField<P>("fluctuations", &P::fFluctuations);
     reg.RegisterField<P>("maxHits", &P::fMaxHits);
+    reg.RegisterField<P>("diffusion", &P::fDiffusion);
     reg.RegisterField<P>("seed", &P::fSeed);
     reg.RegisterField<P>("longDiff", &P::fLongitudinalDiffusion);
     reg.RegisterField<P>("transDiff", &P::fTransversalDiffusion);
@@ -180,6 +186,14 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
             electrons = fRandom.Poisson(electrons);
         }
         if (!(electrons > 0)) continue;
+        if (!fDiffusion) {
+            // The whole hit on the readout, its charge attenuated by the mean attachment (1/cm, d in mm)
+            const double charge = electrons * wValue * std::exp(-fAttachment * distance / 10.);
+            outputEvent->AddHit(fReadout->ProjectToReadout(position), charge,
+                                inputEvent->GetTime(n) + distance / fDriftVelocity, inputEvent->GetType(n),
+                                inputEvent->GetParticleID(n));
+            continue;
+        }
         // The electrons of the hit carry the fluctuated charge (electrons * W)
         const long nElectrons = std::max(1L, std::lround(electrons * wValue / effectiveW));
         const double electronEnergy = electrons * wValue / nElectrons;

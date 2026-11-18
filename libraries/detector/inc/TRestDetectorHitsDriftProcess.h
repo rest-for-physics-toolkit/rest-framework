@@ -46,6 +46,10 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
     /// several (as legacy, an effective W-value), to limit the processing time.
     int fMaxHits = 1000;
 
+    /// Diffusion of the electrons (default). False: each hit is projected whole on the readout at its drift
+    /// time (no electrons nor diffusion; the fluctuation of its charge and the mean attachment are kept)
+    bool fDiffusion = true;
+
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
     /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;

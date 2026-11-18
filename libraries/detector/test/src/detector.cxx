@@ -712,6 +712,22 @@ TEST(DetectorHitsDriftProcess, DiffusionIsSeeded) {
     }
     EXPECT_NEAR(meanTime, 3, 0.03);
 
+    // Without diffusion: the whole hit on the readout plane below it at 30 / 10 us, with its charge
+    auto attaching = MakeDetector(
+        "{wValue: 26.2 eV, fanoFactor: 0.2, driftVelocity: 10, longDiff: 0.03, transDiff: 0.04, "
+        "attachment: 0.1}");
+    TRestDetectorHitsDriftProcess whole("drift", YAML::Load("{fluctuations: none, diffusion: false}"));
+    whole.SetManager(attaching.manager.get());
+    whole.Initialize();
+    TRestDetectorHitsEvent projected;
+    input.AddHit(0, 0, -1, 1);  // behind the readout plane: removed
+    ASSERT_TRUE(whole.ProcessEvent(input, projected));
+    ASSERT_EQ(projected.GetNumberOfHits(), 1u);
+    EXPECT_NEAR(projected.GetX(0), 0, 1e-5);
+    EXPECT_NEAR(projected.GetZ(0), 0, 1e-5);
+    EXPECT_NEAR(projected.GetTime(0), 3, 1e-6);
+    EXPECT_NEAR(projected.GetEnergy(0), 5.9 * std::exp(-0.1 * 3), 1e-4);  // mean attachment over 3 cm
+
     // Fano fluctuations need fanoFactor > 0
     auto noFano = MakeDetector("{wValue: 26.2 eV, driftVelocity: 10}");
     TRestDetectorHitsDriftProcess fano("drift", YAML::Load("{fluctuations: fano}"));
