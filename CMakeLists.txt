@@ -194,9 +194,20 @@ function(rest_attach_dictionary target)
     COMMENT "Generating ${target}_LinkDef.h"
     VERBATIM)
 
+  # The headers by name ("as included", found in the include directories of the
+  # target): rootcling stores them in the dictionary and ROOT loads them when a
+  # class is autoloaded, from ROOT_INCLUDE_PATH (the installed include/). With
+  # the absolute path of the source tree, an install without the sources (the
+  # Docker image) fails ("Missing FileEntry for ...h")
+  set(_dict_headers "")
+  foreach(_header IN LISTS RAD_HEADERS)
+    get_filename_component(_name ${_header} NAME)
+    list(APPEND _dict_headers ${_name})
+  endforeach()
+
   root_generate_dictionary(
     G__${target}
-    ${RAD_HEADERS}
+    ${_dict_headers}
     MODULE
     ${target}
     LINKDEF
