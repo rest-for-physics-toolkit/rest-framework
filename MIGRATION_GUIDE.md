@@ -494,7 +494,7 @@ are not migrated.
 | TRestDetectorReadout, ReadoutPlane, ReadoutModule, ReadoutChannel, ReadoutPixel, ReadoutMapping, TRestDetectorGeometry, TRestDetectorSetup | TRestDetectorReadout (base), TRestMicromegasReadout, TRestGDMLReadout, TRestFibreReadout (new: fibre lattices), TRestDetectorReadoutManager |
 | TRestDetectorGas, TRestDetectorDriftVolume | TRestDetectorMedium (with TRestDetectorChargeResponse, TRestDetectorLightResponse; tables TRestDetectorTransportTable, TRestDetectorGainTable, TRestDetectorTransportManager) |
 | TRestDetectorHitsAnalysisProcess, TRestDetectorHitsSmearingProcess, TRestDetectorHitsToSignalProcess, TRestDetectorSignalToHitsProcess, TRestDetectorSignalRecoveryProcess | Same names |
-| TRestDetectorLightAttenuationProcess | TRestDetectorLightCollectionProcess, model `attenuation` (after TRestDetectorScintillationProcess, with the quantumEfficiency of the PMT: signals in photoelectrons) |
+| TRestDetectorLightAttenuationProcess | TRestDetectorLightCollectionProcess, model `attenuation` (after TRestDetectorScintillationProcess, with the quantumEfficiency of the PMT: signals in photoelectrons), then TRestDetectorPhotosensorProcess for the response of the PMT |
 | TRestDetectorAvalancheProcess | Same name, new meaning (gain tables) |
 | TRestDetectorElectronDiffusionProcess, TRestDetectorGarfieldDriftProcess | TRestDetectorHitsDriftProcess |
 | TRestDetectorFiducializationProcess | TRestDetectorHitsDriftProcess (hits outside the drift volume) |

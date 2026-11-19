@@ -14,11 +14,12 @@
 # volume of its veto (the light guide, readoutVolume of libraries/detector/examples/GDMLReadout.yaml:
 # veto_readout_output.root must be generated again with it) are attenuated and delayed with the distance
 # (attenuation model, light response of the medium) and the PMT converts them into photoelectrons
-# (quantumEfficiency of lightCollection), each with its time (the scintillation profile of BC408, the transit
-# time spread of the PMT) and charge (gain spread of the PMT); hitsToSignal collects them in the channels and
-# signalShaping gives the response of the electronics: the signals are in photoelectrons. The values of the light
-# are placeholders to be measured (BC408: about 10 photons per keV, rise 0.9 ns and decay 2.1 ns; the gain is
-# in ADC per photoelectron).
+# (quantumEfficiency of lightCollection), each with its time (the scintillation profile of BC408); the PMT
+# response (photosensor: transit time spread, gain spread, dark counts, afterpulses) gives a hit per avalanche
+# with its time and charge; hitsToSignal collects them in the channels and signalShaping gives the response
+# of the electronics: the signals are in photoelectrons. The values of the light and of the PMT are
+# placeholders to be measured (BC408: about 10 photons per keV, rise 0.9 ns and decay 2.1 ns; the gain is in
+# ADC per photoelectron).
 
 manager:
   class: "TRestManager"
@@ -74,9 +75,17 @@ manager:
       class: "TRestDetectorLightCollectionProcess"
       model: "attenuation"
       quantumEfficiency: 0.25  # PMT
+      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+    photosensor:
+      class: "TRestDetectorPhotosensorProcess"
       timeJitter: 0.5 ns  # PMT transit time spread
       gainSpread: 0.35  # PMT single photoelectron resolution
-      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+      darkCountRate: 1 kHz  # (placeholder values of a PMT)
+      darkCountWindow: [-4 us, 16 us]  # the raw signal window around the trigger
+      afterpulseProbability: 0.01  # ions, about 1.5 us after the pulse
+      afterpulseDelay: 1.5 us
+      afterpulseSpread: 0.2 us
+      observables: ["NAvalanches", "NDarkCounts", "NAfterpulses"]
     hitsToSignal:
       class: "TRestDetectorHitsToSignalProcess"
       sampling: 1 ns

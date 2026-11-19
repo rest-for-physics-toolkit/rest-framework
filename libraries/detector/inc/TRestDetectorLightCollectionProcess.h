@@ -16,8 +16,8 @@ class TRestDetectorReadout;
 /// \class TRestDetectorLightCollectionProcess
 /// \brief Collection of the scintillation photons of the hits (TRestDetectorScintillationProcess) by the
 /// readout channels and their detection: one hit per photoelectron, with its time (scintillation profile of
-/// the particle, transport and re-emission in the fibres, jitter of the photosensor) and its charge (gain
-/// spread of the photosensor), to be collected by TRestDetectorHitsToSignalProcess. A model for each kind of
+/// the particle, transport and re-emission in the fibres), for the response of the photosensor
+/// (TRestDetectorPhotosensorProcess) and TRestDetectorHitsToSignalProcess. A model for each kind of
 /// scintillator: `localCapture` (opaque scintillator, the channels near the photons
 /// capture them with a probability that depends on the distance, e.g. the fibres of LiquidO) or
 /// `attenuation` (transparent scintillator, the photons reach the readout of their channel attenuated and
@@ -44,8 +44,8 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// \brief Photoelectrons of the photons reaching a photosensor (Binomial(photons, quantumEfficiency)).
     int Detect(int photons);
     /// \brief Adds a hit per photoelectron at a channel position: the arrival time of its photon plus its
-    /// emission time (scintillation profile of the particle), the re-emission of the wavelength shifter and
-    /// the jitter of the photosensor, with charge 1 or Gauss(1, gainSpread).
+    /// emission time (scintillation profile of the particle) and the re-emission of the wavelength shifter,
+    /// with charge 1.
     void AddPhotoelectrons(const ROOT::Math::XYZVector& position, int photoelectrons, double time,
                            int particleID, TRestDetectorHitsEvent& output);
 
@@ -90,14 +90,6 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// a photoelectron
     double fQuantumEfficiency = 1;
 
-    /// `timeJitter`: standard deviation of the Gaussian time jitter of the photosensor (transit time spread,
-    /// 0: none)
-    TRestWithUnits fTimeJitter = 0;  // us
-
-    /// `gainSpread`: relative spread (sigma / mean) of the charge of a photoelectron, the gain fluctuation of
-    /// the photosensor (0: charge 1)
-    double fGainSpread = 0;
-
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
     /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
@@ -109,9 +101,9 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     /// \brief Builds the process from the section sectionName of a YAML file (LoadConfig).
     TRestDetectorLightCollectionProcess(const std::string& fileName, const std::string& sectionName);
 
-    /// \brief Reads the parameters; throws if the model is unknown, quantumEfficiency is not in [0, 1],
-    /// timeJitter or gainSpread is negative, or for localCapture if maxDistance is not positive or
-    /// captureProbability is not a valid formula or graph.
+    /// \brief Reads the parameters; throws if the model is unknown, quantumEfficiency is not in [0, 1], or
+    /// for localCapture if maxDistance is not positive or captureProbability is not a valid formula or
+    /// graph.
     void LoadConfig() override;
     /// \brief Gets the readout, the light response of the medium (needed for attenuation) and the wls
     /// response of wlsMedium, and registers the observables NPhotoelectrons and NHitsWithoutChannel.

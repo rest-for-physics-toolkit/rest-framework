@@ -1,6 +1,7 @@
 #ifndef TRESTDETECTORREADOUT_H
 #define TRESTDETECTORREADOUT_H
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -315,6 +316,15 @@ class TRestDetectorReadout : public TRestMetadata {
     /// \param daqID DAQ channel identifier.
     /// \return `true` if the channel is connected.
     bool IsChannelConnected(int daqID) const { return fDAQToPhysicalMap.count(daqID) > 0; }
+
+    /// \brief The DAQ channels of the decoding table, sorted (e.g. to add the dark counts of every channel).
+    std::vector<int> GetDAQChannels() const {
+        std::vector<int> channels;
+        channels.reserve(fDAQToPhysicalMap.size());
+        for (const auto& entry : fDAQToPhysicalMap) channels.push_back(entry.first);
+        std::sort(channels.begin(), channels.end());
+        return channels;
+    }
 
     /// \brief Returns the DAQ channel of a physical ID, or -1 if it is not in the decoding table.
     int GetDAQID(int physicalID) const {

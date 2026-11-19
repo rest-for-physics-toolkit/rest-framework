@@ -17,7 +17,7 @@
 using namespace REST_Units;
 
 TEST(Units, ParseUnitFactors) {
-    // REST units: keV, us, mm, kg, V, T, bar, rad
+    // REST units: keV, us, mm, kg, V, T, bar, rad, MHz (1/us)
     EXPECT_DOUBLE_EQ(ParseUnit("keV"), 1.);
     EXPECT_DOUBLE_EQ(ParseUnit("MeV"), 1e3);
     EXPECT_DOUBLE_EQ(ParseUnit("eV"), 1e-3);
@@ -28,6 +28,8 @@ TEST(Units, ParseUnitFactors) {
     EXPECT_DOUBLE_EQ(ParseUnit("mbar"), 1e-3);
     EXPECT_DOUBLE_EQ(ParseUnit("G"), 1e-4);
     EXPECT_DOUBLE_EQ(ParseUnit("deg"), TMath::DegToRad());
+    EXPECT_DOUBLE_EQ(ParseUnit("kHz"), 1e-3);
+    EXPECT_DOUBLE_EQ(ParseUnit("kHz") * ParseUnit("ms"), 1.);  // a rate times a time
     // Empty: no units
     EXPECT_DOUBLE_EQ(ParseUnit(""), 1.);
 }
@@ -77,6 +79,7 @@ TEST(Units, FormatAs) {
     EXPECT_EQ(FormatAs(5900., Energy), "5.90 MeV");
     EXPECT_EQ(FormatAs(0., Length), "0");
     EXPECT_EQ(FormatAs(1500., Length), "1.50 m");
+    EXPECT_EQ(FormatAs(0.1, Frequency), "100.00 kHz");
     EXPECT_EQ(FormatAs(0.5, Time), "500.00 ns");
     EXPECT_EQ(FormatAs(2., Voltage), "2.00 V");
     EXPECT_EQ(FormatAs(ROOT::Math::XYZVector(1, 2, 3), Length), "(1.00 mm, 2.00 mm, 3.00 mm)");

@@ -131,8 +131,9 @@ their case.
 ### 2.2 Values with units
 
 REST stores every quantity in its units: energy in keV, time in us, length in mm, mass in kg, voltage in V,
-magnetic field in T, pressure in bar and angle in rad. A numerical field of physical meaning accepts a value
-with units, converted to the REST units when it is read (and stored converted):
+magnetic field in T, pressure in bar, angle in rad and frequency in MHz (1/us). A numerical field of
+physical meaning accepts a value with units, converted to the REST units when it is read (and stored
+converted):
 
 ```yaml
 energy: 5.9 keV          # 5.9
@@ -141,12 +142,13 @@ driftField: 100 V/cm     # 10 (V/mm)
 gasThickness: 9 cm       # 90
 pressure: 1.4 bar
 angle: 30 deg
+darkCountRate: 100 kHz   # 0.1 (MHz, per us)
 ```
 
 Units of each quantity: `meV eV keV MeV GeV TeV J kJ`, `ns us ms s hr day yr`, `nm um mm cm m km`,
-`mg g kg ton`, `mV V kV`, `mT T G`, `bar mbar atm Pa kPa MPa torr`, `rad deg degree arcmin arcsec`, and
-expressions of them (`kV/cm`, `mm/us`). A number without units is taken in REST units. The list is in
-[TRestSystemOfUnits.h](../source/tools/inc/TRestSystemOfUnits.h).
+`mg g kg ton`, `mV V kV`, `mT T G`, `bar mbar atm Pa kPa MPa torr`, `rad deg degree arcmin arcsec`,
+`Hz kHz MHz GHz`, and expressions of them (`kV/cm`, `mm/us`). A number without units is taken in REST
+units. The list is in [TRestSystemOfUnits.h](../source/tools/inc/TRestSystemOfUnits.h).
 
 ### 2.3 Parameters (`parameters`, `${PARAM:name}`, `--set`)
 
@@ -944,16 +946,17 @@ The [detector library](../libraries/detector/README.md) describes the detector:
   particle of each hit is its `fHitParticleID`) and a `wls` response for wavelength shifters such as WLS
   fibres (`attenuationLength` and `lightSpeed` along them, `decayTime` of the re-emission,
   `endReflectivity` of the ends not read). The light is
-  simulated in two processes:
-  `TRestDetectorScintillationProcess` (photons produced) and `TRestDetectorLightCollectionProcess` (photons
+  simulated in three processes:
+  `TRestDetectorScintillationProcess` (photons produced), `TRestDetectorLightCollectionProcess` (photons
   reaching each channel and their photoelectrons with the quantum efficiency: `localCapture` for opaque
   scintillators such as LiquidO, with `wlsMedium` the capture by the fibre, half of the light in each
   direction, attenuated and delayed along the fibre to its read end, the half going to an end not read
-  reflected with `endReflectivity`, `attenuation` for transparent ones read at an end such as the vetoes; a hit per photoelectron, with
-  its time from the scintillation profile of its particle, the re-emission of the `wlsMedium` and the
-  `timeJitter` of the photosensor, and its charge with the `gainSpread` of the photosensor), followed by the
-  generic `TRestDetectorHitsToSignalProcess` and `TRestDetectorSignalShapingProcess` (single photoelectron
-  response and gain).
+  reflected with `endReflectivity`, `attenuation` for transparent ones read at an end such as the vetoes;
+  a hit per photoelectron, with its time from the scintillation profile of its particle and the
+  re-emission of the `wlsMedium`), `TRestDetectorPhotosensorProcess` (the response of the SiPM or PMT, a
+  hit per avalanche: `timeJitter`, `gainSpread`, dark counts, crosstalk, afterpulses and the saturation of
+  the cells of a SiPM), followed by the generic `TRestDetectorHitsToSignalProcess` and
+  `TRestDetectorSignalShapingProcess` (single photoelectron response and gain).
   The processes find the readout by name (`readout`, optional if there is only one) and the medium by name
   and the response they use (`medium`, `wlsMedium`): without a name, the only medium with that key
   (`charge`, `light` or `wls`), so a scintillator, its fibres and a gas need no names unless two media have

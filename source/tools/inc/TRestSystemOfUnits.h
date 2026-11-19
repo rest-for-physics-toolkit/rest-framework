@@ -15,9 +15,9 @@
 
 #include "TRestLogManager.h"
 
-/// \brief System of units of REST: the values are stored in the REST units keV, us, mm, kg, V, T, bar and
-/// rad, and the configuration gives them with units ("300 V", "1 kV/cm", "5.9 keV"), converted with
-/// ParseUnit and ParseValueWithUnits (TRestWithUnits for the configuration fields).
+/// \brief System of units of REST: the values are stored in the REST units keV, us, mm, kg, V, T, bar, rad
+/// and MHz (1/us), and the configuration gives them with units ("300 V", "1 kV/cm", "5.9 keV", "100 kHz"),
+/// converted with ParseUnit and ParseValueWithUnits (TRestWithUnits for the configuration fields).
 ///
 /// \author Javier Galán <javier.galan@unizar.es>
 /// \author Kaixiang Ni
@@ -25,7 +25,18 @@
 namespace REST_Units {
 
 /// Physical quantity of a unit
-enum Physical_Unit { Energy, Time, Length, Mass, Voltage, MagneticField, Pressure, Angle, NOT_A_UNIT = -1 };
+enum Physical_Unit {
+    Energy,
+    Time,
+    Length,
+    Mass,
+    Voltage,
+    MagneticField,
+    Pressure,
+    Angle,
+    Frequency,
+    NOT_A_UNIT = -1
+};
 
 /// Units known: symbol -> (quantity, factor to the REST unit of the quantity), e.g. "cm" -> (Length, 10)
 inline std::map<std::string, std::pair<Physical_Unit, double>> REST_Units_Map = {
@@ -87,13 +98,19 @@ inline std::map<std::string, std::pair<Physical_Unit, double>> REST_Units_Map = 
     {"degree", {Angle, TMath::DegToRad()}},
     {"arcmin", {Angle, TMath::DegToRad() / 60.}},
     {"arcsec", {Angle, TMath::DegToRad() / 3600.}},
+
+    // ================== Frequency (base = MHz = 1/us, the inverse of the time unit) ==================
+    {"Hz", {Frequency, 1e-6}},
+    {"kHz", {Frequency, 1e-3}},
+    {"MHz", {Frequency, 1.}},  // base
+    {"GHz", {Frequency, 1e3}},
 };
 
 /// \brief Factor to REST units of a units expression (e.g. "kV/cm", "keV^2"); 1 if empty. Throws
 /// std::invalid_argument if a unit is unknown or the expression is not valid.
 double ParseUnit(const std::string& UnitsExpr);
 
-/// \brief A value in REST units written in the SI unit of the quantity (eV, s, m, g, V, T, bar, rad) with
+/// \brief A value in REST units written in the SI unit of the quantity (eV, s, m, g, V, T, bar, rad, Hz) with
 /// an SI prefix (n, u, m, k, M, G, T) and 2 decimals, e.g. FormatAs(5.9, Energy) = "5.90 keV"; "0" for 0
 /// and the plain number for NOT_A_UNIT.
 template <typename T>
@@ -128,6 +145,9 @@ inline std::string FormatAs(T value, Physical_Unit quantity) {
     } else if (quantity == Angle) {
         baseUnitSymbol = "rad";
         factorToBase = 1.0 / REST_Units_Map["rad"].second;  // rad -> rad (1.0)
+    } else if (quantity == Frequency) {
+        baseUnitSymbol = "Hz";
+        factorToBase = 1.0 / REST_Units_Map["Hz"].second;  // MHz -> Hz
     } else {
         return std::to_string(val);
     }

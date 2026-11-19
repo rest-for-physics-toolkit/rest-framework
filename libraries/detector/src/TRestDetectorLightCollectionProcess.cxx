@@ -4,19 +4,19 @@
 /// each channel (SiPM, PMT): the photons reaching it give Binomial(N, quantumEfficiency) photoelectrons.
 /// Each photoelectron is an output hit, at a position that the readout assigns to its channel (so
 /// TRestDetectorHitsToSignalProcess puts it in that channel), with the particle of the input hit, the
-/// charge 1 in units of the mean single photoelectron charge, or Gauss(1, gainSpread) truncated at 0 with
-/// the relative spread of the gain of the photosensor (e.g. 0.3-0.4 for a PMT, 0.1 for a SiPM), and the time
+/// charge 1 (one photoelectron) and the time its photon reaches the photosensor
 ///
-///     t = t_hit + t_transport + t_scintillation + t_wls + t_jitter
+///     t = t_hit + t_transport + t_scintillation + t_wls
 ///
 /// - t_transport: the delay to the photosensor of the model (below);
 /// - t_scintillation: emission time of the photon, sampled from the scintillation profile of the particle
 ///   of the hit (TRestDetectorLightResponse::GetScintillationTime of the medium with `light`; the default
 ///   profile for unknown particles, 0 without profiles or without such a medium);
-/// - t_wls: re-emission delay of the fibres, Exp(decayTime) of the `wls` response of wlsMedium;
-/// - t_jitter: Gaussian time jitter of the photosensor (timeJitter, transit time spread).
+/// - t_wls: re-emission delay of the fibres, Exp(decayTime) of the `wls` response of wlsMedium.
 ///
-/// TRestDetectorHitsToSignalProcess then gives the signals in photoelectrons (its sampling bins the times);
+/// TRestDetectorPhotosensorProcess then gives the response of the photosensor (time jitter, gain spread,
+/// dark counts, crosstalk, afterpulses, saturation) and TRestDetectorHitsToSignalProcess the signals in
+/// photoelectrons (its sampling bins the times);
 /// the pulse of a photoelectron and the mean gain of the photosensor go into
 /// TRestDetectorSignalShapingProcess (e.g. `exponential` or `gaus` with a shapingTime of a few ns for a PMT),
 /// so the pulse of an event is the scintillation profile convolved with the single photoelectron response,
@@ -56,14 +56,15 @@
 ///
 /// Parameters: model (localCapture), readout (empty: the data readout of the TRestDetectorReadoutManager),
 /// medium (name of the TRestDetectorMedium with `light`; empty: the only one with `light`, needed for
-/// attenuation), captureProbability, maxDistance and wlsMedium (localCapture), quantumEfficiency (1),
-/// timeJitter (0), gainSpread (0), seed (0: random seed; otherwise the generator is re-seeded at each event
-/// from the seed and the event and subevent IDs).
+/// attenuation), captureProbability, maxDistance and wlsMedium (localCapture), quantumEfficiency (1), seed
+/// (0: random seed; otherwise the generator is re-seeded at each event from the seed and the event and
+/// subevent IDs).
 ///
 /// Differences with the previous version of restv2: the times and charges of the photoelectrons were given
 /// by TRestDetectorLightToSignalProcess (removed), now TRestDetectorHitsToSignalProcess as for the charge;
 /// with wlsMedium captureProbability was per channel and all the captured light went to its read end, now it
-/// is per fibre, half in each direction (the reflected half needs endReflectivity).
+/// is per fibre, half in each direction (the reflected half needs endReflectivity); timeJitter and
+/// gainSpread were parameters of this process, now of TRestDetectorPhotosensorProcess.
 ///
 /// Examples:
 ///
@@ -75,9 +76,11 @@
 ///      maxDistance: 30 mm
 ///      wlsMedium: "Y11"         # medium of the fibres with a `wls` response
 ///      quantumEfficiency: 0.4   # SiPMs
+///      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+///    photosensor:
+///      class: "TRestDetectorPhotosensorProcess"
 ///      timeJitter: 0.2 ns
 ///      gainSpread: 0.1
-///      observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
 ///    hitsToSignal:
 ///      class: "TRestDetectorHitsToSignalProcess"
 ///      sampling: 0.04 us
@@ -89,8 +92,6 @@
 ///      readout: "Veto_Readout"
 ///      medium: "BC408"
 ///      quantumEfficiency: 0.25  # PMT
-///      timeJitter: 0.5 ns
-///      gainSpread: 0.35
 ///
 /// The attenuation model replaces the legacy TRestDetectorLightAttenuationProcess (energy E exp(-d/λ) of the
 /// veto hits), now with photons; its parameters (vetoLightAttenuationLength, vetoEffectiveLightSpeed) are
@@ -148,8 +149,6 @@ static const bool TRestDetectorLightCollectionProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("captureProbability", &P::fCaptureProbability);
     reg.RegisterField<P>("maxDistance", &P::fMaxDistance);
     reg.RegisterField<P>("quantumEfficiency", &P::fQuantumEfficiency);
-    reg.RegisterField<P>("timeJitter", &P::fTimeJitter);
-    reg.RegisterField<P>("gainSpread", &P::fGainSpread);
     reg.RegisterField<P>("seed", &P::fSeed);
     return true;
 }();
@@ -223,9 +222,6 @@ void TRestDetectorLightCollectionProcess::LoadConfig() {
     if (fQuantumEfficiency < 0 || fQuantumEfficiency > 1) {
         throw std::runtime_error(prefix + "quantumEfficiency must be in [0, 1]");
     }
-    if (fTimeJitter < 0 || fGainSpread < 0) {
-        throw std::runtime_error(prefix + "timeJitter and gainSpread must be >= 0");
-    }
     fCapture = nullptr;
     if (fModel == "localCapture") {
         if (fMaxDistance <= 0) throw std::runtime_error(prefix + "localCapture needs maxDistance > 0");
@@ -286,9 +282,7 @@ void TRestDetectorLightCollectionProcess::AddPhotoelectrons(const XYZVector& pos
         double t = time;
         if (profile) t += profile->SampleTime(fRandom);
         if (fWLS) t += fWLS->GetReemissionTime(fRandom);
-        if (fTimeJitter > 0) t += fRandom.Gaus(0, fTimeJitter);
-        const double charge = fGainSpread > 0 ? std::max(0.0, fRandom.Gaus(1, fGainSpread)) : 1.0;
-        output.AddHit(position, charge, t, TRestDetectorHitsEvent::REST_HitType::XYZ, particleID);
+        output.AddHit(position, 1.0, t, TRestDetectorHitsEvent::REST_HitType::XYZ, particleID);
     }
     fNPhotoelectrons += photoelectrons;
 }

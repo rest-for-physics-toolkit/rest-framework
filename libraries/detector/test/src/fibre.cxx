@@ -1,10 +1,12 @@
 /// Unit tests of the fibre readout (TRestFibreReadout) and of the light processes: the primary scintillation
 /// (TRestDetectorScintillationProcess, light yield of the medium) and the collection of the light by the
 /// channels and its photoelectrons (TRestDetectorLightCollectionProcess, models localCapture and attenuation,
-/// quantum efficiency, a hit per photoelectron with the scintillation time profile of its particle) and their
-/// signals (TRestDetectorHitsToSignalProcess). The readout is a box of 100 mm with two families of fibres of
-/// pitch 20 mm, built in memory; the attenuation model uses a minimal readout of the test (a bar read at
-/// x = 0). The processes get the readout and the medium from a TRestManager created from a YAML string.
+/// quantum efficiency, a hit per photoelectron with the scintillation time profile of its particle), the
+/// response of the photosensors (TRestDetectorPhotosensorProcess: jitter, gain spread, crosstalk,
+/// afterpulses, saturation of the cells, dark counts) and the signals (TRestDetectorHitsToSignalProcess).
+/// The readout is a box of 100 mm with two families of fibres of pitch 20 mm, built in memory; the
+/// attenuation model uses a minimal readout of the test (a bar read at x = 0). The processes get the
+/// readout and the medium from a TRestManager created from a YAML string.
 
 #include <TFile.h>
 #include <TGraph.h>
@@ -13,6 +15,7 @@
 #include <TRestDetectorHitsToSignalProcess.h>
 #include <TRestDetectorLightCollectionProcess.h>
 #include <TRestDetectorMedium.h>
+#include <TRestDetectorPhotosensorProcess.h>
 #include <TRestDetectorReadoutManager.h>
 #include <TRestDetectorScintillationProcess.h>
 #include <TRestDetectorSignalEvent.h>
@@ -24,6 +27,7 @@
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -741,25 +745,220 @@ TEST(DetectorLightCollectionProcess, PhotoelectronTimesPerParticle) {
     noWLS.SetManager(withFibres.manager.get());
     EXPECT_THROW(noWLS.Initialize(), std::runtime_error);
 
-    // Gain spread: the charge of each photoelectron Gauss(1, 0.3), 2000 of them on the fibre 7
-    auto spread = MakeProcess<TRestDetectorLightCollectionProcess>(
-        detector, analysis, "lightCollection", "{" + capture + ", seed: 4, gainSpread: 0.3}");
-    TRestDetectorHitsEvent fluctuating;
-    ASSERT_TRUE(spread->ProcessEvent(photons, fluctuating));
-    double charge7 = 0;
-    for (size_t n = 0; n < fluctuating.GetNumberOfHits(); n++) {
-        const auto p = fluctuating.GetPosition(n);
-        if (detector.readout->GetChannelFromPosition(p.X(), p.Y(), p.Z()) == 7) {
-            charge7 += fluctuating.GetEnergy(n);
-        }
-    }
-    EXPECT_NEAR(charge7, 2000, 5 * 0.3 * std::sqrt(2000.));
-    EXPECT_NE(charge7, 2000);
-    EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"), 4000);
+    // The jitter and the gain spread are of TRestDetectorPhotosensorProcess: unknown keys here
+    EXPECT_ANY_THROW(MetadataClassRegistry::Instance().Create(
+        "TRestDetectorLightCollectionProcess", "c", YAML::Load("{" + capture + ", timeJitter: 1 ns}")));
+}
 
-    // Negative jitter or gain spread
-    EXPECT_ANY_THROW(
-        TRestDetectorLightCollectionProcess("c", YAML::Load("{" + capture + ", timeJitter: -1 ns}")));
-    EXPECT_ANY_THROW(
-        TRestDetectorLightCollectionProcess("c", YAML::Load("{" + capture + ", gainSpread: -1}")));
+// ============================================================================
+// Photosensors
+// ============================================================================
+
+namespace {
+/// n photoelectrons at the read end of a channel of the fibre readout, at time t (us), particle 11
+void AddPhotoelectrons(TRestDetectorHitsEvent& event, const Detector& detector, int channel, int n,
+                       double t) {
+    const XYZVector end = detector.readout->GetReadoutPosition(channel);
+    for (int p = 0; p < n; p++) event.AddHit(end, 1, t, TRestHitsData::REST_HitType::XYZ, 11);
+}
+
+/// Number of hits, total charge and mean time of the hits of each channel
+struct ChannelSums {
+    int hits = 0;
+    double charge = 0, time = 0, time2 = 0;
+};
+std::map<int, ChannelSums> SumsPerChannel(const TRestDetectorHitsEvent& event, const Detector& detector) {
+    std::map<int, ChannelSums> sums;
+    for (size_t n = 0; n < event.GetNumberOfHits(); n++) {
+        const auto p = event.GetPosition(n);
+        auto& sum = sums[detector.readout->GetChannelFromPosition(p.X(), p.Y(), p.Z())];
+        sum.hits++;
+        sum.charge += event.GetEnergy(n);
+        sum.time += event.GetTime(n);
+        sum.time2 += event.GetTime(n) * event.GetTime(n);
+    }
+    return sums;
+}
+}  // namespace
+
+TEST(DetectorPhotosensorProcess, JitterAndGainSpread) {
+    auto detector = MakeDetector();
+    AnalysisTree analysis;
+    TRestDetectorHitsEvent photoelectrons;
+    photoelectrons.SetID(3);
+    AddPhotoelectrons(photoelectrons, detector, 7, 2000, 1);
+    photoelectrons.AddHit(0, 60, 50, 1, 1);  // outside the readout: dropped
+
+    // Without effects: a hit of charge 1 per photoelectron, at its time
+    auto ideal = MakeProcess<TRestDetectorPhotosensorProcess>(detector, analysis, "photosensor",
+                                                              "{observables: [NAvalanches]}");
+    TRestDetectorHitsEvent avalanches;
+    ASSERT_TRUE(ideal->ProcessEvent(photoelectrons, avalanches));
+    EXPECT_EQ(avalanches.GetID(), 3);
+    ASSERT_EQ(avalanches.GetNumberOfHits(), 2000u);
+    EXPECT_EQ(analysis.Get<int>("photosensor_NAvalanches"), 2000);
+    for (size_t n = 0; n < avalanches.GetNumberOfHits(); n++) {
+        EXPECT_DOUBLE_EQ(avalanches.GetEnergy(n), 1);
+        EXPECT_DOUBLE_EQ(avalanches.GetTime(n), 1);
+        EXPECT_EQ(avalanches.GetParticleID(n), 11);
+    }
+
+    // Jitter of 1 ns and gain spread of 0.3: the charges Gauss(1, 0.3), the times Gauss(1 us, 1 ns)
+    auto real = MakeProcess<TRestDetectorPhotosensorProcess>(detector, analysis, "photosensor",
+                                                             "{timeJitter: 1 ns, gainSpread: 0.3, seed: 4}");
+    ASSERT_TRUE(real->ProcessEvent(photoelectrons, avalanches));
+    const auto sums = SumsPerChannel(avalanches, detector);
+    ASSERT_EQ(sums.size(), 1u);
+    const auto& sum = sums.at(7);
+    ASSERT_EQ(sum.hits, 2000);
+    EXPECT_NEAR(sum.charge, 2000, 5 * 0.3 * std::sqrt(2000.));
+    EXPECT_NE(sum.charge, 2000);
+    const double mean = sum.time / sum.hits;
+    EXPECT_NEAR(mean, 1, 5 * 1e-3 / std::sqrt(2000.));
+    EXPECT_NEAR(std::sqrt(sum.time2 / sum.hits - mean * mean), 1e-3, 1e-4);
+
+    // Same seed and event: the same avalanches
+    TRestDetectorHitsEvent again;
+    ASSERT_TRUE(real->ProcessEvent(photoelectrons, again));
+    EXPECT_DOUBLE_EQ(again.GetTime(10), avalanches.GetTime(10));
+    EXPECT_DOUBLE_EQ(again.GetEnergy(10), avalanches.GetEnergy(10));
+}
+
+TEST(DetectorPhotosensorProcess, CrosstalkAndAfterpulses) {
+    auto detector = MakeDetector();
+    AnalysisTree analysis;
+    TRestDetectorHitsEvent photoelectrons;
+    AddPhotoelectrons(photoelectrons, detector, 7, 4000, 1);
+    const std::string observables = "observables: [NAvalanches, NCrosstalk, NAfterpulses]";
+
+    // Crosstalk 0.2: each avalanche triggers another with 0.2, 1 / (1 - 0.2) = 1.25 avalanches per
+    // photoelectron, all at the time of the photoelectron
+    auto crosstalk = MakeProcess<TRestDetectorPhotosensorProcess>(
+        detector, analysis, "photosensor", "{crosstalkProbability: 0.2, seed: 5, " + observables + "}");
+    TRestDetectorHitsEvent avalanches;
+    ASSERT_TRUE(crosstalk->ProcessEvent(photoelectrons, avalanches));
+    const int total = analysis.Get<int>("photosensor_NAvalanches");
+    EXPECT_EQ(total, static_cast<int>(avalanches.GetNumberOfHits()));
+    EXPECT_EQ(analysis.Get<int>("photosensor_NCrosstalk"), total - 4000);
+    EXPECT_EQ(analysis.Get<int>("photosensor_NAfterpulses"), 0);
+    // Variance of the number of avalanches per photoelectron: p / (1 - p)^2 = 0.3125
+    EXPECT_NEAR(total, 5000, 5 * std::sqrt(4000 * 0.3125));
+    for (size_t n = 0; n < avalanches.GetNumberOfHits(); n++) EXPECT_DOUBLE_EQ(avalanches.GetTime(n), 1);
+
+    // Afterpulses 0.1 with an exponential delay of 50 ns: 1 / (1 - 0.1) avalanches per photoelectron, the
+    // afterpulses 50 ns later on average (or more, the afterpulses of afterpulses)
+    auto afterpulses = MakeProcess<TRestDetectorPhotosensorProcess>(
+        detector, analysis, "photosensor",
+        "{afterpulseProbability: 0.1, afterpulseDelay: 50 ns, seed: 6, " + observables + "}");
+    ASSERT_TRUE(afterpulses->ProcessEvent(photoelectrons, avalanches));
+    const int nAfterpulses = analysis.Get<int>("photosensor_NAfterpulses");
+    EXPECT_EQ(analysis.Get<int>("photosensor_NAvalanches"), 4000 + nAfterpulses);
+    EXPECT_NEAR(nAfterpulses, 4000 * 0.1 / 0.9, 5 * std::sqrt(4000 * 0.1 / 0.81));
+    double delay = 0;
+    for (size_t n = 0; n < avalanches.GetNumberOfHits(); n++) {
+        EXPECT_GE(avalanches.GetTime(n), 1);
+        delay += avalanches.GetTime(n) - 1;
+    }
+    // Mean delay of an afterpulse after its photoelectron: 50 ns / (1 - 0.1) (chains of afterpulses)
+    EXPECT_NEAR(delay / nAfterpulses, 0.050 / 0.9, 0.010);
+
+    // PMT: Gaussian delay of 1.5 us with 0.1 us of spread
+    auto ions = MakeProcess<TRestDetectorPhotosensorProcess>(
+        detector, analysis, "photosensor",
+        "{afterpulseProbability: 0.05, afterpulseDelay: 1.5 us, afterpulseSpread: 0.1 us, seed: 7}");
+    ASSERT_TRUE(ions->ProcessEvent(photoelectrons, avalanches));
+    int late = 0;
+    for (size_t n = 0; n < avalanches.GetNumberOfHits(); n++) {
+        const double t = avalanches.GetTime(n);
+        if (t == 1) continue;
+        late++;
+        // k afterpulses in a row: k * 1.5 us after the photoelectron, a spread of sqrt(k) 0.1 us
+        const double k = std::max(1.0, std::round((t - 1) / 1.5));
+        EXPECT_LT(std::abs(t - 1 - 1.5 * k), 0.6 * std::sqrt(k)) << t;
+    }
+    EXPECT_NEAR(late, 4000 * 0.05 / 0.95, 5 * std::sqrt(4000 * 0.05));
+}
+
+TEST(DetectorPhotosensorProcess, SaturationOfTheCells) {
+    auto detector = MakeDetector();
+    AnalysisTree analysis;
+    const std::string observables = "observables: [NAvalanches, NSaturationLosses]";
+
+    // 1000 simultaneous photoelectrons on 1000 cells: 1000 (1 - exp(-1)) = 632 avalanches on average
+    TRestDetectorHitsEvent photoelectrons;
+    AddPhotoelectrons(photoelectrons, detector, 7, 1000, 1);
+    auto sipm = MakeProcess<TRestDetectorPhotosensorProcess>(detector, analysis, "photosensor",
+                                                             "{cells: 1000, seed: 8, " + observables + "}");
+    TRestDetectorHitsEvent avalanches;
+    ASSERT_TRUE(sipm->ProcessEvent(photoelectrons, avalanches));
+    const int fired = analysis.Get<int>("photosensor_NAvalanches");
+    EXPECT_EQ(fired, static_cast<int>(avalanches.GetNumberOfHits()));
+    EXPECT_EQ(fired + analysis.Get<int>("photosensor_NSaturationLosses"), 1000);
+    EXPECT_NEAR(fired, 1000 * (1 - std::exp(-1.)), 50);
+
+    // One cell: one avalanche per event; with a recovery time of 0.5 us, again 1 us later
+    TRestDetectorHitsEvent twoPulses;
+    AddPhotoelectrons(twoPulses, detector, 7, 3, 1);
+    AddPhotoelectrons(twoPulses, detector, 7, 3, 2);
+    AddPhotoelectrons(twoPulses, detector, 35, 3, 1);  // other channel, its own cells
+    auto oneCell = MakeProcess<TRestDetectorPhotosensorProcess>(detector, analysis, "photosensor",
+                                                                "{cells: 1, " + observables + "}");
+    ASSERT_TRUE(oneCell->ProcessEvent(twoPulses, avalanches));
+    EXPECT_EQ(avalanches.GetNumberOfHits(), 2u);
+    EXPECT_EQ(analysis.Get<int>("photosensor_NSaturationLosses"), 7);
+    auto recovering = MakeProcess<TRestDetectorPhotosensorProcess>(
+        detector, analysis, "photosensor", "{cells: 1, cellRecoveryTime: 0.5 us, " + observables + "}");
+    ASSERT_TRUE(recovering->ProcessEvent(twoPulses, avalanches));
+    const auto sums = SumsPerChannel(avalanches, detector);
+    EXPECT_EQ(sums.at(7).hits, 2);
+    EXPECT_DOUBLE_EQ(sums.at(7).time, 1 + 2);
+    EXPECT_EQ(sums.at(35).hits, 1);
+}
+
+TEST(DetectorPhotosensorProcess, DarkCountsOfEveryChannel) {
+    auto detector = MakeDetector();
+    AnalysisTree analysis;
+    TRestDetectorHitsEvent photoelectrons;
+    AddPhotoelectrons(photoelectrons, detector, 7, 1, 1);
+
+    // 1 MHz in 10 us: 10 dark counts per channel on average, in the 50 fibres
+    auto dark = MakeProcess<TRestDetectorPhotosensorProcess>(
+        detector, analysis, "photosensor",
+        "{darkCountRate: 1 MHz, darkCountWindow: [-2 us, 8 us], seed: 9, observables: [NDarkCounts]}");
+    TRestDetectorHitsEvent avalanches;
+    ASSERT_TRUE(dark->ProcessEvent(photoelectrons, avalanches));
+    const int darkCounts = analysis.Get<int>("photosensor_NDarkCounts");
+    EXPECT_EQ(static_cast<int>(avalanches.GetNumberOfHits()), darkCounts + 1);
+    EXPECT_NEAR(darkCounts, 500, 5 * std::sqrt(500.));
+    // Each dark count at a position of its channel (found back by TRestDetectorHitsToSignalProcess), in the
+    // window, particle 0
+    const auto sums = SumsPerChannel(avalanches, detector);
+    EXPECT_EQ(sums.count(-1), 0u);
+    EXPECT_GT(sums.size(), 40u);
+    for (size_t n = 0; n < avalanches.GetNumberOfHits(); n++) {
+        if (avalanches.GetParticleID(n) == 11) continue;
+        EXPECT_EQ(avalanches.GetParticleID(n), 0);
+        EXPECT_GE(avalanches.GetTime(n), -2);
+        EXPECT_LE(avalanches.GetTime(n), 8);
+    }
+    // 100 kHz with the unit
+    TRestDetectorPhotosensorProcess rate("p",
+                                         YAML::Load("{darkCountRate: 100 kHz, darkCountWindow: [0, 1]}"));
+    EXPECT_DOUBLE_EQ(rate.fDarkCountRate, 0.1);
+}
+
+TEST(DetectorPhotosensorProcess, WrongParameters) {
+    auto make = [](const std::string& yaml) { TRestDetectorPhotosensorProcess("p", YAML::Load(yaml)); };
+    EXPECT_NO_THROW(make("{}"));
+    EXPECT_ANY_THROW(make("{timeJitter: -1 ns}"));
+    EXPECT_ANY_THROW(make("{gainSpread: -1}"));
+    EXPECT_ANY_THROW(make("{darkCountRate: -1 kHz, darkCountWindow: [0, 1 us]}"));
+    EXPECT_ANY_THROW(make("{darkCountRate: 1 kHz}"));  // no window
+    EXPECT_ANY_THROW(make("{darkCountRate: 1 kHz, darkCountWindow: [1 us, 0]}"));
+    EXPECT_ANY_THROW(make("{crosstalkProbability: 1}"));
+    EXPECT_ANY_THROW(make("{afterpulseProbability: -0.1, afterpulseDelay: 1 us}"));
+    EXPECT_ANY_THROW(make("{afterpulseProbability: 0.1}"));  // no delay
+    EXPECT_ANY_THROW(make("{crosstalkProbability: 0.6, afterpulseProbability: 0.5, afterpulseDelay: 1 us}"));
+    EXPECT_ANY_THROW(make("{cells: -1}"));
+    EXPECT_ANY_THROW(make("{cellRecoveryTime: -1 ns}"));
 }
