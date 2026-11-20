@@ -262,6 +262,7 @@ set(REST_LIBRARIES
 
 # Tests (GoogleTest, ctest): OFF by default. Unit tests in the test/ directory
 # of each component (cmake/RestTests.cmake), label = component (ctest -L core);
+# the pipelines of the examples on real data (label pipelines, examples/test);
 # the restG4 examples are tests only with REST_G4 (label restG4). ctest runs all
 # of them; the target check builds and runs them
 option(BUILD_TESTING "Build the tests (requires GoogleTest)" OFF)
@@ -291,6 +292,14 @@ if(BUILD_TESTING)
       add_subdirectory(libraries/${_library}/test)
     endif()
   endforeach()
+  # Pipeline tests of the examples (label pipelines): real data of
+  # rest-common-data through the raw, detector, track and connectors libraries
+  if(TARGET ${RAW_LIB}
+     AND TARGET ${DETECTOR_LIB}
+     AND TARGET ${TRACK_LIB}
+     AND TARGET ${CONNECTORS_LIB})
+    add_subdirectory(examples/test)
+  endif()
 endif()
 
 option(REST_G4

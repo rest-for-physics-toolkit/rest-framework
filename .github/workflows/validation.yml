@@ -112,6 +112,8 @@ jobs:
         run: cd "$BUILD_DIR" && ctest -j "$(nproc)" -L '^geant4$' --output-on-failure
       - name: connectors
         run: cd "$BUILD_DIR" && ctest -j "$(nproc)" -L '^connectors$' --output-on-failure
+      - name: pipelines
+        run: cd "$BUILD_DIR" && ctest -j "$(nproc)" -L '^pipelines$' --output-on-failure
       - name: restGarfield
         run: cd "$BUILD_DIR" && ctest -j "$(nproc)" -L '^restGarfield$' --output-on-failure
       - name: restDAQ

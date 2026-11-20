@@ -2,7 +2,9 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # The references of the pipeline tests (examples/test/reference) reach ~800 kB
       - id: check-added-large-files
+        args: ["--maxkb=1024"]
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: check-symlinks

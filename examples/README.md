@@ -26,3 +26,12 @@ restManager --c examples/TREXDMToTracks.yaml --i Run03318_Calibration109Cd_TREXD
 restManager --c examples/TREXDMTardis.yaml --i "Run*_TREXDM_Plane0_*.root"
 restManager --c examples/TREXDMTardisPlots.yaml --i Dataset_03318_Calibration109Cd_TREXDM_Plane0_Tardis.root
 ```
+
+## Tests
+
+`test/` holds the pipeline tests (label `pipelines`, see CONTRIBUTING.md): `FemDAQToTracks.yaml`,
+`TREXDMToTracks.yaml` (both planes), `TREXDMTardis.yaml` and `TREXDMTardisPlots.yaml`, and the raw chains of
+`libraries/raw/examples` (`MultiFEMINOSToRaw.yaml` then `RawSignalAnalysis.yaml`, and `FeminosRootToRaw.yaml`
+with both TREX-DM planes)
+on the data files of [rest-common-data](https://github.com/rest-for-physics-toolkit/rest-common-data), with
+the analysis tree of each output compared with a reference of `test/reference/`.
