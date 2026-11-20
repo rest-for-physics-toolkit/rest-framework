@@ -12,7 +12,8 @@
 # with the drift along -Z), and avalanche, the gain of the amplification gap (Polya fluctuations) from the
 # gain table of the medium file. rest-common-transport v1.0 has no gain tables: generate them with
 #   restGarfield packages/restGarfield/examples/ArIso.yaml   (its `gain` section uncommented)
-# and set `mediumFile: "ArIso.root"` in the medium.
+# and set `mediumFile: "ArIso.root"` in the medium. driftResponse replaces hitsDrift in a non-uniform field:
+# the drift response of a CST field map computed by the same command (its `drift` section uncommented).
 
 manager:
   class: "TRestManager"
@@ -74,6 +75,12 @@ manager:
       class: "TRestDetectorHitsDriftProcess"
       fluctuations: "fano"
       maxHits: 1000
+#    driftResponse:        # instead of hitsDrift: drift in a CST field map (restGarfield `drift` section)
+#      class: "TRestDetectorHitsDriftResponseProcess"
+#      responseFile: "ArIso_drift.root"
+#      fluctuations: "fano"
+#      maxHits: 1000
+#      seed: 1
 #    avalanche:            # gain of the 50 um gap at 300 V (6 kV/mm), from the gain table of the medium
 #      class: "TRestDetectorAvalancheProcess"
 #      amplificationVoltage: 300 V

@@ -19,6 +19,7 @@ static const bool TRestDetectorTransportManager_FieldsRegistered = []() {
     reg.RegisterField<M>("medium", &M::fMediumNode);
     reg.RegisterField<M>("transport", &M::fTransportNode);
     reg.RegisterField<M>("gain", &M::fGainNode);
+    reg.RegisterField<M>("drift", &M::fDriftNode);
 
     using T = TRestDetectorTransportTable;
     reg.RegisterField<T>("pressure", &T::fPressure);
@@ -604,6 +605,7 @@ void TRestDetectorTransportManager::LoadConfig() {
     fMedium->CheckConfig();
     fTransport = CreateTables<TRestDetectorTransportTable>(fTransportNode, "transport");
     fGain = CreateTables<TRestDetectorGainTable>(fGainNode, "gain");
+    fDrift = CreateTables<TRestDetectorDriftResponse>(fDriftNode, "drift");
     UpdateYAMLFromParams<TRestDetectorTransportManager>(fNode);
 }
 
@@ -612,4 +614,5 @@ void TRestDetectorTransportManager::PrintMetadata() const {
     if (fMedium) fMedium->PrintMetadata();
     for (const auto& table : fTransport) table->PrintMetadata();
     for (const auto& table : fGain) table->PrintMetadata();
+    for (const auto& response : fDrift) response->PrintMetadata();
 }

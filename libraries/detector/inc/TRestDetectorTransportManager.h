@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "TRestDetectorDriftResponse.h"
 #include "TRestDetectorMedium.h"
 #include "TRestMetadata.h"
 
@@ -305,7 +306,8 @@ class TRestDetectorGainTable : public TRestMetadata {
 /// (TRestDetectorMedium, the `medium` key) and the tables to compute for it, added to its mediumFile:
 /// `transport` (TRestDetectorTransportTable) and `gain` (TRestDetectorGainTable), keys without class, each
 /// one a table configuration or a list of them. restGarfield computes the transport tables first, then the
-/// gain tables. The classes do not depend on Garfield++.
+/// gain tables, then the drift responses in field maps (`drift`, TRestDetectorDriftResponse, each one in its
+/// own file, with the transport table of the medium file). The classes do not depend on Garfield++.
 ///
 ///    transportManager:
 ///      class: "TRestDetectorTransportManager"
@@ -329,6 +331,8 @@ class TRestDetectorTransportManager : public TRestMetadata {
     YAML::Node fTransportNode;
     /// `gain`: a gain table configuration or a list of them
     YAML::Node fGainNode;
+    /// `drift`: a drift response configuration (field map) or a list of them
+    YAML::Node fDriftNode;
 
     /// Medium created from fMediumNode
     std::unique_ptr<TRestDetectorMedium> fMedium;  //!
@@ -336,6 +340,8 @@ class TRestDetectorTransportManager : public TRestMetadata {
     std::vector<std::unique_ptr<TRestDetectorTransportTable>> fTransport;  //!
     /// Gain table configurations created from fGainNode
     std::vector<std::unique_ptr<TRestDetectorGainTable>> fGain;  //!
+    /// Drift response configurations created from fDriftNode
+    std::vector<std::unique_ptr<TRestDetectorDriftResponse>> fDrift;  //!
 
     /// \brief Builds the manager from an in-memory YAML section (LoadConfig).
     TRestDetectorTransportManager(const std::string& instanceName, const YAML::Node& node);

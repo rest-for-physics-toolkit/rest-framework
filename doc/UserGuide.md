@@ -41,7 +41,7 @@ analysis trees of many runs are joined in a **dataset** (`TRestDataSet`), proces
 | `restManager` | core ([source/bin](../source/bin/README.md)) | Runs a YAML configuration with a `TRestManager` section: event processing, dataset generation and processing, plots. |
 | `restRoot` | core ([source/bin](../source/bin/README.md)) | ROOT prompt with the REST libraries and macros loaded; opens a REST file given as argument. |
 | `restG4` | [restG4](../packages/restG4/README.md) | Geant4 simulation, writes `TRestGeant4Event`. |
-| `restGarfield` | [restGarfield](../packages/restGarfield/README.md) | Transport and gain tables of a detector medium with Garfield++. |
+| `restGarfield` | [restGarfield](../packages/restGarfield/README.md) | Transport and gain tables of a detector medium with Garfield++, and drift responses in CST field maps. |
 | `femclient` | [restDAQ](../packages/restDAQ/README.md) | Data taking with AFTER/AGET electronics, writes REST files. |
 
 ```
@@ -1003,7 +1003,9 @@ The conversions between libraries (Geant4 → hits, hits → tracks, raw ↔ det
   ([12.Generators](../packages/restG4/examples/12.Generators)).
 - **restGarfield** ([README](../packages/restGarfield/README.md)): `restGarfield ArIso.yaml` computes the
   transport and gain tables of a medium with Garfield++ and stores them in its medium file, read by the
-  detector library without Garfield++.
+  detector library without Garfield++. With a `drift` section it also computes the drift response in a
+  field map exported by CST (its own `responseFile`), used by `TRestDetectorHitsDriftResponseProcess`
+  instead of `TRestDetectorHitsDriftProcess` in special simulations with a non-uniform drift field.
 - The simulated events are analysed with the [geant4 library](../libraries/geant4/README.md)
   (`TRestGeant4AnalysisProcess`, `TRestGeant4QuenchingProcess`) and converted to detector hits by
   `TRestGeant4ToDetectorHitsProcess`.

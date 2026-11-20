@@ -51,7 +51,8 @@ A readout gives the channel of a position and the position of a channel, the dis
 | `TRestDetectorLightResponse` | Scintillation light of a medium: light yield (photons per keV), `scintillation` time profiles per particle (components with `fraction`, `riseTime`, `decayTime`; the one without `particles` is the default) and propagation to the readout in a transparent scintillator (attenuation length and effective light speed). |
 | `TRestDetectorTransportTable` | Drift velocity, diffusion, Townsend and attachment coefficients versus the field (configuration of restGarfield and one table of the medium file), scaled with E/p for gases. |
 | `TRestDetectorGainTable` | Mean avalanche gain and Polya parameter versus the amplification field for a gap (configuration of restGarfield and one table of the medium file). |
-| `TRestDetectorTransportManager` | Top section of a restGarfield configuration: a medium and the transport and gain tables to compute for it. |
+| `TRestDetectorDriftResponse` | Drift response in a non-uniform field computed by restGarfield from a field map (`drift` section): on a grid of start points, the fraction of electrons reaching the plane above the readout and the histograms of their displacement on the readout plane and of their drift time; interpolated and sampled by `TRestDetectorHitsDriftResponseProcess`. |
+| `TRestDetectorTransportManager` | Top section of a restGarfield configuration: a medium, the transport and gain tables and the drift responses to compute for it. |
 
 ## Processes
 
@@ -60,6 +61,7 @@ Hits processes (`TRestDetectorHitsEvent` to `TRestDetectorHitsEvent`):
 | Class | Description |
 | --- | --- |
 | `TRestDetectorHitsDriftProcess` | Converts the energy of the hits into ionisation electrons (Fano or Poisson fluctuations) and drifts them to the readout with the diffusion and attachment of the medium: hits on the readout plane at their arrival time (drift velocity of the medium). `diffusion: false`: each hit projected whole on the readout at its drift time (charge fluctuation and mean attachment kept). |
+| `TRestDetectorHitsDriftResponseProcess` | Special simulations with a field map: the electrons of the hits (as `TRestDetectorHitsDriftProcess`) drifted with a `TRestDetectorDriftResponse` (`responseFile`): each one survives with the arrived fraction at its position and reaches the readout plane with a displacement and a drift time sampled from the response. Hits outside the grid are removed. |
 | `TRestDetectorHitsTimeProjectionProcess` | Inverse of the drift: the coordinate along the readout normal from the time of the hits (`driftVelocity`, or the one of the medium), e.g. after `TRestDetectorSignalToHitsProcess`; an X strip hit becomes XZ. Observable `NHitsWithoutDrift`. |
 | `TRestDetectorAvalancheProcess` | Multiplies the drifted electrons by the avalanche gain of the amplification gap, with Polya fluctuations, from a gain table of the medium. |
 | `TRestDetectorHitsSmearingProcess` | Applies the energy resolution of the detector (one gaussian gain per event), optionally without the Fano part. |
@@ -184,6 +186,7 @@ The example configurations using each process of this component (paths from the 
 | `TRestDetectorAvalancheProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
 | `TRestDetectorHitsAnalysisProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |
 | `TRestDetectorHitsDriftProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
+| `TRestDetectorHitsDriftResponseProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
 | `TRestDetectorHitsSmearingProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
 | `TRestDetectorHitsTimeProjectionProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/RawToHits.yaml`, `libraries/detector/examples/SignalToHits.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml` |
 | `TRestDetectorHitsToSignalProcess` | `libraries/connectors/examples/Geant4ToRawVeto.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |

@@ -22,8 +22,9 @@
 ///        reducedFieldRange: [25 kV/cm/bar, 35 kV/cm/bar]
 ///
 /// The tables go to the mediumFile of the medium (by default <name>.root): first the transport tables,
-/// then the gain tables. The classes are in the detector library (they do not depend on Garfield++); this
-/// package only computes the tables.
+/// then the gain tables; then the drift responses in field maps (`drift`, each one in its responseFile).
+/// The classes are in the detector library (they do not depend on Garfield++); this package only computes
+/// the tables and responses.
 
 #include <cstdlib>
 #include <exception>
@@ -32,6 +33,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "DriftSimulation.h"
 #include "GainSimulation.h"
 #include "TRestDetectorTransportManager.h"
 #include "TRestVersion.h"
@@ -39,7 +41,8 @@
 #include "TransportSimulation.h"
 
 /// \brief Reads the TRestDetectorTransportManager section of the configuration (argv[1]) and computes its
-/// transport tables (RunTransportSimulation) and then its gain tables (RunGainSimulation).
+/// transport tables (RunTransportSimulation), its gain tables (RunGainSimulation) and its drift responses
+/// (RunDriftResponse).
 /// \return 0 on success, 1 on a usage error or an exception (the reason is printed).
 int main(int argc, char* argv[]) {
     if (argc == 2 && std::string(argv[1]) == "--version") {
@@ -89,6 +92,7 @@ int main(int argc, char* argv[]) {
         for (const auto& table : manager.fTransport)
             RunTransportSimulation(*manager.fMedium, *table, verbose, jobs);
         for (const auto& table : manager.fGain) RunGainSimulation(*manager.fMedium, *table, verbose);
+        for (const auto& response : manager.fDrift) RunDriftResponse(*manager.fMedium, *response, verbose);
     } catch (const std::exception& error) {
         std::cerr << "restGarfield: " << error.what() << std::endl;
         return 1;

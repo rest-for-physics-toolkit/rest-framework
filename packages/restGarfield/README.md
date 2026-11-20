@@ -16,8 +16,15 @@ depend on Garfield++: the tables are read by `TRestDetectorMedium` (detector lib
 - **Gain tables** (`TRestDetectorGainTable`, gases only): mean gain, Polya theta and the avalanche size
   distributions, from microscopic avalanches of one electron in a uniform field across a gap (parallel
   plates).
+- **Drift responses in field maps** (`TRestDetectorDriftResponse`, gases only, special simulations with a
+  non-uniform drift field): electrons drifted with `AvalancheMC` from the nodes of a grid, in a field map
+  exported by CST Studio Suite, to a plane above the readout (the start of the amplification), with the
+  gas of a transport table of the medium file; per node the arrived fraction and the histograms of the
+  displacement on the readout plane and of the drift time. Each response goes to its own `responseFile`,
+  read by `TRestDetectorHitsDriftResponseProcess` (detector library) instead of
+  `TRestDetectorHitsDriftProcess`.
 
-Tables already in the medium file are skipped unless `overwrite: true`.
+Tables already in the medium file, and response files that exist, are skipped unless `overwrite: true`.
 
 ## Build
 
@@ -45,7 +52,8 @@ of the grid of at least 2 nodes (Magboltz is not thread safe, so processes inste
 the same. Several media can also run at once as separate `restGarfield` processes, even writing to the same
 medium file (e.g. `Ar99_iC4H10_1`, `Ar98_iC4H10_2`... in `ArIso.root`, each one in `tables/<medium>/`): the
 file is locked while it is read or written. Example based on
-`examples/ArIso.yaml` (installed in `examples/restGarfield`; its `gain` section is commented out there):
+`examples/ArIso.yaml` (installed in `examples/restGarfield`; its `gain` and `drift`
+sections are commented out there):
 
 ```yaml
 transportManager:
@@ -66,8 +74,9 @@ transportManager:
 
 ## Configuration keys
 
-`TRestDetectorTransportManager`: `medium` (a `TRestDetectorMedium`), `transport` and `gain` (each a map or a
-list of maps, one per set of tables).
+`TRestDetectorTransportManager`: `medium` (a `TRestDetectorMedium`), `transport`, `gain` and `drift` (each a
+map or a list of maps, one per set of tables or response). The drift responses are computed after the
+tables, so the transport table they use can be computed in the same run.
 
 `transport`:
 
@@ -98,7 +107,28 @@ list of maps, one per set of tables).
 | `penningRate` | 0 | Penning transfer probability. |
 | `overwrite` | false | Compute again the tables already in the file. |
 
-See the TRestDetectorTransportManager and TRestDetectorMedium documentation for the validation of these
+`drift` (lengths in mm unless a unit is given):
+
+| Key | Default | Description |
+|---|---|---|
+| `fieldMap` | (required) | ASCII export of the electric field by CST (header `x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]`, the units read from it; x fastest). |
+| `fieldMapOffset` | [0, 0, 0] | Position of the origin of the CST frame in the detector frame. |
+| `readouts` | (required) | YAML file with the `TRestDetectorReadoutManager` of the readout (distance and normal; the normal must be along x, y or z). |
+| `readout` | data readout | Name of the readout in the manager. |
+| `boundary` | 0 | Distance from the readout to the plane where the drift ends (above the mesh); the field map must reach above it. |
+| `transportTable` | the only one | Key of the transport table of the medium file (the gas at the pressure of the medium). |
+| `xRange`, `yRange`, `zRange` | (required) | Grid of start points (detector frame). |
+| `gridNodes` | [2, 2, 2] | Nodes of the grid along x, y and z (at least 2 each). |
+| `electrons` | 1000 | Electrons drifted from each node. |
+| `stepSize` | 1 mm | Distance step of `AvalancheMC`. |
+| `positionBins` | 20 | Bins per axis of the displacement histogram of each node. |
+| `timeBins` | 20 | Bins of the drift time histogram of each node. |
+| `responseFile` | (required) | Output file of the response. |
+| `overwrite` | false | Compute the response again if the file exists. |
+
+The drift of the nodes is not split in processes (`--jobs` applies to the transport tables only).
+
+See the TRestDetectorTransportManager, TRestDetectorMedium and TRestDetectorDriftResponse documentation for the validation of these
 keys.
 
 ## Macros
@@ -118,5 +148,6 @@ root [1] REST_Garfield_DrawMedium("ArIso.root", "", 1.4)
 With `BUILD_TESTING` (`test/`, ctest label `restGarfield`): the Garfield++ gas of a medium and the transport
 and gain tables computed with small grids (a silicon table, a gas table with one Magboltz collision in two
 processes, a gain table of a few avalanches at a low field), written to medium files of the build directory
-and read back; a small CST field map and the Garfield++ gas of a transport table (for the drift in field
-maps, in development).
+and read back; a small CST field map, the Garfield++ gas of a transport table and the drift response in a
+uniform field map (straight drift to the boundary plane at the drift velocity of the table). The suites
+`*Long` (the transport table in two processes) are skipped with `ctest -L restGarfield -E Long`.

@@ -1,7 +1,7 @@
 /// Unit tests of the detector library (GoogleTest, BUILD_TESTING): the hits and signal events, a Micromegas
 /// readout built in memory (with a decoding file written in the work directory) and its export/import, a
-/// GDML readout of a small geometry, the medium with fixed transport parameters or a gain table, and the
-/// hits and signal processes fed with events built by hand.
+/// GDML readout of a small geometry, the medium with fixed transport parameters or a gain table, a drift
+/// response built by hand, and the hits and signal processes fed with events built by hand.
 /// The processes that need a readout or a medium get them from a TRestManager created from a YAML string,
 /// with the readout added to its TRestDetectorReadoutManager; the observables are read from an in-memory
 /// analysis tree given to the process through a TRestRun.
@@ -14,8 +14,10 @@
 #include <TRestDataSetGainMap.h>
 #include <TRestDataSetTardis.h>
 #include <TRestDetectorAvalancheProcess.h>
+#include <TRestDetectorDriftResponse.h>
 #include <TRestDetectorHitsAnalysisProcess.h>
 #include <TRestDetectorHitsDriftProcess.h>
+#include <TRestDetectorHitsDriftResponseProcess.h>
 #include <TRestDetectorHitsEvent.h>
 #include <TRestDetectorHitsSmearingProcess.h>
 #include <TRestDetectorHitsTimeProjectionProcess.h>
@@ -38,6 +40,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -845,6 +848,143 @@ TEST(DetectorHitsDriftProcess, DiffusionIsSeeded) {
     EXPECT_THROW(fano.Initialize(), std::runtime_error);
     TRestDetectorHitsDriftProcess noManager("drift", YAML::Load("{}"));
     EXPECT_THROW(noManager.Initialize(), std::runtime_error);
+}
+
+namespace {
+/// Drift response of a grid x, y in [-10, 10] mm, z in [0, 50] mm, 2 x 2 x 2 nodes, 4 bins (no file)
+TRestDetectorDriftResponse SmallDriftResponse(const std::string& responseFile) {
+    return TRestDetectorDriftResponse(
+        "drift", YAML::Load("{fieldMap: field.txt, responseFile: \"" + responseFile +
+                            "\", xRange: [-10 mm, 10 mm], yRange: [-10 mm, 10 mm], zRange: [0 mm, 50 mm], "
+                            "gridNodes: [2, 2, 2], positionBins: 4, timeBins: 4}"));
+}
+
+/// The 4 nodes of a layer k of the small response with `arrived` of 100 electrons at (u, v, t)
+void SetLayer(TRestDetectorDriftResponse& response, int k, int arrived,
+              const std::array<double, 3>& arrival) {
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 2; i++) {
+            response.SetNode(response.NodeIndex(i, j, k), 100,
+                             std::vector<std::array<double, 3>>(arrived, arrival));
+        }
+    }
+}
+}  // namespace
+
+TEST(DetectorDriftResponse, WriteReadAndSample) {
+    const std::string fileName = std::string(TESTS_WORK_DIR) + "/DriftResponse_WriteReadAndSample.root";
+    auto response = SmallDriftResponse(fileName);
+    EXPECT_EQ(response.GetNumberOfNodes(), 8u);
+    EXPECT_DOUBLE_EQ(response.GetNodePosition(response.NodeIndex(1, 0, 1)).X(), 10);
+    EXPECT_DOUBLE_EQ(response.GetNodePosition(response.NodeIndex(1, 0, 1)).Z(), 50);
+    // Readout plane axes: normal +z gives u = x, v = y
+    const auto [u, v] = TRestDetectorDriftResponse::PlaneAxes({0, 0, 2});
+    EXPECT_NEAR(u.X(), 1, 1e-12);
+    EXPECT_NEAR(v.Y(), 1, 1e-12);
+
+    // The histograms of a node over the range of its arrivals
+    response.SetNode(0, 10, {{0, 0, 0}, {1, 1, 1}});
+    const auto& node = response.fNodes[0];
+    EXPECT_EQ(node.fArrived, 2);
+    EXPECT_EQ(node.fPositionCounts[0], 1);
+    EXPECT_EQ(node.fPositionCounts[3 + 4 * 3], 1);
+    EXPECT_EQ(node.fTimeCounts[3], 1);
+
+    // All the electrons of the readout side arrive (u = 1, v = -2 mm at 0 us), half of those of the cathode
+    // side (at 5 us)
+    SetLayer(response, 0, 100, {1, -2, 0});
+    SetLayer(response, 1, 50, {1, -2, 5});
+    response.fMedium = "ArIso";
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        response.Write(file.get(), YAML::Load("{program: test}"));
+    }
+    std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "READ"));
+    const auto read = TRestDetectorDriftResponse::Read(file.get());
+    EXPECT_EQ(read.fMedium, "ArIso");
+    ASSERT_EQ(read.fNodes.size(), 8u);
+    EXPECT_EQ(read.fNodes[read.NodeIndex(0, 1, 1)].fArrived, 50);
+
+    EXPECT_TRUE(read.Contains({0, 0, 25}));
+    EXPECT_FALSE(read.Contains({0, 0, 51}));
+    EXPECT_FALSE(read.Contains({11, 0, 0}));
+    EXPECT_NEAR(read.GetSurvival({0, 0, 0}), 1, 1e-12);
+    EXPECT_NEAR(read.GetSurvival({3, -4, 50}), 0.5, 1e-12);
+    EXPECT_NEAR(read.GetSurvival({0, 0, 25}), 0.75, 1e-12);
+    EXPECT_EQ(read.GetSurvival({0, 0, 60}), 0);
+
+    // At z = 25 mm a node of each layer, the cathode side with weight 0.5 * 0.5 / (0.5 + 0.25) = 1/3
+    TRandom3 random(1);
+    int late = 0;
+    const int samples = 6000;
+    for (int i = 0; i < samples; i++) {
+        double du = 0, dv = 0, time = -1;
+        ASSERT_TRUE(read.SampleArrival({0, 0, 25}, random, du, dv, time));
+        EXPECT_DOUBLE_EQ(du, 1);
+        EXPECT_DOUBLE_EQ(dv, -2);
+        ASSERT_TRUE(time == 0 || time == 5) << time;
+        if (time == 5) late++;
+    }
+    EXPECT_NEAR(static_cast<double>(late) / samples, 1. / 3, 0.03);
+    double du, dv, time;
+    EXPECT_FALSE(read.SampleArrival({0, 0, 60}, random, du, dv, time));
+
+    // Configuration errors
+    EXPECT_THROW(TRestDetectorDriftResponse("drift", YAML::Load("{fieldMap: f.txt, responseFile: r.root, "
+                                                                "xRange: [1 mm, 0 mm], yRange: [0 mm, 1 mm], "
+                                                                "zRange: [0 mm, 1 mm]}")),
+                 std::runtime_error);
+    const std::string oneNode =
+        "{fieldMap: f.txt, responseFile: r.root, xRange: [0 mm, 1 mm], yRange: [0 mm, 1 mm], "
+        "zRange: [0 mm, 1 mm], gridNodes: [2, 1, 2]}";
+    EXPECT_THROW(TRestDetectorDriftResponse("drift", YAML::Load(oneNode)), std::runtime_error);
+}
+
+TEST(DetectorHitsDriftResponseProcess, ElectronsFromTheResponse) {
+    auto detector = MakeDetector(kChargeNoDiffusion);
+    const std::string fileName = std::string(TESTS_WORK_DIR) + "/DriftResponse_Process.root";
+    {
+        // Every electron arrives displaced by (0.5, -0.25) mm (u = x, v = y for the normal +z) after 3 us
+        auto response = SmallDriftResponse(fileName);
+        SetLayer(response, 0, 100, {0.5, -0.25, 3});
+        SetLayer(response, 1, 100, {0.5, -0.25, 3});
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        response.Write(file.get(), YAML::Load("{program: test}"));
+    }
+    TRestDetectorHitsDriftResponseProcess drift(
+        "drift", YAML::Load("{responseFile: \"" + fileName + "\", fluctuations: none, seed: 3}"));
+    drift.SetManager(detector.manager.get());
+    drift.Initialize();
+    EXPECT_EQ(drift.fMediumName, "ArIso");
+
+    TRestDetectorHitsEvent input, output;
+    input.SetID(2);
+    input.AddHit(1, 2, 20, 5.9, 0.5);
+    input.AddHit(0, 0, 60, 1);  // out of the grid of the response
+    ASSERT_TRUE(drift.ProcessEvent(input, output));
+    EXPECT_EQ(output.GetID(), 2);
+    // energy / W electrons on the readout plane, displaced, at 0.5 + 3 us
+    EXPECT_EQ(output.GetNumberOfHits(), (size_t)std::lround(5.9 / 0.0262));
+    EXPECT_NEAR(TotalEnergy(output), 5.9, 1e-3);
+    for (size_t n = 0; n < output.GetNumberOfHits(); n++) {
+        EXPECT_NEAR(output.GetX(n), 1.5, 1e-5);
+        EXPECT_NEAR(output.GetY(n), 1.75, 1e-5);
+        EXPECT_NEAR(output.GetZ(n), 0, 1e-5);
+        EXPECT_NEAR(output.GetTime(n), 3.5, 1e-6);
+    }
+
+    // Only hits out of the grid: rejected
+    TRestDetectorHitsEvent outside, outsideOutput;
+    outside.AddHit(0, 0, 60, 5);
+    EXPECT_FALSE(drift.ProcessEvent(outside, outsideOutput));
+
+    // Errors: no response file, an unknown key
+    TRestDetectorHitsDriftResponseProcess noFile("drift", YAML::Load("{responseFile: none.root}"));
+    noFile.SetManager(detector.manager.get());
+    EXPECT_ANY_THROW(noFile.Initialize());
+    EXPECT_ANY_THROW(
+        MetadataClassRegistry::Instance().Create("TRestDetectorHitsDriftResponseProcess", "d",
+                                                 YAML::Load("{responseFile: r.root, driftVelocity: 4}")));
 }
 
 TEST(DetectorHitsSmearingProcess, OneGainPerEvent) {

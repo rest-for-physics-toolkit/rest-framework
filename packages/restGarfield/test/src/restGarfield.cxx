@@ -1,12 +1,14 @@
 /// Unit tests of restGarfield (GoogleTest, BUILD_TESTING): the Garfield++ gas of a medium (CreateGas), and
 /// the transport and gain tables computed with small grids (a few field nodes, one Magboltz collision, few
 /// avalanches at a low field), written to a medium file of the work directory and read back with the
-/// detector library; a CST field map (LoadCSTFieldMap) and the Garfield gas of a transport table
-/// (CreateGasFromTable).
+/// detector library; a CST field map (LoadCSTFieldMap), the Garfield gas of a transport table
+/// (CreateGasFromTable) and the drift response in a uniform field map (ComputeDriftResponse).
 
 #include <TFile.h>
+#include <TRestDetectorDriftResponse.h>
 #include <TRestDetectorMedium.h>
 #include <TRestDetectorTransportManager.h>
+#include <TRestMicromegasReadout.h>
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
@@ -17,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "DriftSimulation.h"
 #include "FieldMap.h"
 #include "GainSimulation.h"
 #include "Garfield/ComponentGrid.hh"
@@ -267,4 +270,64 @@ TEST(RestGarfield, GasFromTransportTable) {
     EXPECT_THROW(CreateGasFromTable(medium, noElectrons, 1), std::runtime_error);
     const auto solid = MakeMedium("{name: Si, state: solid, components: {Si: 1}}", MediumFile("Si"));
     EXPECT_THROW(CreateGasFromTable(solid, table, 1), std::runtime_error);
+}
+
+TEST(RestGarfield, DriftResponseInAUniformField) {
+    const auto medium = MakeMedium(kArIso, MediumFile("ArIso"));
+    // A uniform field of 100 V/mm along +z (electrons drift to -z) in x, y in [-10, 10] mm, z in [0, 20] mm
+    const fs::path cstFile = fs::path(TESTS_WORK_DIR) / "DriftResponse_efield.txt";
+    {
+        std::ofstream file(cstFile);
+        file << "x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]\n" << std::string(60, '-') << "\n";
+        for (const double z : {0., 5., 10., 15., 20.}) {
+            for (const double y : {-10., 0., 10.}) {
+                for (const double x : {-10., 0., 10.}) file << x << " " << y << " " << z << " 0 0 1e5\n";
+            }
+        }
+    }
+    // Electrons at 10 mm/us without diffusion, attachment or multiplication
+    TRestDetectorTransportTable table;
+    table.fMedium = "ArIso";
+    table.fPressure = medium.GetPressure();
+    table.fFields = {50, 100, 200};  // V/mm
+    auto& electron = table.fCarriers["electron"];
+    electron.fDriftVelocity = {10, 10, 10};  // mm/us
+    electron.fLongitudinalDiffusion = {0, 0, 0};
+    electron.fTransversalDiffusion = {0, 0, 0};
+    electron.fTownsend = {0, 0, 0};
+    electron.fAttachment = {0, 0, 0};
+    // A readout plane at z = 0 with the normal +z (no decoding needed for the distance)
+    const TRestMicromegasReadout readout(
+        "mm", YAML::Load("{readoutParameters: {nChannels: 4, pitch: 1 mm, thickness: 0.1 mm, "
+                         "gasThickness: 50 mm, normal: [0, 0, 1]}}"));
+
+    // Nodes at z = 0, 5, 10, 15 mm, boundary plane at z = 1 mm
+    const std::string config = "{fieldMap: \"" + cstFile.string() +
+                               "\", responseFile: r.root, boundary: 1 mm, xRange: [-5 mm, 5 mm], "
+                               "yRange: [-5 mm, 5 mm], zRange: [0 mm, 15 mm], gridNodes: [2, 2, 4], "
+                               "electrons: 20, stepSize: 1 mm, positionBins: 4, timeBins: 4}";
+    TRestDetectorDriftResponse response("drift", YAML::Load(config));
+    ComputeDriftResponse(medium, table, readout, response, false);
+    EXPECT_EQ(response.fMedium, "ArIso");
+    ASSERT_EQ(response.fNodes.size(), 16u);
+    for (size_t index = 0; index < response.fNodes.size(); index++) {
+        const auto& node = response.fNodes[index];
+        const double z = response.GetNodePosition(index).Z();
+        // Every electron reaches the boundary plane straight down, at (z - 1 mm) / v (0 below the plane)
+        EXPECT_EQ(node.fPrimaries, 20) << "z = " << z;
+        EXPECT_EQ(node.fArrived, 20) << "z = " << z;
+        EXPECT_NEAR(node.fUMin, 0, 1e-6);
+        EXPECT_NEAR(node.fUMax, 0, 1e-6);
+        EXPECT_NEAR(node.fVMin, 0, 1e-6);
+        EXPECT_NEAR(node.fVMax, 0, 1e-6);
+        const double time = z > 1 ? (z - 1) / 10 : 0;  // us
+        EXPECT_NEAR(node.fTMin, time, 1e-3) << "z = " << z;
+        EXPECT_NEAR(node.fTMax, time, 1e-3) << "z = " << z;
+    }
+    EXPECT_NEAR(response.GetSurvival({1, 2, 7}), 1, 1e-12);
+
+    // The boundary plane above the field map: no drift region
+    TRestDetectorDriftResponse high("drift", YAML::Load(config));
+    high.fBoundary = 30;
+    EXPECT_THROW(ComputeDriftResponse(medium, table, readout, high, false), std::runtime_error);
 }
