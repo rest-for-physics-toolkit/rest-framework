@@ -9,8 +9,9 @@
 /// coefficients), computed with Garfield++ (Magboltz for gases).
 
 namespace Garfield {
+class MediumGas;
 class MediumMagboltz;
-}
+}  // namespace Garfield
 class TRestDetectorMedium;
 class TRestDetectorTransportTable;
 
@@ -36,6 +37,27 @@ class MediumFileLock {
 /// \return The Garfield gas, owned by the caller.
 std::unique_ptr<Garfield::MediumMagboltz> CreateGas(const TRestDetectorMedium& medium, double pressure,
                                                     double temperature);
+
+/// \brief Garfield++ gas whose transport tables are those of a TRestDetectorTransportTable (e.g. read from
+/// the medium file), without running Magboltz: for the drift of electrons and ions with AvalancheMC or
+/// DriftLineRKF in a field map. Only the tables are set (no cross sections: not for AvalancheMicroscopic).
+///
+/// The tables are those of `table` at `pressure`, scaled as TRestDetectorTransportTable does (E/p): its
+/// field nodes at that pressure. The Garfield gas keeps its default pressure, the pressure of its tables,
+/// so Garfield does not scale them again. The electron velocity, diffusion, Townsend and attachment
+/// coefficients are set (Garfield keeps the logarithm of the coefficients, -30 for 0), and the ion mobility
+/// and diffusion if the table has ions. Units: field V/cm, velocity cm/ns, diffusion sqrt(cm),
+/// coefficients 1/cm, mobility cm2/(V ns).
+///
+/// \param medium Gas medium definition of the table (its components name the Garfield gas).
+/// \param table Transport table with electrons.
+/// \param pressure Pressure in bar.
+/// \return The Garfield gas, owned by the caller.
+/// \throws std::runtime_error if the medium is not a gas, its components are not valid for Garfield, or the
+/// table has no electrons.
+std::unique_ptr<Garfield::MediumGas> CreateGasFromTable(const TRestDetectorMedium& medium,
+                                                        const TRestDetectorTransportTable& table,
+                                                        double pressure);
 
 /// \brief Computes the tables of a TRestDetectorTransportTable configuration with Garfield++: for each
 /// condition, creates the Garfield medium of the type of the medium definition (MediumMagboltz, which

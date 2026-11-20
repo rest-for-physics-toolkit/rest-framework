@@ -32,9 +32,13 @@
 Each component has a `test/` directory with a GoogleTest executable (`<component>Tests`, sources in
 `test/src/*.cxx`) added with `rest_add_tests(<component> <libraries>)` (cmake/RestTests.cmake): each test
 has the label of its component; the packages restGarfield and restDAQ compile their sources into their test
-executable (with Garfield++, readline and prometheus-cpp). The unit tests build their inputs (events,
+executable (with Garfield++, readline and prometheus-cpp); restGarfield lists its tests from the sources
+(`SCAN_SOURCES`, gtest_add_tests: Garfield++ prints at load time, which the discovery of the tests in the
+executable would take as a test). The unit tests build their inputs (events,
 metadata, datasets) in memory or in temporary files, without external data. Tests that need input data
-(pipelines of the examples) will use data published outside the repository.
+(pipelines of the examples) will use data published outside the repository. Tests of a minute or more
+(e.g. Magboltz in restGarfield) go in a test suite whose name ends in `Long` (`RestGarfieldLong`), so they
+can be skipped while developing with `ctest -L <component> -E Long`; the CI runs them all.
 
 ## Versions and releases
 

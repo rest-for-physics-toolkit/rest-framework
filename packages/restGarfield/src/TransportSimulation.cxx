@@ -16,10 +16,12 @@
 #include <stdexcept>
 #include <vector>
 
+#include "Garfield/FundamentalConstants.hh"
 #include "Garfield/MediumCdTe.hh"
 #include "Garfield/MediumDiamond.hh"
 #include "Garfield/MediumGaAs.hh"
 #include "Garfield/MediumGaN.hh"
+#include "Garfield/MediumGas.hh"
 #include "Garfield/MediumMagboltz.hh"
 #include "Garfield/MediumSilicon.hh"
 #include "TFile.h"
@@ -71,6 +73,26 @@ std::unique_ptr<Garfield::Medium> CreateMedium(const TRestDetectorMedium& defini
     }
     medium->SetTemperature(temperature);
     return medium;
+}
+
+/// Composition of a Garfield gas from a gas medium (1 to 6 components). Throws if the medium is not a gas
+/// or its components are not valid for Garfield
+void SetComposition(Garfield::MediumGas& gas, const TRestDetectorMedium& medium) {
+    const std::string error = "restGarfield: medium '" + medium.GetName() + "': ";
+    if (!medium.IsGas()) throw std::runtime_error(error + "not a gas");
+    if (medium.fComponents.empty()) throw std::runtime_error(error + "no components");
+    if (medium.fComponents.size() > 6) throw std::runtime_error(error + "up to 6 gas components");
+    std::string names[6];
+    double fractions[6] = {0, 0, 0, 0, 0, 0};
+    size_t i = 0;
+    for (const auto& [component, fraction] : medium.fComponents) {
+        names[i] = component;
+        fractions[i++] = fraction;
+    }
+    if (!gas.SetComposition(names[0], fractions[0], names[1], fractions[1], names[2], fractions[2], names[3],
+                            fractions[3], names[4], fractions[4], names[5], fractions[5])) {
+        throw std::runtime_error(error + "invalid gas components for Garfield");
+    }
 }
 
 using Carriers = std::map<std::string, TRestDetectorTransportTable::Carrier>;
@@ -242,24 +264,44 @@ MediumFileLock::~MediumFileLock() {
 
 std::unique_ptr<Garfield::MediumMagboltz> CreateGas(const TRestDetectorMedium& medium, double pressure,
                                                     double temperature) {
-    const std::string error = "restGarfield: medium '" + medium.GetName() + "': ";
-    if (!medium.IsGas()) throw std::runtime_error(error + "not a gas");
-    if (medium.fComponents.empty()) throw std::runtime_error(error + "no components");
-    if (medium.fComponents.size() > 6) throw std::runtime_error(error + "up to 6 gas components");
     auto gas = std::make_unique<Garfield::MediumMagboltz>();
-    std::string names[6];
-    double fractions[6] = {0, 0, 0, 0, 0, 0};
-    size_t i = 0;
-    for (const auto& [component, fraction] : medium.fComponents) {
-        names[i] = component;
-        fractions[i++] = fraction;
-    }
-    if (!gas->SetComposition(names[0], fractions[0], names[1], fractions[1], names[2], fractions[2], names[3],
-                             fractions[3], names[4], fractions[4], names[5], fractions[5])) {
-        throw std::runtime_error(error + "invalid gas components for Garfield");
-    }
+    SetComposition(*gas, medium);
     gas->SetTemperature(temperature);
     gas->SetPressure(pressure * kTorrPerBar);
+    return gas;
+}
+
+std::unique_ptr<Garfield::MediumGas> CreateGasFromTable(const TRestDetectorMedium& medium,
+                                                        const TRestDetectorTransportTable& table,
+                                                        double pressure) {
+    const std::string error = "restGarfield: medium '" + medium.GetName() + "': ";
+    if (!table.HasCarrier("electron")) {
+        throw std::runtime_error(error + "the transport table " + table.GetKey() + " has no electrons");
+    }
+    auto gas = std::make_unique<Garfield::MediumGas>();
+    SetComposition(*gas, medium);
+
+    // The field nodes of the table at the pressure (E/p scaling), V/cm
+    const double scale = table.fPressureScaling ? pressure / table.fPressure : 1;
+    std::vector<double> fields;
+    for (const double field : table.fFields) fields.push_back(field * scale * kVcmPerVmm);
+    gas->SetFieldGrid(fields, {0.}, {Garfield::HalfPi});
+    // Garfield keeps the logarithm of the Townsend and attachment coefficients (-30: 0)
+    auto logarithm = [](double value) { return value > 0 ? std::log(value) : -30.; };
+    for (size_t i = 0; i < fields.size(); i++) {
+        const double field = table.fFields[i] * scale;  // V/mm
+        // mm/us -> cm/ns
+        gas->SetElectronVelocityE(i, 0, 0, table.GetDriftVelocity(field, pressure) * 1e-4);
+        gas->SetElectronLongitudinalDiffusion(i, 0, 0, table.GetLongitudinalDiffusion(field, pressure));
+        gas->SetElectronTransverseDiffusion(i, 0, 0, table.GetTransversalDiffusion(field, pressure));
+        gas->SetElectronTownsend(i, 0, 0, logarithm(table.GetTownsend(field, pressure)));
+        gas->SetElectronAttachment(i, 0, 0, logarithm(table.GetAttachment(field, pressure)));
+        if (table.HasCarrier("ion")) {
+            gas->SetIonMobility(i, 0, 0, table.GetDriftVelocity(field, pressure, "ion") * 1e-4 / fields[i]);
+            gas->SetIonLongitudinalDiffusion(i, 0, 0, table.GetLongitudinalDiffusion(field, pressure, "ion"));
+            gas->SetIonTransverseDiffusion(i, 0, 0, table.GetTransversalDiffusion(field, pressure, "ion"));
+        }
+    }
     return gas;
 }
 

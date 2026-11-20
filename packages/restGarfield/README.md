@@ -118,4 +118,5 @@ root [1] REST_Garfield_DrawMedium("ArIso.root", "", 1.4)
 With `BUILD_TESTING` (`test/`, ctest label `restGarfield`): the Garfield++ gas of a medium and the transport
 and gain tables computed with small grids (a silicon table, a gas table with one Magboltz collision in two
 processes, a gain table of a few avalanches at a low field), written to medium files of the build directory
-and read back.
+and read back; a small CST field map and the Garfield++ gas of a transport table (for the drift in field
+maps, in development).

@@ -1,7 +1,8 @@
 /// Unit tests of restGarfield (GoogleTest, BUILD_TESTING): the Garfield++ gas of a medium (CreateGas), and
 /// the transport and gain tables computed with small grids (a few field nodes, one Magboltz collision, few
 /// avalanches at a low field), written to a medium file of the work directory and read back with the
-/// detector library.
+/// detector library; a CST field map (LoadCSTFieldMap) and the Garfield gas of a transport table
+/// (CreateGasFromTable).
 
 #include <TFile.h>
 #include <TRestDetectorMedium.h>
@@ -11,11 +12,15 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
+#include "FieldMap.h"
 #include "GainSimulation.h"
+#include "Garfield/ComponentGrid.hh"
+#include "Garfield/MediumGas.hh"
 #include "Garfield/MediumMagboltz.hh"
 #include "TransportSimulation.h"
 
@@ -94,7 +99,8 @@ TEST(RestGarfield, SiliconTransportTable) {
     EXPECT_THROW(RunTransportSimulation(medium, penning, false), std::runtime_error);
 }
 
-TEST(RestGarfield, GasTransportTableInParallel) {
+// Magboltz in full (about a minute): a test suite named *Long, skipped with ctest -E Long
+TEST(RestGarfieldLong, GasTransportTableInParallel) {
     const std::string fileName = MediumFile("ArIso");
     const auto medium = MakeMedium(kArIso, fileName);
     TRestDetectorTransportTable simulation(
@@ -157,4 +163,108 @@ TEST(RestGarfield, GainTableOfFewAvalanches) {
     // Only gases
     const auto solid = MakeMedium("{name: Si, state: solid, components: {Si: 1}}", MediumFile("Si"));
     EXPECT_THROW(RunGainSimulation(solid, simulation, false), std::runtime_error);
+}
+
+TEST(RestGarfield, CSTFieldMap) {
+    // A CST ASCII export (header with the units, dashes, x fastest): 3 x 3 x 3 nodes in mm, Ez in V/m growing
+    // with z (1e5 V/m at z = 0, 2e5 V/m at z = 10 mm)
+    const fs::path cstFile = fs::path(TESTS_WORK_DIR) / "CSTFieldMap_efield.txt";
+    {
+        std::ofstream file(cstFile);
+        file << "           x [mm]           y [mm]           z [mm]         Ex [V/m]         Ey [V/m]"
+                "         Ez [V/m]\n";
+        file << std::string(102, '-') << "\n";
+        for (const double z : {0., 5., 10.}) {
+            for (const double y : {-10., 0., 10.}) {
+                for (const double x : {-10., 0., 10.}) {
+                    file << x << " " << y << " " << z << " 0 0 " << 1e5 * (1 + z / 10) << "\n";
+                }
+            }
+        }
+    }
+    // The origin of the CST frame at (1, 2, 3) mm in the detector frame
+    const auto grid = LoadCSTFieldMap(cstFile.string(), {1, 2, 3});
+    Garfield::MediumGas gas;
+    grid->SetMedium(&gas);
+    unsigned int nx = 0, ny = 0, nz = 0;
+    double xmin, xmax, ymin, ymax, zmin, zmax;
+    ASSERT_TRUE(grid->GetMesh(nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax));
+    EXPECT_EQ(nx, 3u);
+    EXPECT_EQ(ny, 3u);
+    EXPECT_EQ(nz, 3u);
+    // cm
+    EXPECT_NEAR(xmin, -0.9, 1e-9);
+    EXPECT_NEAR(xmax, 1.1, 1e-9);
+    EXPECT_NEAR(ymin, -0.8, 1e-9);
+    EXPECT_NEAR(zmin, 0.3, 1e-9);
+    EXPECT_NEAR(zmax, 1.3, 1e-9);
+
+    // Between nodes, at z = 2.5 mm of the CST frame: 1.25e5 V/m = 1250 V/cm
+    double ex = 0, ey = 0, ez = 0;
+    Garfield::Medium* medium = nullptr;
+    int status = 0;
+    grid->ElectricField(0.1 + 0.05, 0.2 - 0.3, 0.3 + 0.25, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ex, 0, 1e-9);
+    EXPECT_NEAR(ey, 0, 1e-9);
+    EXPECT_NEAR(ez, 1250, 1e-6);
+    // Out of the map: z = 15 mm in the CST frame
+    grid->ElectricField(0.1, 0.2, 0.3 + 1.5, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, -11);
+
+    // Errors: no file, no header with the units, unknown units, a wrong node line
+    EXPECT_THROW(LoadCSTFieldMap((fs::path(TESTS_WORK_DIR) / "CSTFieldMap_none.txt").string()),
+                 std::runtime_error);
+    auto write = [](const fs::path& path, const std::string& content) {
+        std::ofstream file(path);
+        file << content;
+        return path.string();
+    };
+    const fs::path bad = fs::path(TESTS_WORK_DIR) / "CSTFieldMap_bad.txt";
+    EXPECT_THROW(LoadCSTFieldMap(write(bad, "0 0 0 0 0 1\n")), std::runtime_error);
+    const std::string unknown = "x [parsec] y [parsec] z [parsec] Ex [V/m] Ey [V/m] Ez [V/m]\n0 0 0 0 0 1\n";
+    EXPECT_THROW(LoadCSTFieldMap(write(bad, unknown)), std::runtime_error);
+    const std::string wrongNode = "x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]\n0 0 zero 0 0 1\n";
+    EXPECT_THROW(LoadCSTFieldMap(write(bad, wrongNode)), std::runtime_error);
+}
+
+TEST(RestGarfield, GasFromTransportTable) {
+    const auto medium = MakeMedium(kArIso, MediumFile("ArIso"));
+    // A table at 1 bar (no Magboltz): fields 10, 50, 100 V/mm
+    TRestDetectorTransportTable table;
+    table.fMedium = "ArIso";
+    table.fPressure = 1;
+    table.fFields = {10, 50, 100};
+    auto& electron = table.fCarriers["electron"];
+    electron.fDriftVelocity = {10, 30, 50};                 // mm/us
+    electron.fLongitudinalDiffusion = {0.03, 0.025, 0.02};  // sqrt(cm)
+    electron.fTransversalDiffusion = {0.02, 0.015, 0.01};
+    electron.fTownsend = {0, 1, 100};  // 1/cm
+    electron.fAttachment = {0.1, 0.2, 0.3};
+
+    // At 2 bar (E/p scaling): the nodes at 20, 100, 200 V/mm
+    const auto gas = CreateGasFromTable(medium, table, 2);
+    ASSERT_NE(gas, nullptr);
+    double vx = 0, vy = 0, vz = 0, dl = 0, dt = 0, alpha = 0, eta = 0;
+    // 100 V/mm = 1000 V/cm, the second node: the values of the table at E/p = 50 V/mm/bar
+    ASSERT_TRUE(gas->ElectronVelocity(0, 0, 1000, 0, 0, 0, vx, vy, vz));
+    EXPECT_NEAR(std::sqrt(vx * vx + vy * vy + vz * vz), 30e-4, 1e-9);  // cm/ns
+    EXPECT_LT(vz, 0);                                                  // electrons against the field
+    ASSERT_TRUE(gas->ElectronDiffusion(0, 0, 1000, 0, 0, 0, dl, dt));
+    EXPECT_NEAR(dl, 0.025 / std::sqrt(2), 1e-9);
+    EXPECT_NEAR(dt, 0.015 / std::sqrt(2), 1e-9);
+    ASSERT_TRUE(gas->ElectronTownsend(0, 0, 1000, 0, 0, 0, alpha));
+    EXPECT_NEAR(alpha, 2, 1e-9);
+    ASSERT_TRUE(gas->ElectronAttachment(0, 0, 2000, 0, 0, 0, eta));
+    EXPECT_NEAR(eta, 0.6, 1e-9);
+    // A Townsend coefficient 0 stays 0
+    ASSERT_TRUE(gas->ElectronTownsend(0, 0, 200, 0, 0, 0, alpha));
+    EXPECT_NEAR(alpha, 0, 1e-12);
+
+    // Errors: a table without electrons, a medium that is not a gas
+    TRestDetectorTransportTable noElectrons = table;
+    noElectrons.fCarriers.clear();
+    EXPECT_THROW(CreateGasFromTable(medium, noElectrons, 1), std::runtime_error);
+    const auto solid = MakeMedium("{name: Si, state: solid, components: {Si: 1}}", MediumFile("Si"));
+    EXPECT_THROW(CreateGasFromTable(solid, table, 1), std::runtime_error);
 }
