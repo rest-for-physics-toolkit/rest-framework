@@ -91,7 +91,7 @@ class TRestDetectorLightCollectionProcess : public TRestEventProcess {
     double fQuantumEfficiency = 1;
 
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
-    /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
+    /// with TRestEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
 
     /// \brief Default constructor (no configuration).

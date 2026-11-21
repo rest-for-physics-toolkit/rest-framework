@@ -51,7 +51,7 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
     bool fDiffusion = true;
 
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
-    /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
+    /// with TRestEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
 
     /// Written with the transport used, from the medium at its drift field (not inputs): longitudinal and

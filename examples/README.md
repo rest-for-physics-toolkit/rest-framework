@@ -33,5 +33,8 @@ restManager --c examples/TREXDMTardisPlots.yaml --i Dataset_03318_Calibration109
 `TREXDMToTracks.yaml` (both planes), `TREXDMTardis.yaml` and `TREXDMTardisPlots.yaml`, and the raw chains of
 `libraries/raw/examples` (`MultiFEMINOSToRaw.yaml` then `RawSignalAnalysis.yaml`, and `FeminosRootToRaw.yaml`
 with both TREX-DM planes)
-on the data files of [rest-common-data](https://github.com/rest-for-physics-toolkit/rest-common-data), with
-the analysis tree of each output compared with a reference of `test/reference/`.
+on the data files of [rest-common-data](https://github.com/rest-for-physics-toolkit/rest-common-data), and the
+simulated chains on its restG4 files (`libraries/geant4/examples` `Quenching.yaml` and `Geant4Analysis.yaml`,
+`libraries/connectors/examples` `Geant4ToHits.yaml`, `Geant4ToRawVeto.yaml` with the veto readout of
+`GDMLReadout.yaml`, `Geant4ToRaw.yaml` and `Geant4ToDriftHits.yaml`), with the analysis tree of each output
+compared with a reference of `test/reference/`.

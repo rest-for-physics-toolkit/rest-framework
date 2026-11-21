@@ -45,7 +45,7 @@ Signal processing (`TRestRawSignalEvent` to `TRestRawSignalEvent`):
 | `TRestRawZeroSupressionToRawProcess` | Removes the offset of zero-suppressed signals (first non-zero sample). |
 | `TRestRawSignalRecoverSaturationProcess` | Recovers ADC-saturated pulses by fitting the AGET response to the non-saturated bins; observables of the recovered signals. |
 | `TRestRawSignalShapingProcess` | Convolves the signals with a shaping kernel (gaus, exponential, shaper, shaperSin), to emulate the electronics in simulations; an event without signals passes empty. |
-| `TRestRawSignalAddNoiseProcess` | Adds white and sinusoidal noise to the signals, for simulations. |
+| `TRestRawSignalAddNoiseProcess` | Adds white and sinusoidal noise to the signals, for simulations (`seed`: reproducible noise, independent of the threads). |
 
 Analysis (observables in the analysis tree):
 

@@ -11,8 +11,9 @@
 /// * MeanX/Y/Z: energy weighted mean position; SigmaX/Y/Z: energy weighted size (TRestHits::GetSigmaX,
 ///   ...); SkewXY, SkewZ: skewness (TRestHits::GetSkewXY, GetSkewZ).
 /// * GaussSigmaX/Y/Z: size from a gaussian fit of the energy against the coordinate, with the hits that
-///   define it (TRestHitsAnalysis::GetGaussSigma); only with gaussFit: true (slow, not registered otherwise);
-///   -1 if the fit fails, NaN if no hit defines the coordinate.
+///   define it (TRestHitsAnalysis::GetGaussSigma: gaussian integrated over each strip, only sigma fitted);
+///   only with gaussFit: true (not registered otherwise); -1 without result (e.g. a single position), NaN
+///   if no hit defines the coordinate.
 /// * FiducialEnergy: energy of the hits inside the fiducial cylinder (fiducialCenter, fiducialAxis,
 ///   fiducialRadius, fiducialLength); only with fiducialRadius (not registered otherwise). The coordinates a
 ///   hit does not define take the value of the center: with the axis along X, Y or Z, a hit (e.g. XZ) is

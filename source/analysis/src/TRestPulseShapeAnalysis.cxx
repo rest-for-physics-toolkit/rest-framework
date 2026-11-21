@@ -933,32 +933,37 @@ template double TRestPulseShapeAnalysis::GetRiseTime(const std::vector<std::pair
 template double TRestPulseShapeAnalysis::GetRiseTime(const std::vector<std::pair<float, float>>& signal);
 
 template <typename T>
-void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<T>& noise, double amplitude) {
+void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<T>& noise, double amplitude, TRandom* random) {
+    if (!random) random = gRandom;
     const size_t size = noise.size();
     for (size_t i = 0; i < size; ++i) {
-        noise[i] = static_cast<T>(gRandom->Gaus(0.0, amplitude));
+        noise[i] = static_cast<T>(random->Gaus(0.0, amplitude));
     }
 }
 
-template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<short>& noise, double amplitude);
-template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<float>& noise, double amplitude);
-template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<double>& noise, double amplitude);
+template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<short>& noise, double amplitude,
+                                                     TRandom* random);
+template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<float>& noise, double amplitude,
+                                                     TRandom* random);
+template void TRestPulseShapeAnalysis::GetWhiteNoise(std::vector<double>& noise, double amplitude,
+                                                     TRandom* random);
 
 template <typename T>
 void TRestPulseShapeAnalysis::GetSinNoise(std::vector<T>& noise, double maxAmplitude, double period,
-                                          double phase) {
+                                          double phase, TRandom* random) {
+    if (!random) random = gRandom;
     const size_t size = noise.size();
     if (size == 0 || period <= 0 || maxAmplitude <= 0.0) {
         if (size > 0) std::fill(noise.begin(), noise.end(), static_cast<T>(0));
         return;
     }
 
-    double uBase = gRandom->Uniform(0.0, 1.0);
+    double uBase = random->Uniform(0.0, 1.0);
     double sinBase = std::sin(uBase * TMath::Pi() / 2.0);
     double baseAmplitude = maxAmplitude * (sinBase * sinBase);
 
-    double slowFreq = period * gRandom->Uniform(4.0, 8.0);
-    double slowPhase = gRandom->Uniform(0.0, 2.0 * TMath::Pi());
+    double slowFreq = period * random->Uniform(4.0, 8.0);
+    double slowPhase = random->Uniform(0.0, 2.0 * TMath::Pi());
 
     for (size_t i = 0; i < size; ++i) {
         double angle = (2.0 * TMath::Pi() * i / period) + phase;
@@ -973,11 +978,11 @@ void TRestPulseShapeAnalysis::GetSinNoise(std::vector<T>& noise, double maxAmpli
 }
 
 template void TRestPulseShapeAnalysis::GetSinNoise(std::vector<short>& noise, double maxAmplitude,
-                                                   double period, double phase);
+                                                   double period, double phase, TRandom* random);
 template void TRestPulseShapeAnalysis::GetSinNoise(std::vector<float>& noise, double maxAmplitude,
-                                                   double period, double phase);
+                                                   double period, double phase, TRandom* random);
 template void TRestPulseShapeAnalysis::GetSinNoise(std::vector<double>& noise, double maxAmplitude,
-                                                   double period, double phase);
+                                                   double period, double phase, TRandom* random);
 
 double TRestPulseShapeAnalysis::ShapingFunction(const std::string& type, double u) {
     if (type == "gaus") return std::exp(-0.5 * u * u);

@@ -17,7 +17,7 @@
 /// Parameters: energyReference (5.9 keV), resolutionReference (FWHM in %, 15), subtractFano (false),
 /// medium (only with subtractFano; empty: the only one with `charge`), seed (0: random seed; otherwise
 /// the generator is re-seeded at each event from the seed and the event and subevent IDs,
-/// TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number of threads).
+/// TRestEvent::EventSeed, so the result does not depend on the number of threads).
 ///
 /// Example:
 ///
@@ -124,7 +124,7 @@ bool TRestDetectorHitsSmearingProcess::ProcessEvent(const TRestEvent& input, TRe
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
 
     double energy = 0;
     for (size_t n = 0; n < inputEvent->GetNumberOfHits(); n++) {

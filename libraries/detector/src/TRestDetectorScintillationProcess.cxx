@@ -115,7 +115,7 @@ bool TRestDetectorScintillationProcess::ProcessEvent(const TRestEvent& input, TR
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
     fNPhotons = 0;
 
     const double lightYield = fLight->GetLightYield();
