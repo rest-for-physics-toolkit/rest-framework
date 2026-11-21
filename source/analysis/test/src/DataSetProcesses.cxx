@@ -28,6 +28,7 @@
 #include "TRestDataSetLogOdds.h"
 #include "TRestDataSetSignalSelection.h"
 #include "TRestDataSetTMVA.h"
+#include "TRestManager.h"
 #include "TRestPeakFit.h"
 
 namespace fs = std::filesystem;
@@ -385,6 +386,30 @@ TEST(DataSetSignalSelection, UpperQuantile) {
     selection.Apply(dataSet);
     EXPECT_EQ(*dataSet.GetDataFrame().Count(), 75u);
     for (double value : Values(dataSet, "x")) EXPECT_LE(value, 75);
+}
+
+TEST(DataSetSignalSelection, CutsAppliedToReferenceAndDataSet) {
+    // x = 1..100, odd = 1 for the odd values: the cut keeps 1, 3... 99, whose 50% lowest are those up to 49
+    std::vector<double> x, odd;
+    for (int i = 1; i <= 100; i++) {
+        x.push_back(i);
+        odd.push_back(i % 2);
+    }
+    const std::string path = WriteDataSet(TestDirectory() / "Dataset.root", {{"x", x}, {"odd", odd}});
+    TRestDataSet dataSet(path);
+    const std::string cut = "odd: {class: TRestCut, conditions: {o: \"odd > 0.5\"}}";
+    TRestManager manager("manager", YAML::Load("{class: TRestManager, " + cut + "}"));
+
+    TRestDataSetSignalSelection selection(
+        "selection", YAML::Load("{verbose: warning, observable: x, quantiles: [0, 0.5], cuts: [odd]}"));
+    selection.ObtainParameters(dataSet, &manager);
+    EXPECT_DOUBLE_EQ(selection.fRange.second, 49);
+    EXPECT_DOUBLE_EQ(selection.fEfficiency, 0.5);
+
+    // The entries kept pass the cut too: the odd values up to 49 (not the even ones below 49)
+    selection.Apply(dataSet);
+    EXPECT_EQ(*dataSet.GetDataFrame().Count(), 25u);
+    for (double value : Values(dataSet, "odd")) EXPECT_EQ(value, 1);
 }
 
 TEST(DataSetSignalSelection, QuantileIntervalOfAnIntegerColumn) {

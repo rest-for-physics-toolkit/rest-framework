@@ -15,6 +15,7 @@
 #include <TTreeFormula.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -33,7 +34,7 @@ namespace {
 
 /// Release of rest-common-data with the input files
 const std::string kData =
-    "https://github.com/rest-for-physics-toolkit/rest-common-data/releases/download/v1.1/";
+    "https://github.com/rest-for-physics-toolkit/rest-common-data/releases/download/v1.2/";
 /// Tolerance of the comparison: relative, or absolute for values close to 0
 constexpr double kTolerance = 1e-5;
 /// Results of fits (columns whose name contains "Gauss", e.g. trackAnalysis_MaxTrackGaussSigmaX): the
@@ -61,12 +62,13 @@ fs::path WorkDirectory() {
     return directory;
 }
 
-/// A file of rest-common-data in the work directory with its own name (the run parameters are read from
-/// it): downloaded once (cached) and linked
-std::string Input(const std::string& name) {
-    const fs::path link = WorkDirectory() / name;
+/// A file of rest-common-data in the work directory, with its own name (the run parameters are read from
+/// it) or `linkName` (e.g. the name a configuration expects): downloaded once (cached) and linked
+std::string Input(const std::string& name, const std::string& linkName = "") {
+    const std::string fileName = linkName.empty() ? name : linkName;
+    const fs::path link = WorkDirectory() / fileName;
     if (!fs::exists(link)) fs::create_symlink(TRestTools::DownloadFile(kData + name), link);
-    return name;
+    return fileName;
 }
 
 /// restManager in the work directory with a configuration of the repository (path from its root), one
@@ -135,8 +137,12 @@ bool IsNumeric(TBranch* branch) {
     return std::regex_match(std::string(static_cast<TLeaf*>(leaves->At(0))->GetTypeName()), number);
 }
 
-/// The numeric columns of the AnalysisTree of a file
-std::map<std::string, Column> ReadAnalysisTree(const std::string& fileName) {
+/// Name of the pseudo column with the number of entries of the analysis tree (when not all are read)
+const std::string kEntriesColumn = "[entries]";
+
+/// The numeric columns of the AnalysisTree of a file, of its first `maxEntries` entries (0: all of them;
+/// fewer than the tree has: the number of entries is added as the column kEntriesColumn)
+std::map<std::string, Column> ReadAnalysisTree(const std::string& fileName, Long64_t maxEntries = 0) {
     std::map<std::string, Column> columns;
     std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "READ"));
     if (!file || file->IsZombie()) {
@@ -153,13 +159,17 @@ std::map<std::string, Column> ReadAnalysisTree(const std::string& fileName) {
         ADD_FAILURE() << "AnalysisTree without entries in " << fileName;
         return columns;
     }
+    const Long64_t entries = maxEntries > 0 ? std::min(maxEntries, tree->GetEntries()) : tree->GetEntries();
+    if (entries < tree->GetEntries()) {
+        columns[kEntriesColumn] = {{static_cast<double>(tree->GetEntries())}, {1}};
+    }
     for (auto* object : *tree->GetListOfBranches()) {
         auto* branch = static_cast<TBranch*>(object);
         if (!IsNumeric(branch)) continue;
         TTreeFormula formula(branch->GetName(), branch->GetName(), tree);
         if (formula.GetNdim() == 0) continue;
         Column& column = columns[branch->GetName()];
-        for (Long64_t entry = 0; entry < tree->GetEntries(); entry++) {
+        for (Long64_t entry = 0; entry < entries; entry++) {
             tree->LoadTree(entry);
             const int size = formula.GetNdata();
             column.sizes.push_back(size);
@@ -176,10 +186,11 @@ bool Equal(double value, double reference, double tolerance) {
 }
 
 /// Compares the analysis tree of an output with the reference `name` (examples/test/reference/<name>.root),
-/// or writes it with REST_UPDATE_REFERENCE=1
-void CompareWithReference(const std::string& fileName, const std::string& name) {
+/// or writes it with REST_UPDATE_REFERENCE=1. With `maxEntries`, only its first entries and its number of
+/// entries (large outputs, e.g. datasets: the references are committed)
+void CompareWithReference(const std::string& fileName, const std::string& name, Long64_t maxEntries = 0) {
     ASSERT_FALSE(fileName.empty());
-    const auto columns = ReadAnalysisTree(fileName);
+    const auto columns = ReadAnalysisTree(fileName, maxEntries);
     ASSERT_FALSE(columns.empty()) << "no numeric column in the AnalysisTree of " << fileName;
     const fs::path referenceFile = fs::path(TESTS_SOURCE_DIR) / "reference" / (name + ".root");
 
@@ -344,4 +355,36 @@ TEST(Pipelines, AlphaCAMMSimulatedCalibration) {
     CompareWithReference(Output("Run00001_Am241_calibration_AlphaCAMM_RAW\\.root"), "Geant4ToRaw");
     ASSERT_TRUE(RestManager("libraries/connectors/examples/Geant4ToDriftHits.yaml", input));
     CompareWithReference(Output("Run00001_Am241_calibration_AlphaCAMM_DRIFT\\.root"), "Geant4ToDriftHits");
+}
+
+// Dataset chain of IAXO-D1 (calibration Run00229 and background Run00228, whole runs of FemDAQToTracks.yaml
+// as datasets of IAXODataSet.yaml): calibration and gain map of both, log odds of both, BDT of both (trained
+// with the calibration as signal and the background), and selection of the background with each one at 80%
+// of the calibration.
+// The datasets are large: the first entries of each output and its number of entries are compared. About
+// two minutes (TMVA trains twice): in a Long suite (ctest -E Long skips it)
+TEST(PipelinesLong, IAXODataSetChain) {
+    constexpr Long64_t entries = 1000;
+    Input("Dataset_IAXO_D1_Run00229_Calibration.root", "Dataset_Calibration.root");
+    Input("Dataset_IAXO_D1_Run00228_Background.root", "Dataset_Background.root");
+    for (const std::string sample : {"Calibration", "Background"}) {
+        ASSERT_TRUE(RestManager("libraries/detector/examples/DataSetCalibration.yaml",
+                                "Dataset_" + sample + ".root"));
+        CompareWithReference(Output("Dataset_" + sample + "_Calibrated\\.root"),
+                             "DataSetCalibration_" + sample, entries);
+    }
+    for (const std::string sample : {"Calibration", "Background"}) {
+        ASSERT_TRUE(RestManager("examples/DataSetLogOdds.yaml", "Dataset_" + sample + "_Calibrated.root"));
+        CompareWithReference(Output("Dataset_" + sample + "_LogOdds\\.root"), "DataSetLogOdds_" + sample,
+                             entries);
+    }
+    for (const std::string sample : {"Calibration", "Background"}) {
+        ASSERT_TRUE(RestManager("examples/DataSetTMVA.yaml", "Dataset_" + sample + "_Calibrated.root"));
+        CompareWithReference(Output("Dataset_" + sample + "_TMVA\\.root"), "DataSetTMVA_" + sample, entries);
+    }
+    ASSERT_TRUE(RestManager("examples/DataSetSignalSelection.yaml", "Dataset_Background_TMVA.root"));
+    CompareWithReference(Output("Dataset_Background_Selected\\.root"), "DataSetSignalSelection", entries);
+    ASSERT_TRUE(RestManager("examples/DataSetLogOddsSelection.yaml", "Dataset_Background_LogOdds.root"));
+    CompareWithReference(Output("Dataset_Background_LogOddsSelected\\.root"), "DataSetLogOddsSelection",
+                         entries);
 }

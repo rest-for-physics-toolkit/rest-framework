@@ -38,15 +38,18 @@ executable would take as a test). The unit tests build their inputs (events,
 metadata, datasets) in memory or in temporary files, without external data.
 
 The pipeline tests (`examples/test`, label `pipelines`) run restManager with the YAML of the examples, as a
-user would, on real data cut to a few hundred events and on fixed restG4 simulations, published in
+user would, on real data cut to a few hundred events, datasets of whole runs (for the dataset processes)
+and fixed restG4 simulations, published in
 [rest-common-data](https://github.com/rest-for-physics-toolkit/rest-common-data) (a fixed release, downloaded
 by URL and cached), each test in its own work directory. The random processes of the examples have fixed
 seeds (`seed`, a different one per process), so their outputs are reproducible. As the legacy pipeline
 validation, the `AnalysisTree` of each output is compared event by event with a reference of
 `examples/test/reference/` (every numeric column, scalars and vectors, relative tolerance 1e-5; the results
 of fits, columns with `Gauss` in their name, depend on the platform: tolerance 1e-2, up to 2% of their
-values may differ, and a fit without result, -1, on either side is not compared). After an intended change
-of the results, the references are written again and committed with the change:
+values may differ, and a fit without result, -1, on either side is not compared). Large outputs (the
+datasets of whole runs) are compared on their first entries and their number of entries, so the references
+stay small. After an intended change of the results, the references are written again and committed with
+the change:
 
 ```
 REST_UPDATE_REFERENCE=1 ctest -L pipelines

@@ -36,7 +36,8 @@ use them, and the dataset processes built on them. It depends on `RestCore` and 
   objects, drawn by `DrawResults` (macro `REST_ViewTMVA` of restRoot).
 - `TRestDataSetSignalSelection`: keeps the entries with an observable (e.g. `logOdds_total`, `bdt_score`)
   in the range holding a quantile interval of the reference (`quantiles`, e.g. [0, 0.8] or [0.2, 1]):
-  fixes a signal efficiency on a calibration and applies it to a background (filter).
+  fixes a signal efficiency on a calibration and applies it to a background (filter); its `cuts` (e.g.
+  energy window and fiducial region) are applied to both.
 - `TRestDataSetCombine`: adds the columns of another dataset of the same events (`combineFileName`, e.g.
   the vetoes analysed apart, to the dataset of the Micromegas), matched by run, eventID and subEventID; the
   entries without match are kept with default values and `<name>_matched` 0 (`keepUnmatched`, true by
@@ -62,7 +63,7 @@ reference of later runs.
 - `examples/DataSetLogOdds.yaml`: log odds of calibrated datasets with TRestDataSetLogOdds.
 - `examples/DataSetTMVA.yaml`: BDT of calibrated datasets with TRestDataSetTMVA.
 - `examples/DataSetSignalSelection.yaml`: selection of the entries with the BDT score of the 80% of the
-  calibration with TRestDataSetSignalSelection.
+  calibration with TRestDataSetSignalSelection; `examples/DataSetLogOddsSelection.yaml`, with the log odds.
 - `examples/DataSetTardis.yaml`: time since the previous event with TRestDataSetTardis (libraries/detector).
 
 ### Processes in the examples
@@ -75,5 +76,5 @@ The example configurations using each process of this component (paths from the 
 | `TRestDataSetCalibration` | `libraries/detector/examples/DataSetCalibration.yaml` |
 | `TRestDataSetCombine` | `examples/DataSetCombine.yaml` |
 | `TRestDataSetLogOdds` | `examples/DataSetLogOdds.yaml` |
-| `TRestDataSetSignalSelection` | `examples/DataSetSignalSelection.yaml` |
+| `TRestDataSetSignalSelection` | `examples/DataSetLogOddsSelection.yaml`, `examples/DataSetSignalSelection.yaml` |
 | `TRestDataSetTMVA` | `examples/DataSetTMVA.yaml` |

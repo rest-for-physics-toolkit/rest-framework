@@ -1,0 +1,29 @@
+# Calibration and background datasets (TRestDataSet) of IAXO D1, from the outputs of FemDAQToTracks.yaml
+# (R<run>_<subrun>_ANA_<tag>_Test_<type>.root): the observables of the event and of its main track
+# (trackAnalysis), with the TRestRun of each run, for the events with tracks in both projections. They are
+# the inputs of the dataset chain: libraries/detector/examples/DataSetCalibration.yaml, then
+# DataSetLogOdds.yaml or DataSetTMVA.yaml and DataSetSignalSelection.yaml. Generated with the macro, the
+# output and the files given as arguments (with -e: without it ROOT takes the call as a file name and does
+# nothing):
+#   restRoot -l -b -q -e 'REST_GenerateDataSet("examples/IAXODataSet.yaml", "dataSet",
+#                        "Dataset_Calibration.root", "R*_ANA_*_Calibration.root")'
+#   restRoot -l -b -q -e 'REST_GenerateDataSet("examples/IAXODataSet.yaml", "dataSet",
+#                        "Dataset_Background.root", "R*_ANA_*_Background.root")'
+
+# Events with tracks in both projections (X and Y strips)
+quality:
+  class: "TRestCut"
+  conditions:
+    nTracks: "trackAnalysis_NTracks_XZ > 0 && trackAnalysis_NTracks_YZ > 0"
+
+dataSet:
+  class: "TRestDataSet"
+  filePattern: "R*_ANA_*.root"  # replaced by the fourth argument of the macro
+  # The scalar observables (not the vectors of all the tracks, trackAnalysis_Tracks*)
+  observables: ["trackAnalysis_NTracks*", "trackAnalysis_TotalEnergy", "trackAnalysis_MaxTrack*",
+                "trackAnalysis_EnergyBalance_XZ_YZ", "trackAnalysis_SigmaBalance_XZ_YZ"]
+  cuts: ["quality"]
+  # Legacy tckAna_MaxTrack_XYZ_SigmaZ2
+  columns:
+    MaxTrackSigmaZ2: "trackAnalysis_MaxTrackSigmaZ * trackAnalysis_MaxTrackSigmaZ"
+  outputFileName: "Dataset.root"  # replaced by the third argument of the macro

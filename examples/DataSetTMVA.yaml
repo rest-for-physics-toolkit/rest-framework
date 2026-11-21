@@ -1,6 +1,7 @@
-# Boosted decision tree (TRestDataSetTMVA, ROOT TMVA) of datasets calibrated with DataSetCalibration.yaml: trained
-# with the calibration as signal (cut on the calibrated energy, calib_Energy) and a background dataset, its score
-# is added to the dataset processed (bdt_score):
+# Boosted decision tree (TRestDataSetTMVA, ROOT TMVA) of datasets calibrated with DataSetCalibration.yaml:
+# trained with the calibration as signal (cuts on the calibrated energy, calib_Energy, and the fiducial
+# region) and a background dataset (in the fiducial region), its score is added to the dataset processed
+# (bdt_score):
 #   restManager --c examples/DataSetTMVA.yaml --i Dataset_Background_Calibrated.root
 # (output Dataset_Background_TMVA.root, from the tag of inputFormat)
 # The output dataset keeps the trained BDT (weights): as referenceFileName of another pipeline, it classifies
@@ -16,10 +17,12 @@ manager:
     conditions:
       range: "calib_Energy > 4 && calib_Energy < 8"
 
-  hits:
+  # The fiducial region: the main track within 1 cm of the centre of the readout
+  fiducial:
     class: "TRestCut"
     conditions:
-      nHits: "hitsAnalysis_NHits > 0"
+      inside: "trackAnalysis_MaxTrack_XZ_MeanX * trackAnalysis_MaxTrack_XZ_MeanX +
+               trackAnalysis_MaxTrack_YZ_MeanY * trackAnalysis_MaxTrack_YZ_MeanY < 100"
 
   dataSetProcessing:
     class: "TRestDataSetProcessManager"
@@ -30,9 +33,13 @@ manager:
     bdt:
       class: "TRestDataSetTMVA"
       referenceFileName: "Dataset_Calibration_Calibrated.root"  # signal
-      cuts: ["energy", "hits"]
+      cuts: ["energy", "fiducial"]
       backgroundFileName: "Dataset_Background_Calibrated.root"
-      backgroundCuts: ["hits"]
+      backgroundCuts: ["fiducial"]
       method: "BDT"
       options: "NTrees=800:MinNodeSize=2.5%:MaxDepth=3:BoostType=AdaBoost:AdaBoostBeta=0.5:nCuts=20"
-      observables: ["hitsAnalysis_SigmaX", "hitsAnalysis_SigmaY", "hitsAnalysis_NHits"]
+      # The observables of the log odds (DataSetLogOdds.yaml)
+      observables: ["MaxTrackSigmaZ2", "trackAnalysis_EnergyBalance_XZ_YZ", "trackAnalysis_MaxTrack_XZ_NHits",
+                    "trackAnalysis_MaxTrack_YZ_NHits", "trackAnalysis_MaxTrackEnergyRatio",
+                    "trackAnalysis_MaxTrack_XZ_SigmaX", "trackAnalysis_MaxTrack_YZ_SigmaY",
+                    "trackAnalysis_SigmaBalance_XZ_YZ"]

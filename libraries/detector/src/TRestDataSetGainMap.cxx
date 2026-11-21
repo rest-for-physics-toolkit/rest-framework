@@ -97,8 +97,8 @@
 ///      class: "TRestDataSetGainMap"
 ///      referenceFileName: "Dataset_Calibration.root"
 ///      observable: "rawAnalysis_ThresholdIntegral"
-///      spatialObservableX: "hitsAnalysis_MeanX"
-///      spatialObservableY: "hitsAnalysis_MeanY"
+///      spatialObservableX: "trackAnalysis_MaxTrack_XZ_MeanX"
+///      spatialObservableY: "trackAnalysis_MaxTrack_YZ_MeanY"
 ///      segments: [5, 5]
 ///      peaks:
 ///        - {energy: "22.5 keV", range: [250000, 370000]}

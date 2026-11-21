@@ -833,7 +833,8 @@ manager:
   fiducial:
     class: "TRestCut"
     conditions:
-      inside: "hitsAnalysis_MeanX * hitsAnalysis_MeanX + hitsAnalysis_MeanY * hitsAnalysis_MeanY < 2500"
+      inside: "trackAnalysis_MaxTrack_XZ_MeanX * trackAnalysis_MaxTrack_XZ_MeanX +
+               trackAnalysis_MaxTrack_YZ_MeanY * trackAnalysis_MaxTrack_YZ_MeanY < 100"
   dataSetProcessing:
     class: "TRestDataSetProcessManager"
     inputFileName: "Dataset_Calibration.root"               # --i
@@ -843,7 +844,7 @@ manager:
       class: "TRestDataSetCalibration"
       referenceFileName: "Dataset_Calibration.root"
       cuts: ["fiducial"]
-      observable: "hitsAnalysis_Energy"
+      observable: "trackAnalysis_MaxTrackEnergy"
       range: [0, 20000]
       peaks:
         - {energy: "5.9 keV"}
@@ -874,7 +875,7 @@ objects in `RESTDataSetStore/<class>/<name>`.
 | `TRestDataSetGainMap` | detector | `<name>_<calibratedObservable>` per segment of the readout and `..NoSegmentation` | Calibration of each segment (`segments`, `splitX/Y`) and of the whole readout |
 | `TRestDataSetLogOdds` | analysis | `<name>_<observable>` = log(1 − p) − log(p) for each observable, and `<name>_total` | PDF of each observable in the reference |
 | `TRestDataSetTMVA` | analysis | `<name>_score` | A trained TMVA method (BDT by default), signal = reference, background = `backgroundFileName`; ROC integral, separation, KS tests |
-| `TRestDataSetSignalSelection` | analysis | (filters the entries) | `range` of `observable` between the `quantiles` of the reference, and its `efficiency` |
+| `TRestDataSetSignalSelection` | analysis | (filters the entries: its `cuts` and the range) | `range` of `observable` between the `quantiles` of the reference, and its `efficiency` |
 | `TRestDataSetCombine` | analysis | The columns of another dataset of the same events (`combineFileName`, `observables`, `prefix`), matched by run, `eventID` and `subEventID`, and `<name>_matched` (0 where the event is not there: default values, or filtered without `keepUnmatched`) | None (e.g. the vetoes and the Micromegas analysed apart, combined) |
 | `TRestDataSetTardis` | detector | `<name>_timeDelay`: time in seconds since the previous event in chronological order across all runs (with `channels`: in the same place of the readout); NaN for the first event | None (its `cuts` filter the dataset) |
 

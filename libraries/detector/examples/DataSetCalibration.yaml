@@ -1,7 +1,7 @@
-# Energy calibration of datasets (TRestDataSetProcessManager) with the observables of a
-# TRestDetectorHitsAnalysisProcess named hitsAnalysis. The peaks are fitted in the calibration dataset
-# (generated with REST_GenerateDataSet); the same configuration calibrates the calibration and the background
-# datasets:
+# Energy calibration of datasets (TRestDataSetProcessManager) with the energy of the main track of a
+# TRestTrackAnalysisProcess named trackAnalysis (examples/IAXODataSet.yaml). The peaks are fitted in the
+# calibration dataset (generated with REST_GenerateDataSet), in the fiducial region; the same configuration
+# calibrates the calibration and the background datasets:
 #   restManager --c libraries/detector/examples/DataSetCalibration.yaml --i Dataset_Calibration.root
 #   restManager --c libraries/detector/examples/DataSetCalibration.yaml --i Dataset_Background.root
 # The outputs (Dataset_Calibration_Calibrated.root, Dataset_Background_Calibrated.root) are named with the
@@ -14,10 +14,12 @@ manager:
   class: "TRestManager"
   name: "manager"
 
+  # The fiducial region: the main track within 1 cm of the centre of the readout
   fiducial:
     class: "TRestCut"
     conditions:
-      inside: "hitsAnalysis_MeanX * hitsAnalysis_MeanX + hitsAnalysis_MeanY * hitsAnalysis_MeanY < 2500"
+      inside: "trackAnalysis_MaxTrack_XZ_MeanX * trackAnalysis_MaxTrack_XZ_MeanX +
+               trackAnalysis_MaxTrack_YZ_MeanY * trackAnalysis_MaxTrack_YZ_MeanY < 100"
 
   dataSetProcessing:
     class: "TRestDataSetProcessManager"
@@ -32,7 +34,7 @@ manager:
       class: "TRestDataSetCalibration"
       referenceFileName: "Dataset_Calibration.root"
       cuts: ["fiducial"]
-      observable: "hitsAnalysis_Energy"
+      observable: "trackAnalysis_MaxTrackEnergy"
       nBins: 1024
       range: [0, 20000]
       peaks:
@@ -44,9 +46,9 @@ manager:
     gainMap:
       class: "TRestDataSetGainMap"
       referenceFileName: "Dataset_Calibration.root"
-      observable: "hitsAnalysis_Energy"
-      spatialObservableX: "hitsAnalysis_MeanX"
-      spatialObservableY: "hitsAnalysis_MeanY"
+      observable: "trackAnalysis_MaxTrackEnergy"
+      spatialObservableX: "trackAnalysis_MaxTrack_XZ_MeanX"
+      spatialObservableY: "trackAnalysis_MaxTrack_YZ_MeanY"
       readout: ""  # the data readout of the dataset (its manager); its extent is divided in segments
       segments: [4, 4]
       range: [0, 20000]

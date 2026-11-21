@@ -37,7 +37,8 @@ class TRestDataSetSignalSelection : public TRestDataSetProcess {
     /// \brief Reads the fields; throws without observable or with quantiles out of 0 <= lower < upper <= 1
     void LoadConfig() override;
 
-    /// \brief Keeps the entries of the dataset with the observable in the range (filter)
+    /// \brief Keeps the entries of the dataset that pass the cuts and have the observable in the range
+    /// (filters)
     void Apply(TRestDataSet& dataSet) const override;
 };
 

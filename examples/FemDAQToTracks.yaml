@@ -4,7 +4,8 @@
 # Run from the repository root: the readout and medium file paths are relative to the working directory.
 # The readout file is generated with REST_Detector_GenerateMicromegasReadout (libraries/detector/README.md)
 # and the medium file with restGarfield (packages/restGarfield/examples/ArIso.yaml). The output has the
-# observables of rawToSignal used by libraries/connectors/examples/ChannelActivity.yaml.
+# observables of rawToSignal used by libraries/connectors/examples/ChannelActivity.yaml, and those of
+# trackAnalysis used by the datasets (examples/IAXODataSet.yaml).
 
 manager:
   class: "TRestManager"

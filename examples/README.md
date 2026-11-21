@@ -7,9 +7,11 @@ except where noted.
 | File | Contents |
 |---|---|
 | `FemDAQToTracks.yaml` | Full chain of the IAXO D1 data of the old FEMDAQ, from raw signals to track analysis (readout and medium files relative to the repository root). |
+| `IAXODataSet.yaml` | Calibration and background datasets (`Dataset_Calibration.root`, `Dataset_Background.root`) of the outputs of `FemDAQToTracks.yaml`: the observables of the main track of the events with tracks in X and Y, the inputs of `DataSetCalibration.yaml`. |
 | `DataSetLogOdds.yaml` | Log odds of observables (`TRestDataSetLogOdds`), PDFs from the calibration. |
 | `DataSetTMVA.yaml` | BDT of TMVA (`TRestDataSetTMVA`), the calibration as signal and a background dataset. |
 | `DataSetSignalSelection.yaml` | Selection (`TRestDataSetSignalSelection`) of the entries with the BDT score of the 80% of the calibration. |
+| `DataSetLogOddsSelection.yaml` | The same selection with the total log odds (`logOdds_total`) of `DataSetLogOdds.yaml`. |
 | `DataSetCombine.yaml` | Combination (`TRestDataSetCombine`) of the datasets of the Micromegas and of the vetoes, analysed apart, matched by event. |
 | `DataSetTardis.yaml` | Chronological time differences (`TRestDataSetTardis`) for any dataset with both timestamp columns. |
 | `TREXDMToTracks.yaml` | Full chain of the TREX-DM FEMDAQ data of one Micromegas plane (`--set plane=0` or `1`), from raw signals to track analysis (Ne + 2% isobutane at 2 bar), with the physical channels of each event (`rawToSignal_SignalsPhysicalID`); output named as the input. |
@@ -18,9 +20,11 @@ except where noted.
 
 ```
 restManager --c examples/FemDAQToTracks.yaml --i Run00012_Calibration_IAXO_Data_000.root
+restRoot -l -b -q -e 'REST_GenerateDataSet("examples/IAXODataSet.yaml", "dataSet", "Dataset_Calibration.root", "R*_ANA_*_Calibration.root")'
 restManager --c examples/DataSetLogOdds.yaml --i Dataset_Background_Calibrated.root
 restManager --c examples/DataSetTMVA.yaml --i Dataset_Background_Calibrated.root
 restManager --c examples/DataSetSignalSelection.yaml --i Dataset_Background_TMVA.root
+restManager --c examples/DataSetLogOddsSelection.yaml --i Dataset_Background_LogOdds.root
 restManager --c examples/DataSetTardis.yaml --i Dataset.root --o Dataset_Tardis.root
 restManager --c examples/TREXDMToTracks.yaml --i Run03318_Calibration109Cd_TREXDM_DAQ_001.root --set plane=0
 restManager --c examples/TREXDMTardis.yaml --i "Run*_TREXDM_Plane0_*.root"
@@ -36,5 +40,7 @@ with both TREX-DM planes)
 on the data files of [rest-common-data](https://github.com/rest-for-physics-toolkit/rest-common-data), and the
 simulated chains on its restG4 files (`libraries/geant4/examples` `Quenching.yaml` and `Geant4Analysis.yaml`,
 `libraries/connectors/examples` `Geant4ToHits.yaml`, `Geant4ToRawVeto.yaml` with the veto readout of
-`GDMLReadout.yaml`, `Geant4ToRaw.yaml` and `Geant4ToDriftHits.yaml`), with the analysis tree of each output
-compared with a reference of `test/reference/`.
+`GDMLReadout.yaml`, `Geant4ToRaw.yaml` and `Geant4ToDriftHits.yaml`), and the dataset chain on its IAXO-D1
+datasets of whole runs (`IAXODataSet.yaml` of Run00229 and Run00228: `DataSetCalibration.yaml`,
+`DataSetLogOdds.yaml`, `DataSetTMVA.yaml`, `DataSetSignalSelection.yaml` and `DataSetLogOddsSelection.yaml`;
+first 1000 entries and number of entries compared), with the analysis tree of each output compared with a reference of `test/reference/`.

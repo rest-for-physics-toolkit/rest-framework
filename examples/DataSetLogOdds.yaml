@@ -1,6 +1,7 @@
-# Log odds (TRestDataSetLogOdds) of datasets calibrated with DataSetCalibration.yaml: the PDFs of the observables are
-# built in the calibrated calibration dataset, with a cut on the calibrated energy (calib_Energy), and the log
-# odds are added to the dataset processed (logOdds_<observable> and logOdds_total):
+# Log odds (TRestDataSetLogOdds) of datasets calibrated with DataSetCalibration.yaml: the PDFs of the
+# observables are built in the calibrated calibration dataset, with cuts on the calibrated energy
+# (calib_Energy) and the fiducial region, and the log odds are added to the dataset processed
+# (logOdds_<observable> and logOdds_total):
 #   restManager --c examples/DataSetLogOdds.yaml --i Dataset_Background_Calibrated.root
 # (output Dataset_Background_LogOdds.root, from the tag of inputFormat)
 # The reference is used as it is: it must have the columns of the cuts (calib_Energy).
@@ -14,6 +15,13 @@ manager:
     conditions:
       range: "calib_Energy > 4 && calib_Energy < 8"
 
+  # The fiducial region: the main track within 1 cm of the centre of the readout
+  fiducial:
+    class: "TRestCut"
+    conditions:
+      inside: "trackAnalysis_MaxTrack_XZ_MeanX * trackAnalysis_MaxTrack_XZ_MeanX +
+               trackAnalysis_MaxTrack_YZ_MeanY * trackAnalysis_MaxTrack_YZ_MeanY < 100"
+
   dataSetProcessing:
     class: "TRestDataSetProcessManager"
     inputFileName: "Dataset_Background_Calibrated.root"  # --i
@@ -23,8 +31,15 @@ manager:
     logOdds:
       class: "TRestDataSetLogOdds"
       referenceFileName: "Dataset_Calibration_Calibrated.root"
-      cuts: ["energy"]
+      cuts: ["energy", "fiducial"]
       observables:
-        - {observable: "hitsAnalysis_SigmaX", range: [0, 10], nBins: 100}
-        - {observable: "hitsAnalysis_SigmaY", range: [0, 10], nBins: 100}
-        - {observable: "hitsAnalysis_NHits", range: [0, 100], nBins: 100}
+        # Those of the legacy IAXO analysis (legacy name in the comment; MaxTrackEnergyBalanceXY and
+        # MaxTrackxySigmaBalance are the balances)
+        - {observable: "MaxTrackSigmaZ2", range: [0, 20], nBins: 100}  # MaxTrack_XYZ_SigmaZ2
+        - {observable: "trackAnalysis_EnergyBalance_XZ_YZ", range: [-1, 1], nBins: 100}
+        - {observable: "trackAnalysis_MaxTrack_XZ_NHits", range: [0, 20], nBins: 20}  # MaxTrack_XZ_nHits
+        - {observable: "trackAnalysis_MaxTrack_YZ_NHits", range: [0, 20], nBins: 20}  # MaxTrack_YZ_nHits
+        - {observable: "trackAnalysis_MaxTrackEnergyRatio", range: [0, 0.1], nBins: 100}
+        - {observable: "trackAnalysis_MaxTrack_XZ_SigmaX", range: [0, 10], nBins: 100}
+        - {observable: "trackAnalysis_MaxTrack_YZ_SigmaY", range: [0, 10], nBins: 100}
+        - {observable: "trackAnalysis_SigmaBalance_XZ_YZ", range: [-1, 1], nBins: 25}
