@@ -46,7 +46,7 @@ class TRestDetectorHitsDriftResponseProcess : public TRestEventProcess {
     /// several (an effective W-value), as TRestDetectorHitsDriftProcess.
     int fMaxHits = 1000;
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
-    /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
+    /// with TRestEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
 
     /// \brief Default constructor (no configuration).

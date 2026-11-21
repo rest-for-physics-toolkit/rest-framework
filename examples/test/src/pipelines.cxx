@@ -36,10 +36,12 @@ const std::string kData =
     "https://github.com/rest-for-physics-toolkit/rest-common-data/releases/download/v1.1/";
 /// Tolerance of the comparison: relative, or absolute for values close to 0
 constexpr double kTolerance = 1e-5;
-/// Results of fits (columns whose name contains "Gauss", e.g. trackAnalysis_MaxTrackGaussSigmaX): Minuit
-/// converges to slightly different points on other platforms (libm, architecture), and a fit may fail on one
-/// of them only. Their tolerance, and the fraction of their values allowed to differ
+/// Results of fits (columns whose name contains "Gauss", e.g. trackAnalysis_MaxTrackGaussSigmaX): the
+/// minimization is deterministic, but last-bit differences of libm (erf) between platforms can move the
+/// minimum of a flat chi2, or a fit can be at its limit on one of them only. Their tolerance, and the
+/// fraction of their values allowed to differ; a fit without result (-1) on either side is not compared
 constexpr double kFitTolerance = 1e-2;
+constexpr double kFitNoResult = -1;
 constexpr double kFitMismatches = 0.02;
 const std::regex kFitColumn(".*Gauss.*");
 /// Mismatches printed per column
@@ -240,6 +242,9 @@ void CompareWithReference(const std::string& fileName, const std::string& name) 
         for (size_t entry = 0; entry < sizes->size(); entry++) {
             for (int i = 0; i < (*sizes)[entry]; i++, index++) {
                 if (Equal(output.values[index], (*values)[index], tolerance)) continue;
+                if (fit && (output.values[index] == kFitNoResult || (*values)[index] == kFitNoResult)) {
+                    continue;
+                }
                 std::ostringstream text;
                 text << *column << ", entry " << entry << ", value " << i << ": " << output.values[index]
                      << " (reference " << (*values)[index] << ")";

@@ -44,16 +44,33 @@ by URL and cached), each test in its own work directory. The random processes of
 seeds (`seed`, a different one per process), so their outputs are reproducible. As the legacy pipeline
 validation, the `AnalysisTree` of each output is compared event by event with a reference of
 `examples/test/reference/` (every numeric column, scalars and vectors, relative tolerance 1e-5; the results
-of fits, columns with `Gauss` in their name, depend on the platform: tolerance 1e-2 and up to 2% of their
-values may differ). After an intended change of the results, the references are written again and committed
-with the change:
+of fits, columns with `Gauss` in their name, depend on the platform: tolerance 1e-2, up to 2% of their
+values may differ, and a fit without result, -1, on either side is not compared). After an intended change
+of the results, the references are written again and committed with the change:
 
 ```
 REST_UPDATE_REFERENCE=1 ctest -L pipelines
 ```
- Tests of a minute or more
-(e.g. Magboltz in restGarfield) go in a test suite whose name ends in `Long` (`RestGarfieldLong`), so they
-can be skipped while developing with `ctest -L <component> -E Long`; the CI runs them all.
+
+The results must be the same on every platform (they may change with the version of ROOT, not with the
+compiler or the standard library), so the code follows these rules:
+
+- random numbers from a `TRandom3` of the process (seeded with `TRestEvent::EventSeed`), with its own
+  distributions (`Gaus`, `Poisson`, `Rndm`...) or algorithms written on them; never the distributions of
+  `<random>` (`std::binomial_distribution`, `std::gamma_distribution`...), whose algorithms differ between
+  libstdc++ and libc++;
+- one random number per statement: the operands of an expression (`Gaus() * u + Gaus() * v`) and the
+  arguments of a call are evaluated in an order that depends on the compiler (braced lists `{a, b, c}` are
+  evaluated in order);
+- `std::stable_sort` when the comparison does not order all the elements (by a coordinate, a time, an
+  energy): `std::sort` leaves the equal ones in an order that depends on the library;
+- no output depending on the iteration order of `std::unordered_map` or `std::unordered_set` (use
+  `std::map`, `std::set` or a vector);
+- the build disables fused multiply-adds (`-ffp-contract=off`), which clang uses by default on arm64.
+
+Tests of a minute or more (e.g. Magboltz in restGarfield) go in a test suite whose name ends in `Long`
+(`RestGarfieldLong`), so they can be skipped while developing with `ctest -L <component> -E Long`; the CI
+runs them all.
 
 ## Versions and releases
 

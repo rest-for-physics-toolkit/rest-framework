@@ -1,8 +1,5 @@
 #include "TRestHitsAnalysis.h"
 
-#include <TF1.h>
-#include <TFitResult.h>
-#include <TGraphErrors.h>
 #include <TMatrixD.h>
 #include <TMatrixDSym.h>
 #include <TMatrixDSymEigen.h>
@@ -12,10 +9,12 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 
 using TRestHitsAnalysis::XYZVector;
 
@@ -536,47 +535,115 @@ double TRestHitsAnalysis::GetTrackEnds(const std::vector<XYZVector>& points,
     return total > 0 ? std::abs(lastEnergy - firstEnergy) / total : 0;
 }
 
+namespace {
+/// Minimum of f in [low, high], deterministic: the best of nScan + 1 equidistant points, then a golden
+/// section search between its neighbours. Returns {x, f(x)} and the index of the best point of the scan
+std::pair<double, double> MinimizeOnInterval(const std::function<double(double)>& f, double low, double high,
+                                             int nScan, int nGolden, int& best) {
+    const double step = (high - low) / nScan;
+    best = 0;
+    double bestValue = std::numeric_limits<double>::max();
+    for (int i = 0; i <= nScan; i++) {
+        const double value = f(low + i * step);
+        if (value < bestValue) {
+            bestValue = value;
+            best = i;
+        }
+    }
+    const double ratio = (std::sqrt(5.0) - 1) / 2;
+    double a = low + std::max(best - 1, 0) * step;
+    double b = low + std::min(best + 1, nScan) * step;
+    double c = b - ratio * (b - a);
+    double d = a + ratio * (b - a);
+    double fC = f(c);
+    double fD = f(d);
+    for (int i = 0; i < nGolden; i++) {
+        if (fC < fD) {
+            b = d;
+            d = c;
+            fD = fC;
+            c = b - ratio * (b - a);
+            fC = f(c);
+        } else {
+            a = c;
+            c = d;
+            fC = fD;
+            d = a + ratio * (b - a);
+            fD = f(d);
+        }
+    }
+    const double x = (a + b) / 2;
+    return {x, f(x)};
+}
+}  // namespace
+
 double TRestHitsAnalysis::GetGaussSigma(const std::vector<double>& values,
-                                        const std::vector<double>& energies, double error, int nHitsMin) {
-    const int nHits = (int)values.size();
-    if (nHits == 0) return 0;
+                                        const std::vector<double>& energies) {
+    if (values.empty()) return 0;
 
-    const bool addPoints = nHits <= nHitsMin;
-    const int nAdd = addPoints ? 2 : 0;
-    const int nElems = nHits + nAdd;
-    std::vector<double> x(nElems), y(nElems), ex(nElems, 0), ey(nElems);
-
-    double xMin = std::numeric_limits<double>::max();
-    double xMax = std::numeric_limits<double>::lowest();
-    for (int n = 0, k = nAdd / 2; n < nHits; n++, k++) {
-        x[k] = values[n];
-        y[k] = energies[n];
-        ey[k] = y[k] != 0 ? 10 * std::sqrt(std::abs(y[k])) : 0;
-        xMin = std::min(xMin, x[k]);
-        xMax = std::max(xMax, x[k]);
-    }
-    if (addPoints) {
-        x.front() = xMin - 0.5;
-        x.back() = xMax + 0.5;
-        y.front() = y.back() = 0;
-        ey.front() = ey.back() = error;
+    // Energy of each position (several hits in a strip are added); positions closer than a millionth
+    // of their size are the same one
+    std::map<double, double> byPosition;
+    for (size_t n = 0; n < values.size() && n < energies.size(); n++) byPosition[values[n]] += energies[n];
+    std::vector<std::pair<double, double>> positions;
+    for (const auto& [x, e] : byPosition) {
+        if (!positions.empty() && x - positions.back().first <= 1e-6 * std::max(1.0, std::abs(x))) {
+            positions.back().second += e;
+        } else {
+            positions.emplace_back(x, e);
+        }
     }
 
-    const auto maxIt = std::max_element(y.begin(), y.end());
-    TGraphErrors graph(nElems, x.data(), y.data(), ex.data(), ey.data());
-    TF1 fit("", "gaus");
-    fit.SetParameter(0, *maxIt);
-    fit.SetParameter(1, x[maxIt - y.begin()]);
-    // The values are not sorted: the extent is given by their minimum and maximum (with the added points)
-    const double extent = addPoints ? xMax - xMin + 1.0 : xMax - xMin;
-    fit.SetParameter(2, extent / 2.0);
+    double total = 0;
+    double pitch = std::numeric_limits<double>::max();
+    for (size_t n = 0; n < positions.size(); n++) {
+        total += positions[n].second;
+        if (n > 0) pitch = std::min(pitch, positions[n].first - positions[n - 1].first);
+    }
+    if (!(total > 0)) return -1;
+    // With two strips any sigma below the pitch fits (the centre moving with it): three are needed
+    const auto significant = std::count_if(positions.begin(), positions.end(),
+                                           [total](const auto& p) { return p.second > 0.01 * total; });
+    if (significant < 3) return -1;
+    const double xMin = positions.front().first;
+    const double xMax = positions.back().first;
 
-    // Q: quiet; N: no plot; B: given start parameters; S: return the fit result
-    TFitResultPtr fitResult = graph.Fit(&fit, "QNBS");
-    if (!fitResult.Get() || !fitResult->IsValid()) return -1;
-    // A sigma beyond the extent of the points is a diverged fit (a flat gaussian)
-    const double sigma = std::abs(fit.GetParameter(2));
-    return sigma <= extent ? sigma : -1;
+    // Strips of width pitch from one before the first to one after the last (0 where there is no hit)
+    const long nStrips = std::lround((xMax - xMin) / pitch) + 3;
+    if (nStrips > 100000) return -1;
+    std::vector<double> stripEnergy(nStrips, 0);
+    for (const auto& [x, e] : positions) stripEnergy[std::lround((x - xMin) / pitch) + 1] += e;
+
+    // Least squares of the energies against the gaussian of integral total integrated over each strip
+    const double halfPitch = pitch / 2;
+    const auto chi2 = [&](double mean, double sigma) {
+        const double scale = 1 / (sigma * std::sqrt(2.0));
+        double sum = 0;
+        for (long k = 0; k < nStrips; k++) {
+            const double x = xMin + (k - 1) * pitch - mean;
+            const double expected =
+                total * 0.5 * (std::erf((x + halfPitch) * scale) - std::erf((x - halfPitch) * scale));
+            sum += (stripEnergy[k] - expected) * (stripEnergy[k] - expected);
+        }
+        return sum;
+    };
+
+    // For each sigma (in log, from pitch / 100 to the extent) the best centre, within the strips
+    const double extent = xMax - xMin + 2 * pitch;
+    const auto bestForSigma = [&](double logSigma) {
+        const double sigma = std::exp(logSigma);
+        int best = 0;
+        return MinimizeOnInterval([&](double mean) { return chi2(mean, sigma); }, xMin - halfPitch,
+                                  xMax + halfPitch, 40, 40, best)
+            .second;
+    };
+    constexpr int nScan = 40;
+    int best = 0;
+    const double logSigma =
+        MinimizeOnInterval(bestForSigma, std::log(pitch / 100), std::log(extent), nScan, 40, best).first;
+    // At the extent: the energy does not decrease away from the centre (no gaussian)
+    if (best == nScan) return -1;
+    return std::exp(logSigma);
 }
 
 double TRestHitsAnalysis::GetTwist(const std::vector<XYZVector>& points, size_t n, size_t m) {

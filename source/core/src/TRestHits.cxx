@@ -702,10 +702,10 @@ void Draw3DMarkers(const TRestHits& hits, const double min[3], const double max[
                 const auto it = groups[ub][common].find(bin);
                 if (it == groups[ub][common].end()) continue;
                 std::vector<size_t> groupA = indicesA, groupB = it->second;
-                std::sort(groupA.begin(), groupA.end(), [&](size_t i, size_t j) {
+                std::stable_sort(groupA.begin(), groupA.end(), [&](size_t i, size_t j) {
                     return hits.GetCoordinate(i, ub) < hits.GetCoordinate(j, ub);
                 });
-                std::sort(groupB.begin(), groupB.end(), [&](size_t i, size_t j) {
+                std::stable_sort(groupB.begin(), groupB.end(), [&](size_t i, size_t j) {
                     return ascending ? hits.GetCoordinate(i, ua) < hits.GetCoordinate(j, ua)
                                      : hits.GetCoordinate(i, ua) > hits.GetCoordinate(j, ua);
                 });

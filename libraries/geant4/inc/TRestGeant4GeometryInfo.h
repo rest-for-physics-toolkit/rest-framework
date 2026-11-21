@@ -4,7 +4,6 @@
 #include <map>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 // Modern ROOT vector headers (MathCore GenVector)
@@ -40,8 +39,9 @@ class TRestGeant4GeometryInfo {
     // Cache dictionaries mapping fast unique integer IDs to volume paths
     std::map<int, std::string> fVolumeNameMap;
     std::map<std::string, int> fVolumeNameReverseMap;
-    std::unordered_map<std::string, std::set<std::string>> fG4ToAltNames;
-    std::unordered_map<std::string, std::string> fAltToG4Name;
+    // Ordered: the volumes are listed in the same order on every platform
+    std::map<std::string, std::set<std::string>> fG4ToAltNames;
+    std::map<std::string, std::string> fAltToG4Name;
 
    public:
     TRestGeant4GeometryInfo() = default;

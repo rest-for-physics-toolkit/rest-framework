@@ -72,6 +72,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compiler flags
 # ---------------------------------------------------------------------------
 add_compile_options(-fPIC -Wall -Wextra -Wno-unused-parameter)
+# No fused multiply-adds (a * b + c rounded once): clang contracts by default on
+# arm64 (macOS), gcc only with FMA instructions; without them the results are
+# the same on every platform
+add_compile_options(-ffp-contract=off)
 # Off by default: each compiler version adds new warnings, which would break the
 # build
 option(REST_WERROR "Treat compiler warnings as errors" OFF)

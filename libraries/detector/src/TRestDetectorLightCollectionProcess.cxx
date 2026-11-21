@@ -101,9 +101,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <memory>
-#include <random>
 #include <stdexcept>
 
 #include "TF1.h"
@@ -120,22 +118,47 @@
 using ROOT::Math::XYZVector;
 
 namespace {
-/// Uniform random bits from a TRandom, for the distributions of <random>
-struct TRandomBits {
-    using result_type = std::uint32_t;
-    TRandom& random;
-    static constexpr result_type min() { return 0; }
-    static constexpr result_type max() { return 0xFFFFFFFEu; }
-    result_type operator()() { return static_cast<result_type>(random.Integer(0xFFFFFFFFu)); }
-};
-
 /// Binomial(n, p) drawn from a TRandom in about constant time: TRandom::Binomial draws n uniform numbers,
-/// too slow for the photons of a hit (thousands, for each channel around it)
+/// too slow for the photons of a hit (thousands, for each channel around it). Not
+/// std::binomial_distribution, whose algorithm depends on the standard library (the same seed would give
+/// other numbers on another platform). For a mean below 10, inversion of the distribution function; above,
+/// rejection from a Lorentzian envelope, as TRandom::Poisson.
 int Binomial(TRandom& random, int n, double p) {
     if (n <= 0 || !(p > 0)) return 0;
     if (p >= 1) return n;
-    TRandomBits bits{random};
-    return std::binomial_distribution<int>(n, p)(bits);
+    if (p > 0.5) return n - Binomial(random, n, 1 - p);
+    const double q = 1 - p;
+    const double mean = n * p;
+    if (mean < 10) {
+        // The first k whose cumulated probability exceeds the uniform (P(0) = q^n >= exp(-20))
+        double u = random.Rndm();
+        double probability = std::pow(q, n);
+        int k = 0;
+        while (u > probability && k < n) {
+            u -= probability;
+            probability *= (n - k) * p / ((k + 1) * q);
+            k++;
+        }
+        return k;
+    }
+    const double pi = std::acos(-1.0);
+    const double logFactorialN = std::lgamma(n + 1.0);
+    const double logP = std::log(p);
+    const double logQ = std::log(q);
+    const double width = std::sqrt(2 * mean * q);
+    while (true) {
+        double y, k;
+        do {
+            y = std::tan(pi * random.Rndm());
+            k = width * y + mean;
+        } while (k < 0 || k >= n + 1);
+        k = std::floor(k);
+        // Probability of k over the envelope (at most 1)
+        const double ratio =
+            1.2 * width * (1 + y * y) *
+            std::exp(logFactorialN - std::lgamma(k + 1) - std::lgamma(n - k + 1) + k * logP + (n - k) * logQ);
+        if (random.Rndm() <= ratio) return static_cast<int>(k);
+    }
 }
 }  // namespace
 
@@ -385,7 +408,7 @@ bool TRestDetectorLightCollectionProcess::ProcessEvent(const TRestEvent& input, 
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
     fNPhotoelectrons = 0;
     fNHitsWithoutChannel = 0;
 

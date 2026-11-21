@@ -1,9 +1,9 @@
 #ifndef TRESTDETECTORAVALANCHEPROCESS_H
 #define TRESTDETECTORAVALANCHEPROCESS_H
 
-#include <random>
 #include <string>
 
+#include "TRandom3.h"
 #include "TRestEventProcess.h"
 
 class TRestDetectorChargeResponse;
@@ -21,7 +21,7 @@ class TRestDetectorChargeResponse;
 class TRestDetectorAvalancheProcess : public TRestEventProcess {
    private:
     const TRestDetectorChargeResponse* fCharge = nullptr;
-    std::mt19937_64 fEngine;  //!
+    TRandom3 fRandom;  //!
 
    public:
     /// Voltage across the amplification gap
@@ -33,7 +33,7 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     /// Key of the amplification table. Only needed if the medium has several with the gap
     std::string fTable = "";
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
-    /// with TRestDetectorHitsEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
+    /// with TRestEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
 
     /// Written with the values used (not inputs): mean gain and Polya parameter at the field

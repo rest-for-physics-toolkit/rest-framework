@@ -237,7 +237,7 @@ bool TRestDetectorPhotosensorProcess::ProcessEvent(const TRestEvent& input, TRes
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
     fNAvalanches = 0;
     fNDarkCounts = 0;
     fNCrosstalk = 0;

@@ -36,12 +36,13 @@ void ApplyPermutation(const std::vector<int>& order, int start, Arrays&... array
 }
 
 /// \brief Builds an identity-then-sorted index order over [0, n), using
-/// `compareCondition` if given, or `defaultCompare` otherwise.
+/// `compareCondition` if given, or `defaultCompare` otherwise. Stable: equal elements keep their index
+/// order, the same with every standard library.
 inline std::vector<int> BuildSortOrder(int n, std::function<bool(int, int)> compareCondition,
                                        std::function<bool(int, int)> defaultCompare) {
     std::vector<int> order(n);
     std::iota(order.begin(), order.end(), 0);
-    std::sort(order.begin(), order.end(), compareCondition ? compareCondition : defaultCompare);
+    std::stable_sort(order.begin(), order.end(), compareCondition ? compareCondition : defaultCompare);
     return order;
 }
 

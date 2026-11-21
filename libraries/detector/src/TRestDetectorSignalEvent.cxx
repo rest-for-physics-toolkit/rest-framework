@@ -60,7 +60,7 @@ void TRestDetectorSignal::Sort() {
     std::vector<int> indices(nPoints);
     std::iota(indices.begin(), indices.end(), 0);
 
-    std::sort(indices.begin(), indices.end(), [this, start](int a, int b) {
+    std::stable_sort(indices.begin(), indices.end(), [this, start](int a, int b) {
         return fData->allSignalsTime[start + a] < fData->allSignalsTime[start + b];
     });
 

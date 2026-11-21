@@ -104,14 +104,19 @@ double GetLineResidual(const std::vector<XYZVector>& points, const std::vector<d
 double GetTrackEnds(const std::vector<XYZVector>& points, const std::vector<double>& energies,
                     XYZVector& origin, XYZVector& end);
 
-/// \brief Size of the distribution of one coordinate of the points (`values`) from a gaussian fit of
-/// the energy against the coordinate, as legacy TRestHits::GetGaussSigmaX. With less than `nHitsMin`
-/// points, two points with no energy (and error `error`) are added 0.5 beyond the extremes, so the fit
-/// of narrow distributions converges.
-/// \return The fitted sigma, 0 without points, -1 if the fit fails or diverges (sigma larger than the
-/// extent of the points).
-double GetGaussSigma(const std::vector<double>& values, const std::vector<double>& energies,
-                     double error = 150, int nHitsMin = 100000);
+/// \brief Size of the distribution of one coordinate of the points (`values`, e.g. strip positions) from
+/// a gaussian fit of their energy. The energy of each position (the hits at the same one added) is the
+/// gaussian integrated over its strip, of width the smallest distance between positions (the pitch), with
+/// the total energy as integral: centre and sigma are fitted by least squares, including the strips
+/// without energy between the first and last position and one beyond each. The minimization is
+/// deterministic (scans in log(sigma), from pitch / 100 to the extent, and in the centre, refined by golden
+/// section searches), without Minuit, so the result is the same on every platform. A gaussian evaluated at
+/// the strip centres (legacy) has no well defined minimum with a few strips; integrated over them, three
+/// strips with energy determine it (with two, any sigma below the pitch fits).
+/// \return The fitted sigma, 0 without points, -1 without result: fewer than three positions with more
+/// than 1% of the energy, no positive total energy, or the best sigma at the extent of the points (the
+/// energy does not decrease away from the centre).
+double GetGaussSigma(const std::vector<double>& values, const std::vector<double>& energies);
 
 /// \brief Mean twist of the points [n, m) in order (m = 0: up to the last one), as legacy
 /// TRestHits::GetHitsTwist: (1 - cos(angle)) / 2 at each inner point, from the directions to the next

@@ -668,6 +668,11 @@ bool TRestDetectorChargeResponse::DiffuseElectron(XYZVector& position, const XYZ
     const XYZVector u =
         (std::abs(normal.X()) < 0.9 ? XYZVector(1, 0, 0) : XYZVector(0, 1, 0)).Cross(normal).Unit();
     const XYZVector v = normal.Cross(u);
-    position += random.Gaus(0, sigmaT) * u + random.Gaus(0, sigmaT) * v + random.Gaus(0, sigmaL) * normal;
+    // One statement per draw: the order of evaluation of the operands of an expression depends on the
+    // compiler, and with it the coordinate each random number goes to
+    const double du = random.Gaus(0, sigmaT);
+    const double dv = random.Gaus(0, sigmaT);
+    const double dn = random.Gaus(0, sigmaL);
+    position += du * u + dv * v + dn * normal;
     return true;
 }
