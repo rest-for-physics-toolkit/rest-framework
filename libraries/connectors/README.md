@@ -54,8 +54,8 @@ files to be generated first (see the comments at the top of each file).
 | File | Description |
 | --- | --- |
 | `Geant4ToHits.yaml` | `TRestGeant4Event` (restG4 output) to `TRestDetectorHitsEvent`. |
-| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout, with their z reconstructed from the arrival time; optional (commented) transformation of the hits to the frame of the readout and avalanche gain (gain table generated with restGarfield). |
-| `Geant4ToRaw.yaml` | Full simulation chain: Geant4 hits, drift, smearing, readout signals, shaping, digitization and noise, to raw signals analysed as the data. |
+| `Geant4ToDriftHits.yaml` | Geant4 hits drifted and diffused to the AlphaCAMM readout, with their z reconstructed from the arrival time and the observables of the hits; optional (commented) transformation of the hits to the frame of the readout and avalanche gain (gain table generated with restGarfield). |
+| `Geant4ToRaw.yaml` | Full simulation chain: Geant4 hits, drift, smearing, readout signals, shaping, digitization and noise, to raw signals, with the pulse observables of the data analysis. |
 | `Geant4ToRawVeto.yaml` | Raw signals of the vetoes with the acquisition window of the Micromegas (trigger time from an observable). |
 | `RawToHits.yaml` | `TRestRawSignalEvent` to `TRestDetectorSignalEvent` to `TRestDetectorHitsEvent`, with a selection of the events (`TRestSelectionProcess` with a `TRestCut` on an observable of the raw to signal conversion). |
 | `HitsToTrack.yaml` | `TRestDetectorHitsEvent` to `TRestTrackEvent`, with hits and track observables, reduction, path minimization and blob analysis. |

@@ -10,6 +10,9 @@
 # table in it, TRestDetectorAvalancheProcess (amplificationVoltage, gap) can replace hitsSmearing to get the
 # gain and its fluctuations at the voltage instead of a resolution.
 
+# rawAna computes the pulse observables of the raw signals, as for the data (default ranges: baseline in
+# the samples 5-55, before the trigger delay of 100 samples; integral in the samples 10-500).
+
 # The random processes have fixed seeds, a different one each (the same output at each run, as in the
 # pipeline tests of examples/test): seed 0 gives a random seed.
 
@@ -89,3 +92,7 @@ manager:
         - method: "white"
           amplitude: 5
       seed: 3
+    rawAna:
+      class: "TRestRawSignalAnalysisProcess"
+      observables:
+        - "all"

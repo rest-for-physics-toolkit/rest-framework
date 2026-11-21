@@ -7,8 +7,8 @@
 /// Track observables (<name>): Energy, NHits; Length (TRestHits::GetTotalDistance) and Volume
 /// (squared distance of the farthest hits); MeanX/Y/Z (energy weighted); SigmaX/Y/Z (energy weighted
 /// size, TRestHits::GetSigmaX, ...); GaussSigmaX/Y/Z (gaussian fit, TRestHitsAnalysis::GetGaussSigma,
-/// gaussian integrated over each strip, only sigma fitted; only with gaussFit: true, otherwise 0; -1 without
-/// result, e.g. a single position); Twist, TwistWeighted
+/// gaussian integrated over each strip, centre and sigma fitted; only with gaussFit: true, otherwise 0; -1
+/// without result, e.g. a single position); Twist, TwistWeighted
 /// (TRestHitsAnalysis::GetTwist, GetTwistWeighted) and TwistLow, TwistHigh (lowest and highest twist of the
 /// first and last twistTailPercentage% of the hits); Size and MaxNodeSize: sum and maximum of the node sizes,
 /// sqrt(sigmaX² + sigmaY² + sigmaZ²) of the coordinates the node defines (the sigmas given by

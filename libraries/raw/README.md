@@ -102,7 +102,7 @@ The example configurations using each process of this component (paths from the 
 | `TRestRawFeminosRootToSignalProcess` | `libraries/raw/examples/FeminosRootToRaw.yaml` |
 | `TRestRawMultiFEMINOSToSignalProcess` | `libraries/raw/examples/MultiFEMINOSToRaw.yaml` |
 | `TRestRawSignalAddNoiseProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
-| `TRestRawSignalAnalysisProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/DAQViewer.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/raw/examples/RawSignalAnalysis.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
+| `TRestRawSignalAnalysisProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/DAQViewer.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/raw/examples/RawSignalAnalysis.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
 | `TRestRawSignalChannelSelectionProcess` | `examples/TREXDMToTracks.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
 | `TRestRawSignalRecoverSaturationProcess` | `examples/TREXDMToTracks.yaml` |
 | `TRestRawSignalShapingProcess` | `libraries/raw/examples/RawSignalAnalysis.yaml` (commented) |

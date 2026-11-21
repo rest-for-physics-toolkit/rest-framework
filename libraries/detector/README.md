@@ -184,7 +184,7 @@ The example configurations using each process of this component (paths from the 
 | `TRestDataSetGainMap` | `libraries/detector/examples/DataSetCalibration.yaml` |
 | `TRestDataSetTardis` | `examples/DataSetTardis.yaml`, `examples/TREXDMTardis.yaml` |
 | `TRestDetectorAvalancheProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
-| `TRestDetectorHitsAnalysisProcess` | `libraries/connectors/examples/HitsToTrack.yaml` |
+| `TRestDetectorHitsAnalysisProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/HitsToTrack.yaml` |
 | `TRestDetectorHitsDriftProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml` |
 | `TRestDetectorHitsDriftResponseProcess` | `libraries/connectors/examples/Geant4ToDriftHits.yaml` (commented) |
 | `TRestDetectorHitsSmearingProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
