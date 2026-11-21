@@ -15,6 +15,9 @@
 # and set `mediumFile: "ArIso.root"` in the medium. driftResponse replaces hitsDrift in a non-uniform field:
 # the drift response of a CST field map computed by the same command (its `drift` section uncommented).
 
+# The random processes have fixed seeds, a different one each (the same output at each run, as in the
+# pipeline tests of examples/test): seed 0 gives a random seed.
+
 manager:
   class: "TRestManager"
   name: "manager"
@@ -75,6 +78,7 @@ manager:
       class: "TRestDetectorHitsDriftProcess"
       fluctuations: "fano"
       maxHits: 1000
+      seed: 1
 #    driftResponse:        # instead of hitsDrift: drift in a CST field map (restGarfield `drift` section)
 #      class: "TRestDetectorHitsDriftResponseProcess"
 #      responseFile: "ArIso_drift.root"

@@ -31,7 +31,7 @@
 /// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (empty:
 /// the only one with `charge`), fluctuations ("fano", "poisson" or "none"), maxHits (1000, 0: no
 /// limit), diffusion (true), seed (0: random seed; otherwise the generator is re-seeded at each event from
-/// the seed and the event and subevent IDs, TRestDetectorHitsEvent::EventSeed, so the result does not
+/// the seed and the event and subevent IDs, TRestEvent::EventSeed, so the result does not
 /// depend on the number of threads).
 ///
 /// Example:
@@ -156,7 +156,7 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
 
     double totalEnergy = 0;
     for (size_t n = 0; n < inputEvent->GetNumberOfHits(); n++) {

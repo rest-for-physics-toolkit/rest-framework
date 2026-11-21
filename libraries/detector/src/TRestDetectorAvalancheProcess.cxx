@@ -16,7 +16,7 @@
 ///
 /// Parameters: amplificationVoltage, gap, medium (empty: the only one with `charge`), table (""), seed (0:
 /// random seed; otherwise the generator is re-seeded at each event from the seed and the event and subevent
-/// IDs, TRestDetectorHitsEvent::EventSeed, so the result does not depend on the number of threads).
+/// IDs, TRestEvent::EventSeed, so the result does not depend on the number of threads).
 ///
 /// Example:
 ///
@@ -34,6 +34,31 @@
 #include "TRestDetectorMedium.h"
 #include "TRestDetectorTransportManager.h"
 #include "TRestManager.h"
+
+namespace {
+/// Gamma(shape, scale) drawn from a TRandom (Marsaglia and Tsang). Not std::gamma_distribution, whose
+/// algorithm depends on the standard library (the same seed would give other numbers on another platform)
+double Gamma(TRandom& random, double shape, double scale) {
+    if (!(shape > 0) || !(scale > 0)) return 0;
+    if (shape < 1) {
+        // Gamma(shape + 1) U^(1 / shape)
+        const double gamma = Gamma(random, shape + 1, scale);
+        return gamma * std::pow(random.Rndm(), 1 / shape);
+    }
+    const double d = shape - 1. / 3;
+    const double c = 1 / std::sqrt(9 * d);
+    while (true) {
+        const double x = random.Gaus(0, 1);
+        double v = 1 + c * x;
+        if (v <= 0) continue;
+        v = v * v * v;
+        const double u = random.Rndm();
+        if (u < 1 - 0.0331 * x * x * x * x || std::log(u) < 0.5 * x * x + d * (1 - v + std::log(v))) {
+            return d * v * scale;
+        }
+    }
+}
+}  // namespace
 
 static const bool TRestDetectorAvalancheProcess_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
@@ -113,7 +138,7 @@ void TRestDetectorAvalancheProcess::InitProcess() {
     UpdateYAMLFromParams<TRestDetectorAvalancheProcess>(fNode);
 
     // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
-    fEngine.seed(fSeed != 0 ? fSeed : std::random_device{}());
+    fRandom.SetSeed(fSeed);
 }
 
 bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -126,7 +151,7 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
 
     outputEvent->Initialize();
     outputEvent->SetEventInfo(inputEvent);
-    if (fSeed != 0) fEngine.seed(TRestDetectorHitsEvent::EventSeed(fSeed, *inputEvent));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inputEvent));
 
     const double wValue = fCharge->GetWValue();
     for (size_t n = 0; n < inputEvent->GetNumberOfHits(); n++) {
@@ -134,9 +159,9 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
         if (energy <= 0) continue;
         // Sum of the Polya gains of the electrons of the hit
         const double electrons = energy / wValue;
-        std::gamma_distribution<double> gain(electrons * (fTheta + 1), fGain / (fTheta + 1));
-        outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain(fEngine) / electrons,
-                            inputEvent->GetTime(n), inputEvent->GetType(n), inputEvent->GetParticleID(n));
+        const double gain = Gamma(fRandom, electrons * (fTheta + 1), fGain / (fTheta + 1));
+        outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain / electrons, inputEvent->GetTime(n),
+                            inputEvent->GetType(n), inputEvent->GetParticleID(n));
     }
 
     return outputEvent->GetNumberOfHits() > 0;

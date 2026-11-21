@@ -237,6 +237,30 @@ TEST(HitsAnalysis, GaussSigma) {
     }
     EXPECT_NEAR(HA::GetGaussSigma(values, energies), 3, 0.2);
     EXPECT_EQ(HA::GetGaussSigma({}, {}), 0);
+
+    // A narrow cloud on three strips of 2 mm: the energy of each strip is the gaussian (sigma 0.6 mm,
+    // centre 0.3 mm) integrated over it; the hits of a strip are added (the central one in two hits)
+    const auto strip = [](double x, double sigma, double centre) {
+        const double scale = 1 / (sigma * std::sqrt(2.0));
+        return 1000 * 0.5 * (std::erf((x + 1 - centre) * scale) - std::erf((x - 1 - centre) * scale));
+    };
+    const std::vector<double> stripValues = {-2, 0, 0, 2};
+    const std::vector<double> stripEnergies = {strip(-2, 0.6, 0.3), strip(0, 0.6, 0.3) / 2,
+                                               strip(0, 0.6, 0.3) / 2, strip(2, 0.6, 0.3)};
+    EXPECT_NEAR(HA::GetGaussSigma(stripValues, stripEnergies), 0.6, 1e-3);
+    // Wider, on five strips
+    std::vector<double> wideValues, wideEnergies;
+    for (int x = -4; x <= 4; x += 2) {
+        wideValues.push_back(x);
+        wideEnergies.push_back(strip(x, 1.5, 0.7));
+    }
+    EXPECT_NEAR(HA::GetGaussSigma(wideValues, wideEnergies), 1.5, 1e-2);
+    // Two strips with energy (the third with 1e-10 of it) or a single one: no result
+    const std::vector<double> twoStrips = {strip(-2, 0.3, 0.9), strip(0, 0.3, 0.9), strip(2, 0.3, 0.9)};
+    EXPECT_EQ(HA::GetGaussSigma({-2, 0, 2}, twoStrips), -1);
+    EXPECT_EQ(HA::GetGaussSigma({0, 0}, {10, 20}), -1);
+    // Deterministic: the same value again
+    EXPECT_EQ(HA::GetGaussSigma(stripValues, stripEnergies), HA::GetGaussSigma(stripValues, stripEnergies));
 }
 
 TEST(HitsAnalysis, Twist) {

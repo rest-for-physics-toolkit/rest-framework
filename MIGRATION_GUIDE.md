@@ -499,7 +499,7 @@ are not migrated.
 | TRestDetectorElectronDiffusionProcess, TRestDetectorGarfieldDriftProcess | TRestDetectorHitsDriftProcess |
 | TRestDetectorFiducializationProcess | TRestDetectorHitsDriftProcess (hits outside the drift volume) |
 | TRestDetectorHitsNormalizationProcess, TranslationProcess, RotationProcess, SpecularProcess | TRestDetectorHitsTransformationProcess |
-| TRestDetectorHitsGaussAnalysisProcess, TRestDetectorHitsReadoutAnalysisProcess | Not migrated: TRestDetectorHitsAnalysisProcess (`gaussFit`, FiducialEnergy) |
+| TRestDetectorHitsGaussAnalysisProcess, TRestDetectorHitsReadoutAnalysisProcess | Not migrated: TRestDetectorHitsAnalysisProcess (`gaussFit`, FiducialEnergy). GaussSigma: gaussian integrated over each strip (centre and sigma fitted, without Minuit), not evaluated at the strip centres; -1 with fewer than three strips with energy |
 | TRestDetectorHitmapAnalysisProcess | Not migrated: TRestDetectorHitsTransformationProcess + MeanX/Y/Z |
 | TRestDetectorHitsReductionProcess | Not migrated: TRestTrackReductionProcess |
 | TRestDetectorSingleChannelAnalysisProcess, TRestDetectorGainMap, TRestDetectorPositionMappingProcess | Not migrated: TRestDataSetGainMap |
@@ -513,7 +513,7 @@ are not migrated.
 | Legacy | restv2 |
 |--------|--------|
 | TRestTrackEvent, TRestTrack | Same names; no track levels: an event holds the tracks of one stage (`parentID` = track of the input event) |
-| TRestTrackAnalysisProcess, TRestTrackLineAnalysisProcess | Same names, readout independent (`projections`), renamed observables (see their `.cxx`) |
+| TRestTrackAnalysisProcess, TRestTrackLineAnalysisProcess | Same names, readout independent (`projections`), renamed observables (see their `.cxx`); GaussSigma as in TRestDetectorHitsAnalysisProcess |
 | TRestTrackReductionProcess, TRestTrackLinearizationProcess, TRestTrackBlobAnalysisProcess | Same names |
 | TRestTrackPathMinimizationProcess | Same name, own shortest path solver (no Concorde) |
 | TRestTrackReconnectionProcess | Not migrated: Branches observable of TRestTrackPathMinimizationProcess |
@@ -824,7 +824,7 @@ bool TRestDetectorHitsSmearingProcess::ProcessEvent(const TRestEvent& input, TRe
     auto& out = dynamic_cast<TRestDetectorHitsEvent&>(output);
     out.Initialize();
     out.SetEventInfo(&in);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, in));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, in));
     ...
     return out.GetNumberOfHits() > 0;                  // false rejects the event
 }
@@ -849,7 +849,7 @@ Rules:
 - **Sibling metadata** (readouts, medium) are found through `fManager` in `InitProcess`; store the name of
   the one used as a result (`UpdateYAMLFromParams`).
 - **Random numbers**: a `seed` field (0: random), the generator re-seeded at each event from (seed,
-  eventID, subEventID) (`TRestDetectorHitsEvent::EventSeed`), so results do not depend on threads.
+  eventID, subEventID) (`TRestEvent::EventSeed`), so results do not depend on threads.
 - **Threads**: each thread builds its own manager and processes from the YAML, so members need no locks;
   shared static state does. Read geometries only with `TRestTools::ReadGeometry` (shared, read-only) or
   `TRestTools::ReadGeometryCopy` (owned copy, for navigation), never `TGeoManager::Import`/`TFile::Get`.

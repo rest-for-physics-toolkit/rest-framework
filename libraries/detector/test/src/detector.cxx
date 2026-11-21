@@ -239,11 +239,11 @@ TEST(DetectorHitsEvent, SortAndEventSeed) {
     TRestDetectorHitsEvent other;
     event.SetID(1);
     other.SetID(2);
-    const auto seed = TRestDetectorHitsEvent::EventSeed(17, event);
-    EXPECT_EQ(seed, TRestDetectorHitsEvent::EventSeed(17, event));
+    const auto seed = TRestEvent::EventSeed(17, event);
+    EXPECT_EQ(seed, TRestEvent::EventSeed(17, event));
     EXPECT_NE(seed, 0u);
-    EXPECT_NE(seed, TRestDetectorHitsEvent::EventSeed(17, other));
-    EXPECT_NE(seed, TRestDetectorHitsEvent::EventSeed(18, event));
+    EXPECT_NE(seed, TRestEvent::EventSeed(17, other));
+    EXPECT_NE(seed, TRestEvent::EventSeed(18, event));
 }
 
 TEST(DetectorSignalEvent, AddRemoveAndAccess) {

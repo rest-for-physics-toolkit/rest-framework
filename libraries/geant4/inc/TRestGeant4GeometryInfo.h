@@ -4,7 +4,6 @@
 #include <map>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 // Modern ROOT vector headers (MathCore GenVector)
@@ -40,8 +39,9 @@ class TRestGeant4GeometryInfo {
     // Cache dictionaries mapping fast unique integer IDs to volume paths
     std::map<int, std::string> fVolumeNameMap;
     std::map<std::string, int> fVolumeNameReverseMap;
-    std::unordered_map<std::string, std::set<std::string>> fG4ToAltNames;
-    std::unordered_map<std::string, std::string> fAltToG4Name;
+    // Ordered: the volumes are listed in the same order on every platform
+    std::map<std::string, std::set<std::string>> fG4ToAltNames;
+    std::map<std::string, std::string> fAltToG4Name;
 
    public:
     TRestGeant4GeometryInfo() = default;
@@ -156,10 +156,9 @@ class TRestGeant4GeometryInfo {
     std::set<std::string> GetVolumesMatchingExpression(const std::string& expression) const;
     /// \brief Returns the IDs of the volumes (volume ID map) whose name, or filtered name, is in `names`.
     std::set<int> GetVolumeIDsFromNames(const std::set<std::string>& names) const;
-    /// \brief Returns the IDs of the volumes matching the expression, as GetVolumesMatchingExpression.
-    std::set<int> GetVolumeIDsMatchingExpression(const std::string& expression) const {
-        return GetVolumeIDsFromNames(GetVolumesMatchingExpression(expression));
-    }
+    /// \brief Returns the IDs of the volumes matching the expression, as GetVolumesMatchingExpression, and
+    /// those of the volumes of an assembly whose logical volume matches it (from their Geant4 name).
+    std::set<int> GetVolumeIDsMatchingExpression(const std::string& expression) const;
 
     /// \brief Prints a geometry summary (assembly, path separator, number of volumes and nodes).
     void Print() const;

@@ -37,6 +37,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 using ROOT::Math::XYZVector;
 
@@ -573,6 +575,31 @@ TEST(DetectorLightCollectionProcess, QuantumEfficiency) {
     EXPECT_NEAR(photoelectrons.GetNumberOfHits(), 4000, 5 * std::sqrt(10000 * 0.4 * 0.6));
     EXPECT_DOUBLE_EQ(analysis.Get<double>("lightCollection_NPhotoelectrons"),
                      photoelectrons.GetNumberOfHits());
+
+    // Mean and variance of the binomial over many events: inversion (mean below 10), rejection (above) and
+    // p above 0.5 (sampled as n minus a binomial of 1 - p)
+    for (const auto& [n, p] : std::vector<std::pair<int, double>>{{20, 0.4}, {100, 0.3}, {50, 0.9}}) {
+        auto efficiency = MakeProcess<TRestDetectorLightCollectionProcess>(
+            detector, analysis, "lightCollection",
+            "{captureProbability: \"1+0*x\", maxDistance: 5mm, quantumEfficiency: " + std::to_string(p) +
+                ", seed: 4}");
+        TRestDetectorHitsEvent few;
+        few.AddHit(0, 0, 30, n, 1);
+        const int events = 4000;
+        double sum = 0, sum2 = 0;
+        for (int e = 0; e < events; e++) {
+            few.SetID(e);
+            TRestDetectorHitsEvent detected;
+            efficiency->ProcessEvent(few, detected);
+            sum += detected.GetNumberOfHits();
+            sum2 += detected.GetNumberOfHits() * detected.GetNumberOfHits();
+        }
+        const double mean = sum / events;
+        const double variance = sum2 / events - mean * mean;
+        const double expectedVariance = n * p * (1 - p);
+        EXPECT_NEAR(mean, n * p, 5 * std::sqrt(expectedVariance / events)) << n << " " << p;
+        EXPECT_NEAR(variance, expectedVariance, 0.1 * expectedVariance) << n << " " << p;
+    }
 
     auto blind = MakeProcess<TRestDetectorLightCollectionProcess>(
         detector, analysis, "lightCollection",

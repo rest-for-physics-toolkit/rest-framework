@@ -21,6 +21,9 @@
 # placeholders to be measured (BC408: about 10 photons per keV, rise 0.9 ns and decay 2.1 ns; the gain is in
 # ADC per photoelectron).
 
+# The random processes have fixed seeds, a different one each (the same output at each run, as in the
+# pipeline tests of examples/test): seed 0 gives a random seed.
+
 manager:
   class: "TRestManager"
   name: "manager"
@@ -71,11 +74,13 @@ manager:
     scintillation:
       class: "TRestDetectorScintillationProcess"
       observables: ["NPhotons"]
+      seed: 1
     lightCollection:
       class: "TRestDetectorLightCollectionProcess"
       model: "attenuation"
       quantumEfficiency: 0.25  # PMT
       observables: ["NPhotoelectrons", "NHitsWithoutChannel"]
+      seed: 2
     photosensor:
       class: "TRestDetectorPhotosensorProcess"
       timeJitter: 0.5 ns  # PMT transit time spread
@@ -86,6 +91,7 @@ manager:
       afterpulseDelay: 1.5 us
       afterpulseSpread: 0.2 us
       observables: ["NAvalanches", "NDarkCounts", "NAfterpulses"]
+      seed: 3
     hitsToSignal:
       class: "TRestDetectorHitsToSignalProcess"
       sampling: 1 ns
