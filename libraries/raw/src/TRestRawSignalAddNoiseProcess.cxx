@@ -48,6 +48,7 @@ void TRestNoiseParameters::LoadConfig() {
 static const bool TRestRawSignalAddNoiseProcess_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
     reg.RegisterField<TRestRawSignalAddNoiseProcess>("noise", &TRestRawSignalAddNoiseProcess::fNoiseParams);
+    reg.RegisterField<TRestRawSignalAddNoiseProcess>("seed", &TRestRawSignalAddNoiseProcess::fSeed);
     return true;
 }();
 
@@ -89,6 +90,11 @@ void TRestRawSignalAddNoiseProcess::LoadConfig() {
     UpdateYAMLFromParams<TRestRawSignalAddNoiseProcess>(fNode);
 }
 
+void TRestRawSignalAddNoiseProcess::InitProcess() {
+    // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
+    fRandom.SetSeed(fSeed);
+}
+
 bool TRestRawSignalAddNoiseProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
     output.CopyFrom(&input);
 
@@ -97,6 +103,7 @@ bool TRestRawSignalAddNoiseProcess::ProcessEvent(const TRestEvent& input, TRestE
     if (!inEvent || !signalEvent) {
         throw std::runtime_error("TRestRawSignalAddNoiseProcess: input/output is not a TRestRawSignalEvent");
     }
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, *inEvent));
 
     std::vector<short> noiseData;
     for (const auto& noisePar : fNoiseParams) {
@@ -106,17 +113,17 @@ bool TRestRawSignalAddNoiseProcess::ProcessEvent(const TRestEvent& input, TRestE
             for (int s = 0; s < signalEvent->GetNumberOfSignals(); s++) {
                 auto& sig = signalEvent->GetSignal(s);
                 noiseData.resize(sig.GetNPoints());
-                GetWhiteNoise(noiseData, noiseAmp);
+                GetWhiteNoise(noiseData, noiseAmp, &fRandom);
                 for (int b = 0; b < sig.GetNPoints(); b++) sig.IncreaseBinByClamped(b, noiseData[b]);
             }
-        } else {                                                            // sin or sinusoidal
-            const double phase = gRandom->Uniform(0.0, 2.0 * TMath::Pi());  // Same phase for the event
+        } else {                                                           // sin or sinusoidal
+            const double phase = fRandom.Uniform(0.0, 2.0 * TMath::Pi());  // Same phase for the event
             const double period = noisePar.fNoisePeriod;
             for (int s = 0; s < signalEvent->GetNumberOfSignals(); s++) {
                 auto& sig = signalEvent->GetSignal(s);
                 noiseData.resize(sig.GetNPoints());
 
-                GetSinNoise(noiseData, noiseAmp, period, phase);
+                GetSinNoise(noiseData, noiseAmp, period, phase, &fRandom);
                 for (int b = 0; b < sig.GetNPoints(); b++) sig.IncreaseBinByClamped(b, noiseData[b]);
             }
         }

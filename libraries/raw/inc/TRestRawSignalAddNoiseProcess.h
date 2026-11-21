@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "TRandom3.h"
 #include "TRestEventProcess.h"
 #include "TRestMetadata.h"
 class TRestRawSignalEvent;
@@ -40,6 +41,10 @@ class TRestNoiseParameters : public TRestMetadata {
 /// - `sin` (or `sinusoidal`): a sine of period `period` bins with the same random phase for all the
 ///   signals of the event, and a slowly modulated random envelope of maximum `amplitude`.
 ///
+/// `seed`: seed of the random generator (0, the default: a random seed). Otherwise the generator is
+/// re-seeded at each event from the seed and the event and subevent IDs (TRestEvent::EventSeed), so the
+/// noise does not depend on the number of threads.
+///
 /// No observables. Example:
 /// \code
 /// addNoise:
@@ -50,14 +55,20 @@ class TRestNoiseParameters : public TRestMetadata {
 ///     - method: "sin"
 ///       amplitude: 100
 ///       period: 55
+///   seed: 1
 /// \endcode
 ///
 /// \author Javier Gracia
 /// \author JuanAn García <juanangp@unizar.es>
 class TRestRawSignalAddNoiseProcess : public TRestEventProcess {
+   private:
+    TRandom3 fRandom;  //!
+
    public:
     /// Noise components added to the signals (YAML `noise`)
     std::vector<TRestNoiseParameters> fNoiseParams;
+    /// Seed of the random generator (YAML `seed`, 0: random seed)
+    unsigned long fSeed = 0;
 
     /// \brief Default constructor (no noise).
     TRestRawSignalAddNoiseProcess();
@@ -68,7 +79,8 @@ class TRestRawSignalAddNoiseProcess : public TRestEventProcess {
 
     /// \brief Reads the `noise` list.
     virtual void LoadConfig() override;
-    void InitProcess() override {}
+    /// \brief Seeds the random generator (`seed`, 0: random).
+    void InitProcess() override;
     /// \brief Copies the input event and adds each noise component to all its signals.
     bool ProcessEvent(const TRestEvent& input, TRestEvent& output) override;
     void EndProcess() override {}

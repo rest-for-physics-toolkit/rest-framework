@@ -1,12 +1,15 @@
 /// Pipeline tests (GoogleTest, BUILD_TESTING), as the legacy pipeline validation: restManager runs the YAML
-/// of the examples, as a user would, on real data cut to a few hundred events (rest-common-data, downloaded
-/// by URL), each test in its own work directory, and the analysis tree of each output is compared event by
-/// event with a reference of examples/test/reference: every numeric column (scalars and vectors; strings are
-/// not compared), with a relative tolerance. With the environment variable REST_UPDATE_REFERENCE=1 the
+/// of the examples, as a user would, on the data of rest-common-data (downloaded by URL): real data cut to a
+/// few hundred events and fixed restG4 simulations (the processing is tested, not Geant4; the random
+/// processes of the examples have fixed seeds), each test in its own work directory, and the analysis tree
+/// of each output is compared event by event with a reference of examples/test/reference: every numeric
+/// column (scalars and vectors; strings are not compared), with a relative tolerance (looser for the results
+/// of fits, which depend on the platform). With the environment variable REST_UPDATE_REFERENCE=1 the
 /// references are written instead (after an intended change, committed with it).
 
 #include <TFile.h>
 #include <TLeaf.h>
+#include <TRestGDMLReadout.h>
 #include <TRestTools.h>
 #include <TTree.h>
 #include <TTreeFormula.h>
@@ -20,6 +23,7 @@
 #include <memory>
 #include <regex>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -29,9 +33,15 @@ namespace {
 
 /// Release of rest-common-data with the input files
 const std::string kData =
-    "https://github.com/rest-for-physics-toolkit/rest-common-data/releases/download/v1.0/";
+    "https://github.com/rest-for-physics-toolkit/rest-common-data/releases/download/v1.1/";
 /// Tolerance of the comparison: relative, or absolute for values close to 0
 constexpr double kTolerance = 1e-5;
+/// Results of fits (columns whose name contains "Gauss", e.g. trackAnalysis_MaxTrackGaussSigmaX): Minuit
+/// converges to slightly different points on other platforms (libm, architecture), and a fit may fail on one
+/// of them only. Their tolerance, and the fraction of their values allowed to differ
+constexpr double kFitTolerance = 1e-2;
+constexpr double kFitMismatches = 0.02;
+const std::regex kFitColumn(".*Gauss.*");
 /// Mismatches printed per column
 constexpr int kMaxPrinted = 5;
 
@@ -60,11 +70,32 @@ std::string Input(const std::string& name) {
 /// restManager in the work directory with a configuration of the repository (path from its root), one
 /// thread (the order of the events) and other options; true if it succeeds
 bool RestManager(const std::string& config, const std::string& input, const std::string& options = "") {
-    const std::string line = "cd '" + WorkDirectory().string() + "' && " + RESTMANAGER_EXECUTABLE + " --c '" +
-                             (fs::path(REPOSITORY_DIR) / config).string() + "' --i '" + input + "' --j 1 " +
-                             options;
+    // Without display (ROOT in batch mode) and without terminal input: the plots with previewPlot do not
+    // open a window nor wait for Enter (TRestAnalysisPlot)
+    const std::string configPath = (fs::path(REPOSITORY_DIR) / config).string();
+    const std::string line = "cd '" + WorkDirectory().string() + "' && env -u DISPLAY -u WAYLAND_DISPLAY " +
+                             RESTMANAGER_EXECUTABLE + " --c '" + configPath + "' --i '" + input + "' --j 1 " +
+                             options + " < /dev/null";
     std::cout << "Running: " << line << std::endl;
     return std::system(line.c_str()) == 0;
+}
+
+/// The veto readout of libraries/detector/examples/GDMLReadout.yaml in a file, as the macro
+/// REST_Detector_GenerateGDMLReadout, built from the repository root (the paths of the YAML); true if done
+bool GenerateVetoReadout(const std::string& fileName) {
+    const fs::path previous = fs::current_path();
+    fs::current_path(REPOSITORY_DIR);
+    bool done = false;
+    try {
+        TRestGDMLReadout readout("libraries/detector/examples/GDMLReadout.yaml", "readout");
+        readout.BuildGeometry();
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        done = file && !file->IsZombie() && readout.Export(file.get(), readout.GetName(), "veto_decoding");
+    } catch (const std::exception& error) {
+        std::cerr << "GenerateVetoReadout: " << error.what() << std::endl;
+    }
+    fs::current_path(previous);
+    return done;
 }
 
 /// The only file of the work directory whose name matches a regular expression (empty if none or several)
@@ -136,10 +167,10 @@ std::map<std::string, Column> ReadAnalysisTree(const std::string& fileName) {
     return columns;
 }
 
-bool Equal(double value, double reference) {
+bool Equal(double value, double reference, double tolerance) {
     if (std::isnan(value) || std::isnan(reference)) return std::isnan(value) && std::isnan(reference);
     if (std::isinf(value) || std::isinf(reference)) return value == reference;
-    return std::abs(value - reference) <= kTolerance * std::max(1., std::abs(reference));
+    return std::abs(value - reference) <= tolerance * std::max(1., std::abs(reference));
 }
 
 /// Compares the analysis tree of an output with the reference `name` (examples/test/reference/<name>.root),
@@ -200,16 +231,31 @@ void CompareWithReference(const std::string& fileName, const std::string& name) 
                           << ") or different number of values in an entry";
             continue;
         }
-        int printed = 0;
+        const bool fit = std::regex_match(*column, kFitColumn);
+        const double tolerance = fit ? kFitTolerance : kTolerance;
+        // The mismatches allowed: a fraction of the values of a fit column, none otherwise
+        const size_t allowed = fit ? static_cast<size_t>(kFitMismatches * values->size()) : 0;
+        std::vector<std::string> mismatches;
         size_t index = 0;
         for (size_t entry = 0; entry < sizes->size(); entry++) {
             for (int i = 0; i < (*sizes)[entry]; i++, index++) {
-                if (Equal(output.values[index], (*values)[index])) continue;
-                if (printed++ < kMaxPrinted) {
-                    ADD_FAILURE() << *column << ", entry " << entry << ", value " << i << ": "
-                                  << output.values[index] << " (reference " << (*values)[index] << ")";
-                }
+                if (Equal(output.values[index], (*values)[index], tolerance)) continue;
+                std::ostringstream text;
+                text << *column << ", entry " << entry << ", value " << i << ": " << output.values[index]
+                     << " (reference " << (*values)[index] << ")";
+                mismatches.push_back(text.str());
             }
+        }
+        if (mismatches.size() <= allowed) {
+            if (!mismatches.empty()) {
+                std::cout << *column << ": " << mismatches.size() << " fit values differ (allowed " << allowed
+                          << ")" << std::endl;
+            }
+            continue;
+        }
+        ADD_FAILURE() << *column << ": " << mismatches.size() << " values differ (allowed " << allowed << ")";
+        for (size_t m = 0; m < mismatches.size() && m < static_cast<size_t>(kMaxPrinted); m++) {
+            ADD_FAILURE() << mismatches[m];
         }
     }
     for (const auto& [columnName, data] : columns) {
@@ -261,4 +307,36 @@ TEST(Pipelines, FeminosRootToTracks) {
             RestManager("libraries/raw/examples/FeminosRootToRaw.yaml", input, "--set plane=" + plane));
         CompareWithReference(Output("FeminosRoot_Plane" + plane + "\\.root"), "FeminosRoot_Plane" + plane);
     }
+}
+
+// Simulated cosmic neutrons in IAXO-D1 (restG4 example 13.IAXO, Neutrons.yaml): quenching, then the Geant4
+// analysis and the hits of the gas and of the vetoes
+TEST(Pipelines, IAXOSimulatedNeutrons) {
+    ASSERT_TRUE(
+        RestManager("libraries/geant4/examples/Quenching.yaml", Input("Run00010_CosmicNeutrons_IAXO.root")));
+    const std::string quenching = "Run00010_CosmicNeutrons_IAXO_QUENCHING.root";
+    CompareWithReference(Output(quenching), "Quenching");
+    ASSERT_TRUE(RestManager("libraries/geant4/examples/Geant4Analysis.yaml", quenching));
+    CompareWithReference(Output("Run00010_CosmicNeutrons_IAXO_G4ANA\\.root"), "Geant4Analysis");
+    ASSERT_TRUE(RestManager("libraries/connectors/examples/Geant4ToHits.yaml", quenching));
+    CompareWithReference(Output("Run00010_CosmicNeutrons_IAXO_HITS\\.root"), "Geant4ToHits");
+}
+
+// Simulated cosmic muons in IAXO-D1 (13.IAXO, Muons.yaml): raw signals of the vetoes, with their readout
+// generated from the GDML of the example (GenerateVetoReadout)
+TEST(Pipelines, IAXOSimulatedVetoes) {
+    ASSERT_TRUE(GenerateVetoReadout((WorkDirectory() / "veto_readout_output.root").string()));
+    ASSERT_TRUE(RestManager("libraries/connectors/examples/Geant4ToRawVeto.yaml",
+                            Input("Run00001_CosmicMuons_IAXO.root")));
+    CompareWithReference(Output("Run00001_CosmicMuons_IAXO_VETO_RAW\\.root"), "Geant4ToRawVeto");
+}
+
+// Simulated 241Am calibration of AlphaCAMM (Simulation.yaml of the AlphaCAMM repository): raw signals of the
+// Micromegas, and the drifted hits
+TEST(Pipelines, AlphaCAMMSimulatedCalibration) {
+    const std::string input = Input("Run00001_Am241_calibration_AlphaCAMM.root");
+    ASSERT_TRUE(RestManager("libraries/connectors/examples/Geant4ToRaw.yaml", input));
+    CompareWithReference(Output("Run00001_Am241_calibration_AlphaCAMM_RAW\\.root"), "Geant4ToRaw");
+    ASSERT_TRUE(RestManager("libraries/connectors/examples/Geant4ToDriftHits.yaml", input));
+    CompareWithReference(Output("Run00001_Am241_calibration_AlphaCAMM_DRIFT\\.root"), "Geant4ToDriftHits");
 }

@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+class TRandom;
+
 class TF1;
 
 /// \brief Generic functions to calculate signal parameters (baseline, maxima, integrals, rise time, peaks,
@@ -199,15 +201,17 @@ TGraph GetGraphPair(const std::vector<std::pair<T, U>>& points, const std::strin
 template <typename T>
 TGraph GetGraph(const std::vector<T>& signal, const std::string& title = "");
 
-/// \brief Fills `noise` (its size kept) with gaussian noise of sigma `amplitude` (gRandom)
+/// \brief Fills `noise` (its size kept) with gaussian noise of sigma `amplitude`, from `random` (gRandom if
+/// nullptr)
 template <typename T>
-void GetWhiteNoise(std::vector<T>& noise, double amplitude);
+void GetWhiteNoise(std::vector<T>& noise, double amplitude, TRandom* random = nullptr);
 
 /// \brief Fills `noise` (its size kept) with a sine of `period` bins (not necessarily an integer) and `phase`
 /// whose amplitude is modulated by a slower random sine (period 4 to 8 times longer), at most maxAmplitude
-/// (gRandom); zeros if period or maxAmplitude are not positive
+/// (random numbers from `random`, gRandom if nullptr); zeros if period or maxAmplitude are not positive
 template <typename T>
-void GetSinNoise(std::vector<T>& noise, double maxAmplitude, double period, double phase = 0);
+void GetSinNoise(std::vector<T>& noise, double maxAmplitude, double period, double phase = 0,
+                 TRandom* random = nullptr);
 
 /// \brief Points grouped in time windows [k * intWindow, (k + 1) * intWindow) (any integer k): (center of
 /// the window, mean value of its points), in increasing time. Throws std::invalid_argument if intWindow is

@@ -10,6 +10,9 @@
 # table in it, TRestDetectorAvalancheProcess (amplificationVoltage, gap) can replace hitsSmearing to get the
 # gain and its fluctuations at the voltage instead of a resolution.
 
+# The random processes have fixed seeds, a different one each (the same output at each run, as in the
+# pipeline tests of examples/test): seed 0 gives a random seed.
+
 manager:
   class: "TRestManager"
   name: "manager"
@@ -55,11 +58,13 @@ manager:
       class: "TRestDetectorHitsDriftProcess"
       fluctuations: "fano"
       maxHits: 1000
+      seed: 1
     hitsSmearing:
       class: "TRestDetectorHitsSmearingProcess"
       energyReference: 5.9 keV
       resolutionReference: 15
       subtractFano: true
+      seed: 2
     hitsToSignal:
       class: "TRestDetectorHitsToSignalProcess"
       observables: ["NHitsRejected"]
@@ -83,3 +88,4 @@ manager:
       noise:
         - method: "white"
           amplitude: 5
+      seed: 3

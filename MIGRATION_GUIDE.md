@@ -824,7 +824,7 @@ bool TRestDetectorHitsSmearingProcess::ProcessEvent(const TRestEvent& input, TRe
     auto& out = dynamic_cast<TRestDetectorHitsEvent&>(output);
     out.Initialize();
     out.SetEventInfo(&in);
-    if (fSeed != 0) fRandom.SetSeed(TRestDetectorHitsEvent::EventSeed(fSeed, in));
+    if (fSeed != 0) fRandom.SetSeed(TRestEvent::EventSeed(fSeed, in));
     ...
     return out.GetNumberOfHits() > 0;                  // false rejects the event
 }
@@ -849,7 +849,7 @@ Rules:
 - **Sibling metadata** (readouts, medium) are found through `fManager` in `InitProcess`; store the name of
   the one used as a result (`UpdateYAMLFromParams`).
 - **Random numbers**: a `seed` field (0: random), the generator re-seeded at each event from (seed,
-  eventID, subEventID) (`TRestDetectorHitsEvent::EventSeed`), so results do not depend on threads.
+  eventID, subEventID) (`TRestEvent::EventSeed`), so results do not depend on threads.
 - **Threads**: each thread builds its own manager and processes from the YAML, so members need no locks;
   shared static state does. Read geometries only with `TRestTools::ReadGeometry` (shared, read-only) or
   `TRestTools::ReadGeometryCopy` (owned copy, for navigation), never `TGeoManager::Import`/`TFile::Get`.
