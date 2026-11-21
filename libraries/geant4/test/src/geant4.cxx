@@ -318,6 +318,21 @@ TEST(Geant4Event, NamesFromMetadata) {
 // Metadata, generator and physics lists
 // ============================================================================
 
+// Volumes of an assembly read from a file: the volume ID map has their Geant4 names
+// (av_<assembly>_impr_<imprint>_<logical>_pv_<index>), the geometry the physvol names
+TEST(Geant4GeometryInfo, AssemblyVolumeIDs) {
+    TRestGeant4GeometryInfo info;
+    info.InsertVolumeName(0, "av_1_impr_1_gasVolume_pv_0");
+    info.InsertVolumeName(1, "av_1_impr_1_chamberBodyVolume_pv_2");
+    info.InsertVolumeName(2, "shielding");
+    EXPECT_EQ(info.GetVolumeIDsMatchingExpression("gasVolume"), std::set<int>({0}));
+    EXPECT_EQ(info.GetVolumeIDsMatchingExpression("^gasVolume"), std::set<int>({0}));
+    EXPECT_EQ(info.GetVolumeIDsMatchingExpression("Volume$"), std::set<int>({0, 1}));
+    // Not an assembly name: only through the names of the geometry (none here)
+    EXPECT_TRUE(info.GetVolumeIDsMatchingExpression("shielding").empty());
+    EXPECT_TRUE(info.GetVolumeIDsMatchingExpression("^pv").empty());
+}
+
 TEST(Geant4Metadata, FromYAML) {
     const YAML::Node node = YAML::Load(
         "nEvents: 100\n"

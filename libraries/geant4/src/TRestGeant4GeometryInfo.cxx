@@ -189,6 +189,19 @@ std::set<std::string> TRestGeant4GeometryInfo::GetVolumesMatchingExpression(
     return volumes;
 }
 
+std::set<int> TRestGeant4GeometryInfo::GetVolumeIDsMatchingExpression(const std::string& expression) const {
+    std::set<int> ids = GetVolumeIDsFromNames(GetVolumesMatchingExpression(expression));
+    // Volumes of an assembly: their Geant4 name (av_1_impr_1_<logical>_pv_0, the one of the volume ID map)
+    // holds the logical volume, not the physvol name of the geometry read from a file, where the Geant4
+    // names are unknown (fG4ToAltNames is only filled by restG4)
+    TPRegexp regex(expression.c_str());
+    for (const auto& [id, name] : fVolumeNameMap) {
+        const std::string logical = GetGeant4NameFiltered(name);
+        if (logical != name && regex.MatchB(logical.c_str())) ids.insert(id);
+    }
+    return ids;
+}
+
 std::set<int> TRestGeant4GeometryInfo::GetVolumeIDsFromNames(const std::set<std::string>& names) const {
     std::set<int> ids;
     for (const auto& [id, name] : fVolumeNameMap) {

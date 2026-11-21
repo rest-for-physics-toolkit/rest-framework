@@ -606,21 +606,33 @@ TEST(RawAddNoise, WhiteNoiseStatistics) {
 }
 
 TEST(RawAddNoise, ReproducibleWithSeed) {
-    auto process = MakeProcess<TRestRawSignalAddNoiseProcess>(
-        "noise",
-        "noise:\n  - method: white\n    amplitude: 15\n  - method: sin\n    amplitude: 50\n    period: 20\n");
+    const std::string noise =
+        "noise:\n  - method: white\n    amplitude: 15\n  - method: sin\n    amplitude: 50\n    period: 20\n";
+    auto process = MakeProcess<TRestRawSignalAddNoiseProcess>("noise", noise + "seed: 777\n");
+    EXPECT_EQ(process->fSeed, 777u);
     process->Initialize();
 
-    TRestRawSignalEvent input, first, second;
+    TRestRawSignalEvent input, first, second, other;
+    input.SetID(5);
     input.AddSignal(1, Flat(512, 500));
     input.AddSignal(2, Flat(512, 500));
 
-    gRandom->SetSeed(777);
+    // The same event gives the same noise (re-seeded from the seed and the event IDs), whatever gRandom
     ASSERT_TRUE(process->ProcessEvent(input, first));
-    gRandom->SetSeed(777);
+    gRandom->SetSeed(1);
     ASSERT_TRUE(process->ProcessEvent(input, second));
     for (int s = 0; s < 2; s++) EXPECT_EQ(first.GetSignal(s).GetData(), second.GetSignal(s).GetData());
     EXPECT_NE(first.GetSignal(0).GetData(), Flat(512, 500));
+    // Another event, another noise
+    input.SetID(6);
+    ASSERT_TRUE(process->ProcessEvent(input, other));
+    EXPECT_NE(first.GetSignal(0).GetData(), other.GetSignal(0).GetData());
+    // Another process with the same seed: the same noise
+    auto copy = MakeProcess<TRestRawSignalAddNoiseProcess>("noise", noise + "seed: 777\n");
+    copy->Initialize();
+    TRestRawSignalEvent again;
+    ASSERT_TRUE(copy->ProcessEvent(input, again));
+    EXPECT_EQ(other.GetSignal(0).GetData(), again.GetSignal(0).GetData());
 }
 
 TEST(RawAddNoise, SinNoiseBounded) {

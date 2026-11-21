@@ -156,10 +156,9 @@ class TRestGeant4GeometryInfo {
     std::set<std::string> GetVolumesMatchingExpression(const std::string& expression) const;
     /// \brief Returns the IDs of the volumes (volume ID map) whose name, or filtered name, is in `names`.
     std::set<int> GetVolumeIDsFromNames(const std::set<std::string>& names) const;
-    /// \brief Returns the IDs of the volumes matching the expression, as GetVolumesMatchingExpression.
-    std::set<int> GetVolumeIDsMatchingExpression(const std::string& expression) const {
-        return GetVolumeIDsFromNames(GetVolumesMatchingExpression(expression));
-    }
+    /// \brief Returns the IDs of the volumes matching the expression, as GetVolumesMatchingExpression, and
+    /// those of the volumes of an assembly whose logical volume matches it (from their Geant4 name).
+    std::set<int> GetVolumeIDsMatchingExpression(const std::string& expression) const;
 
     /// \brief Prints a geometry summary (assembly, path separator, number of volumes and nodes).
     void Print() const;
