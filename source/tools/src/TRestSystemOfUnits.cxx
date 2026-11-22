@@ -4,7 +4,9 @@
 #include <TGeoManager.h>
 
 #include <algorithm>
-#include <charconv>
+#include <cctype>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 
 #include "TRestTools.h"
@@ -77,15 +79,37 @@ double ParseUnit(const std::string& UnitsExpr) {
 }
 
 std::optional<double> ParseValueWithUnits(const std::string& text) {
-    // std::from_chars (locale independent) takes the longest number: "10eV" is 10 and "eV" (an incomplete
-    // exponent is not part of the number), which a stream (>> double) fails to read
+    // The longest number at the start: "10eV" is 10 and "eV" (an incomplete exponent is not part of the
+    // number), which a stream (>> double) fails to read. Read without the locale (classic). Not
+    // std::from_chars: the libc++ of Xcode 16 has no floating point from_chars
     const char* begin = text.data();
     const char* end = text.data() + text.size();
     while (begin != end && std::isspace(static_cast<unsigned char>(*begin))) begin++;
-    if (begin != end && *begin == '+') begin++;  // from_chars does not accept '+'
+    const auto digits = [end](const char* p) {
+        while (p != end && std::isdigit(static_cast<unsigned char>(*p))) p++;
+        return p;
+    };
+    const char* rest = begin;
+    if (rest != end && (*rest == '+' || *rest == '-')) rest++;
+    const char* mantissa = rest;
+    rest = digits(rest);
+    bool hasDigits = rest != mantissa;
+    if (rest != end && *rest == '.') {
+        const char* fraction = rest + 1;
+        rest = digits(fraction);
+        hasDigits = hasDigits || rest != fraction;
+    }
+    if (!hasDigits) return std::nullopt;
+    if (rest != end && (*rest == 'e' || *rest == 'E')) {
+        const char* exponent = rest + 1;
+        if (exponent != end && (*exponent == '+' || *exponent == '-')) exponent++;
+        const char* exponentEnd = digits(exponent);
+        if (exponentEnd != exponent) rest = exponentEnd;
+    }
+    std::istringstream number(std::string(begin, rest));
+    number.imbue(std::locale::classic());
     double value = 0;
-    const auto [rest, error] = std::from_chars(begin, end, value);
-    if (error != std::errc() || rest == begin) return std::nullopt;
+    if (!(number >> value)) return std::nullopt;
     const std::string units = TRestTools::Trim(std::string(rest, end));
     if (!units.empty()) {
         try {
