@@ -214,11 +214,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The ROOT release (300 MB, slow from root.cern) is downloaded once per version and kept in the cache
+      - name: ROOT cache
+        id: root-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.ROOT_INSTALL }}
+          key: root-${{ env.ROOT_VERSION }}-macos-15.6-arm64-clang170
+
+      - name: ROOT download
+        if: steps.root-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 30
+        run: |
+          curl -fSL --retry 3 --speed-time 120 --speed-limit 50000 -o root.tar.gz \
+            "https://root.cern/download/root_v${ROOT_VERSION}.macos-15.6-arm64-clang170.tar.gz"
+          tar -xzf root.tar.gz -C "${{ github.workspace }}"
+          rm root.tar.gz
+
       - name: Dependencies
+        timeout-minutes: 20
         run: |
           brew install yaml-cpp googletest ninja
-          curl -fsSL "https://root.cern/download/root_v${ROOT_VERSION}.macos-15.6-arm64-clang170.tar.gz" \
-            | tar -xz -C "${{ github.workspace }}"
           source "$ROOT_INSTALL/bin/thisroot.sh"
           root-config --version
 
