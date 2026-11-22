@@ -199,76 +199,48 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # macOS (Apple Clang): build, install, restRoot and unit tests. Without Geant4, Garfield++, CRY and restDAQ
-  # (the DAQ runs on Linux; restG4, restGarfield and restDAQ are checked on Linux). ROOT is the binary release
-  # of the version of the rest-env image (ROOT_VERSION of the rest-docker Dockerfile, to be changed with it):
-  # the results of the pipelines depend on the ROOT version (e.g. the TMVA training). macos-15: the newest
-  # macOS with a binary of that version (built with its clang 17). Not required by the protection of master
+  # macOS: build, install, restRoot and unit tests. Without Geant4, Garfield++, CRY and restDAQ (the DAQ runs
+  # on Linux; restG4, restGarfield and restDAQ are checked on Linux). ROOT of the version of the rest-env
+  # image (ROOT_VERSION of the rest-docker Dockerfile, to be changed with it): the results of the pipelines
+  # depend on the ROOT version (e.g. the TMVA training). From conda-forge, with its compiler and libraries
+  # (the binary release of root.cern needs libraries of MacPorts). Not required by the protection of master
   macos:
     name: macOS
     runs-on: macos-15
     timeout-minutes: 120
-    env:
-      ROOT_VERSION: "6.36.04"
-      ROOT_INSTALL: ${{ github.workspace }}/root
+    defaults:
+      run:
+        # Login shell: the conda environment activated in each step
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v7
 
-      # The ROOT release (300 MB, slow from root.cern) is downloaded once per version and kept in the cache
-      # Restored and saved apart: saved right after the download, also if a later step fails
-      - name: ROOT cache
-        id: root-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ env.ROOT_INSTALL }}
-          key: root-${{ env.ROOT_VERSION }}-macos-15.6-arm64-clang170
-
-      - name: ROOT download
-        if: steps.root-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 30
-        run: |
-          curl -fSL --retry 3 --speed-time 120 --speed-limit 50000 -o root.tar.gz \
-            "https://root.cern/download/root_v${ROOT_VERSION}.macos-15.6-arm64-clang170.tar.gz"
-          tar -xzf root.tar.gz -C "${{ github.workspace }}"
-          rm root.tar.gz
-
-      - name: ROOT cache save
-        if: steps.root-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ env.ROOT_INSTALL }}
-          key: ${{ steps.root-cache.outputs.cache-primary-key }}
-
       - name: Dependencies
-        timeout-minutes: 20
-        run: |
-          brew install yaml-cpp googletest ninja
-          source "$ROOT_INSTALL/bin/thisroot.sh"
-          root-config --version
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: rest
+          create-args: >-
+            root=6.36.04 cxx-compiler cmake ninja yaml-cpp gtest
+          cache-environment: true
 
       - name: Configure
         run: |
-          source "$ROOT_INSTALL/bin/thisroot.sh"
+          root-config --version
           cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" -DBUILD_TESTING=ON \
+            -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" -DBUILD_TESTING=ON \
             -DREST_G4=OFF -DREST_GARFIELD=OFF
 
       - name: Build and install
-        run: |
-          source "$ROOT_INSTALL/bin/thisroot.sh"
-          cmake --build "$BUILD_DIR" --target install -j "$(sysctl -n hw.ncpu)"
+        run: cmake --build "$BUILD_DIR" --target install -j "$(sysctl -n hw.ncpu)"
 
       - name: Executables and libraries
         run: |
-          source "$ROOT_INSTALL/bin/thisroot.sh"
           source "$INSTALL_DIR/thisREST.sh"
           restRoot -b -q
           command -v restManager
 
       - name: Unit tests
-        run: |
-          source "$ROOT_INSTALL/bin/thisroot.sh"
-          cd "$BUILD_DIR" && ctest -j "$(sysctl -n hw.ncpu)" --output-on-failure
+        run: cd "$BUILD_DIR" && ctest -j "$(sysctl -n hw.ncpu)" --output-on-failure
 
   format:
     name: Format
