@@ -113,8 +113,8 @@ long GetRandomSeed();
 /// \brief The expression without whitespace (spaces, tabs, new lines)
 std::string CleanExpression(const std::string& expr);
 
-/// \brief Regular expression of a file name pattern: `*` becomes `.*` and every other punctuation
-/// character is escaped (so `?` is not a wildcard)
+/// \brief Regular expression of a file name pattern: `*` becomes `.*` and the other special characters of a
+/// regex are escaped (so `?` is not a wildcard); the rest, e.g. `_` or `-`, as they are
 std::string PatternToRegex(const std::string& pattern);
 /// \brief The string without whitespace and the characters not valid in file names (/ \\ : * ? " < > |)
 std::string CleanString(const std::string& str);

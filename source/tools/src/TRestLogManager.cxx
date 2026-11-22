@@ -68,6 +68,13 @@ std::string SuppressedSummary(int suppressed, const std::string& lastMessage, co
 }
 }  // namespace
 
+/// The singletons are defined out of line: an inline function-local static is one per shared library when
+/// inline functions are hidden (-fvisibility-inlines-hidden, e.g. the compiler flags of conda-forge)
+TRestLogManager& TRestLogManager::instance() {
+    static TRestLogManager mgr;
+    return mgr;
+}
+
 TRestLogManager::TRestLogManager() : fRepeated(new RepeatedMessages) {}
 
 void TRestLogManager::Write(const std::string_view& color, const std::string& prefix, const std::string& name,

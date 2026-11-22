@@ -6,6 +6,13 @@
 #include "TRestRun.h"
 #include "TRestTools.h"
 
+/// The singletons are defined out of line: an inline function-local static is one per shared library when
+/// inline functions are hidden (-fvisibility-inlines-hidden, e.g. the compiler flags of conda-forge)
+EventRegistry& EventRegistry::Instance() {
+    static EventRegistry inst;
+    return inst;
+}
+
 void TRestEvent::SetTime(double time) {
     // Whole seconds (floor, also for negative times, beyond the range of int) and nanoseconds in [0, 1e9)
     const double seconds = std::floor(time);

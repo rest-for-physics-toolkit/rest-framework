@@ -389,12 +389,9 @@ class EventRegistry {
     /// Function type used to instantiate events.
     using Creator = std::function<std::unique_ptr<TRestEvent>()>;
 
-    /// \brief Returns the singleton registry instance.
+    /// \brief Returns the singleton registry instance (defined in the .cxx: one for all the libraries).
     /// \return Singleton reference.
-    static EventRegistry& Instance() {
-        static EventRegistry inst;
-        return inst;
-    }
+    static EventRegistry& Instance();
 
     EventRegistry(const EventRegistry&) = delete;  ///< Non-copyable singleton.
     EventRegistry& operator=(const EventRegistry&) = delete;

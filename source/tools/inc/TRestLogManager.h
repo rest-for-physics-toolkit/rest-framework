@@ -143,11 +143,8 @@ class TRestLogManager {
         throw std::invalid_argument("unknown verbose '" + vStr + "' (silent, error, warning, info or debug)");
     }
 
-    /// \brief The single instance (created on first use)
-    static TRestLogManager& instance() {
-        static TRestLogManager mgr;
-        return mgr;
-    }
+    /// \brief The single instance (created on first use; defined in the .cxx: one for all the libraries)
+    static TRestLogManager& instance();
 
     /// \brief Also writes the messages to a file (appended), closing the previous one if any
     void SetLogFile(const std::string& filename) {

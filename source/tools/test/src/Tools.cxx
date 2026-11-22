@@ -132,10 +132,13 @@ TEST(Tools, ReplaceIdentifiers) {
 }
 
 TEST(Tools, PatternToRegex) {
-    // `*` is the only wildcard, punctuation is escaped
+    // `*` is the only wildcard, the special characters of a regex are escaped
     EXPECT_EQ(TRestTools::PatternToRegex("R*.root"), "R.*\\.root");
     EXPECT_EQ(TRestTools::PatternToRegex("a?b"), "a\\?b");
     EXPECT_EQ(TRestTools::PatternToRegex("abc"), "abc");
+    // Not escaped: "\_" is an invalid regex in libc++
+    EXPECT_EQ(TRestTools::PatternToRegex("R_1-2.root"), "R_1-2\\.root");
+    EXPECT_NO_THROW(std::regex(TRestTools::PatternToRegex("R_[1]_(a){2}+$^|.root")));
 }
 
 TEST(Tools, Times) {

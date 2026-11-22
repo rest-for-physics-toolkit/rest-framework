@@ -120,6 +120,19 @@ void TRestMetadata::PrintMetadata() const {
     }
 }
 
+/// The singletons are defined out of line: an inline function-local static is one per shared library when
+/// inline functions are hidden (-fvisibility-inlines-hidden, e.g. the compiler flags of conda-forge)
+MetadataClassRegistry& MetadataClassRegistry::Instance() {
+    static MetadataClassRegistry inst;
+    return inst;
+}
+
+/// \brief Returns the singleton registry instance.
+TRestMetadataFieldRegistry& TRestMetadataFieldRegistry::Instance() {
+    static TRestMetadataFieldRegistry inst;
+    return inst;
+}
+
 void TRestMetadataFieldRegistry::ApplyFields(TRestMetadata* instance, const YAML::Node& params) {
     if (!instance || !params) return;
     for (const auto& [type, fields] : fFieldMaps) {

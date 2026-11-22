@@ -206,12 +206,9 @@ class MetadataClassRegistry {
     /// Function type used to create metadata instances.
     using Creator = std::function<std::unique_ptr<TRestMetadata>(const std::string&, const YAML::Node&)>;
 
-    /// \brief Returns the singleton registry instance.
+    /// \brief Returns the singleton registry instance (defined in the .cxx: one for all the libraries).
     /// \return Singleton reference.
-    static MetadataClassRegistry& Instance() {
-        static MetadataClassRegistry inst;
-        return inst;
-    }
+    static MetadataClassRegistry& Instance();
 
     MetadataClassRegistry(const MetadataClassRegistry&) = delete;  ///< Non-copyable singleton.
     MetadataClassRegistry& operator=(const MetadataClassRegistry&) = delete;
@@ -269,11 +266,8 @@ class TRestMetadataFieldRegistry {
         std::function<bool(const TRestMetadata*)> appliesTo;  ///< True for instances of the class.
     };
 
-    /// \brief Returns the singleton registry instance.
-    static TRestMetadataFieldRegistry& Instance() {
-        static TRestMetadataFieldRegistry inst;
-        return inst;
-    }
+    /// \brief Returns the singleton registry instance (defined in the .cxx: one for all the libraries).
+    static TRestMetadataFieldRegistry& Instance();
 
     TRestMetadataFieldRegistry(const TRestMetadataFieldRegistry&) = delete;  ///< Non-copyable singleton.
     TRestMetadataFieldRegistry& operator=(const TRestMetadataFieldRegistry&) = delete;

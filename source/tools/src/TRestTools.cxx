@@ -516,9 +516,10 @@ std::string TRestTools::PatternToRegex(const std::string& pattern) {
     for (char c : pattern) {
         if (c == '*') {
             regex_pattern += ".*";  // '*' -> Wildcard
-        } else if (std::ispunct(c)) {
+        } else if (std::string_view(".^$|()[]{}+?\\").find(c) != std::string_view::npos) {
+            // Special characters of a regex only: escaping another one (e.g. \_) is an error in libc++
             regex_pattern += "\\";
-            regex_pattern += c;  // Special characters
+            regex_pattern += c;
         } else {
             regex_pattern += c;
         }
