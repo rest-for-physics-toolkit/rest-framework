@@ -25,6 +25,7 @@
 #include "Garfield/ComponentGrid.hh"
 #include "Garfield/MediumGas.hh"
 #include "Garfield/MediumMagboltz.hh"
+#include "Garfield/Random.hh"
 #include "TransportSimulation.h"
 
 namespace fs = std::filesystem;
@@ -139,6 +140,8 @@ TEST(RestGarfieldLong, GasTransportTableInParallel) {
 TEST(RestGarfield, GainTableOfFewAvalanches) {
     const std::string fileName = MediumFile("ArIso");
     const auto medium = MakeMedium(kArIso, fileName);
+    // Garfield++ seeds its generator from the time (TRandom3(0)): a fixed seed for a reproducible test
+    Garfield::randomEngine.Seed(1);
     // A low field (small gain): fast avalanches
     TRestDetectorGainTable simulation(
         "gain", YAML::Load("{gap: 128 um, reducedFieldRange: [10 kV/cm/bar, 12 kV/cm/bar], fieldNodes: 2, "
@@ -156,8 +159,8 @@ TEST(RestGarfield, GainTableOfFewAvalanches) {
     ASSERT_EQ(table.fGain.size(), 2u);
     EXPECT_NEAR(table.fTableGap, 0.128, 1e-9);
     for (size_t i = 0; i < 2; i++) {
-        // At least the primary electron reaches the anode (no attachment)
-        EXPECT_GE(table.fGain[i], 1) << i;
+        // A gain of about one: the primary electron, started at the mesh, may diffuse back out of the gap
+        EXPECT_GT(table.fGain[i], 0.5) << i;
         EXPECT_TRUE(std::isfinite(table.fTheta[i])) << i;
     }
     // The avalanche sizes of each field node
