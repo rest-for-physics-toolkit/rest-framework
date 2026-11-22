@@ -130,11 +130,13 @@ endif()
 # themselves from static initializers, so a library may be needed even if the
 # target uses none of its symbols. Linkers using --as-needed (default on Ubuntu
 # and others, or set in LDFLAGS) would drop it, so the target is linked with
-# --no-as-needed. Libraries whose target does not exist (disabled) are skipped.
-# The build-tree path of the libraries is written as RPATH, not RUNPATH: it is
-# searched before LD_LIBRARY_PATH, so the executables and tests of the build
-# load its libraries, not others with the same name in LD_LIBRARY_PATH (e.g. a
-# legacy REST installation). The installed ones use thisREST.sh.
+# --no-as-needed; on macOS each one is a needed library (-needed_library), kept
+# also with -dead_strip_dylibs (set in LDFLAGS, e.g. by conda-forge). Libraries
+# whose target does not exist (disabled) are skipped. The build-tree path of the
+# libraries is written as RPATH, not RUNPATH: it is searched before
+# LD_LIBRARY_PATH, so the executables and tests of the build load its libraries,
+# not others with the same name in LD_LIBRARY_PATH (e.g. a legacy REST
+# installation). The installed ones use thisREST.sh.
 # ---------------------------------------------------------------------------
 function(rest_link_registered_libraries target)
   set(_libs "")
@@ -144,7 +146,15 @@ function(rest_link_registered_libraries target)
     endif()
   endforeach()
   target_link_libraries(${target} PRIVATE ${_libs})
-  if(NOT APPLE AND NOT WIN32)
+  if(APPLE)
+    foreach(_lib ${_libs})
+      get_target_property(_type ${_lib} TYPE)
+      if(_type STREQUAL "SHARED_LIBRARY")
+        target_link_options(${target} PRIVATE
+                            "LINKER:-needed_library,$<TARGET_FILE:${_lib}>")
+      endif()
+    endforeach()
+  elseif(NOT WIN32)
     target_link_options(${target} PRIVATE "LINKER:--no-as-needed"
                         "LINKER:--disable-new-dtags")
   endif()
