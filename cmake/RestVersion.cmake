@@ -6,7 +6,7 @@
 # only TRestVersion.cxx is compiled again after a commit.
 #
 # Inputs (-D): SOURCE_DIR (the git checkout), OUTPUT, VERSION (the VERSION of
-# project(), e.g. 2.0.0), GIT_COMMIT (optional: the commit of a build without
+# project(), e.g. 3.0.0), GIT_COMMIT (optional: the commit of a build without
 # git, e.g. a release tarball or a Docker image, given with -DREST_GIT_COMMIT).
 #
 # Without git and without GIT_COMMIT the commit is "unknown" and the clean state
