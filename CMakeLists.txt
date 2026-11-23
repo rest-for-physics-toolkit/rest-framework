@@ -76,10 +76,16 @@ add_compile_options(-fPIC -Wall -Wextra -Wno-unused-parameter)
 # arm64 (macOS), gcc only with FMA instructions; without them the results are
 # the same on every platform
 add_compile_options(-ffp-contract=off)
-# Off by default: each compiler version adds new warnings, which would break the
-# build
-option(REST_WERROR "Treat compiler warnings as errors" OFF)
-if(REST_WERROR)
+# Warnings of clang (macOS) that gcc does not give with -Wall: unused constants
+# of the file (clang also warns about variables only incremented, gcc cannot)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options(-Wunused-const-variable=1)
+endif()
+# On by default: a warning is seen (as an error) where it is introduced, not in
+# the validation. Off for a compiler newer than the validated ones, if it adds
+# warnings
+option(REST_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+if(REST_WARNINGS_AS_ERRORS)
   add_compile_options(-Werror -Wno-cast-function-type -Wno-unknown-pragmas)
 endif()
 

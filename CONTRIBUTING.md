@@ -95,7 +95,7 @@ Actions access).
 
 | Workflow | When | What |
 |---|---|---|
-| `validation.yml` | Pull requests to master, pushes to master, releases, by hand | Build (all the packages, install, `restRoot`, Doxygen), unit tests (a step per component), restG4 examples, format (pre-commit). |
+| `validation.yml` | Pull requests to master, pushes to master, releases, by hand | Build (all the packages, compiler warnings as errors, install, `restRoot`, Doxygen), unit tests (a step per component), restG4 examples, format (pre-commit). |
 | `docs.yml` | Pushes to master, by hand | Doxygen documentation in GitHub Pages (Settings, Pages, Source: GitHub Actions). |
 
 Other files of `.github`: the pull request template, CODEOWNERS (reviewers requested automatically),
