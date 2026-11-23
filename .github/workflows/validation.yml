@@ -54,6 +54,17 @@ jobs:
           grep -E "^(REST_G4|REST_CRY|REST_GARFIELD|REST_DAQ):BOOL=ON" "$BUILD_DIR/CMakeCache.txt" | wc -l | grep -qx 4 \
             || { echo "An optional package is disabled:"; grep -E "^REST_(G4|CRY|GARFIELD|DAQ):" "$BUILD_DIR/CMakeCache.txt"; exit 1; }
 
+      # A release: its tag vX.Y.Z (or vX.Y.Z-<suffix>, a pre-release) is the VERSION of project()
+      - name: Release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^CMAKE_PROJECT_VERSION:[A-Z]*=//p' "$BUILD_DIR/CMakeCache.txt")
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-.+)?$ \
+                || "${BASH_REMATCH[1]}" != "$version" ]]; then
+            echo "The tag $GITHUB_REF_NAME is not v$version (VERSION of project() in CMakeLists.txt)"
+            exit 1
+          fi
+
       - name: Build and install
         run: cmake --build "$BUILD_DIR" --target install -j "$(nproc)"
 
@@ -145,7 +156,8 @@ jobs:
   # Image with restv2 installed (/opt/rest), on the environment image, when the tests pass at each push to
   # master or run by hand on master (tag latest) and each release (its tag): ghcr.io/<owner>/rest. Its
   # Dockerfile is rest/Dockerfile of the rest-docker repository (built with this repository as context). The
-  # projects and rest-common-readouts use it to run restv2 without building it
+  # projects and rest-common-readouts use it to run restv2 without building it. It is pushed only if its
+  # version is the commit built, clean, and in a release its tag (CONTRIBUTING.md, Versions and releases)
   image:
     name: Image
     needs: [unit-tests, restg4-examples]
@@ -187,6 +199,31 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=ref,event=tag
             type=sha
+
+      # Built and checked before pushing it (the push reuses the build, cached in the builder)
+      - uses: docker/build-push-action@v7
+        with:
+          context: rest-framework
+          file: rest-docker/rest/Dockerfile
+          build-args: |
+            BASE_IMAGE=${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+            JOBS=4
+          load: true
+          tags: rest:check
+
+      # The version of the code in the image: the commit built, without uncommitted changes and, in a
+      # release, its tag (restManager --version: "rest-for-physics-toolkit X.Y.Z (commit <sha>, vX.Y.Z,
+      # <date>, clean)")
+      - name: Version in the image
+        run: |
+          summary=$(docker run --rm rest:check restManager --version | grep -m1 '^rest-for-physics-toolkit ')
+          echo "$summary"
+          [[ "$summary" == *"commit $GITHUB_SHA"* && "$summary" == *", clean)" ]] \
+            || { echo "The image is not the clean commit $GITHUB_SHA"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/* && "$summary" != *", $GITHUB_REF_NAME, "* ]]; then
+            echo "The image is not the release $GITHUB_REF_NAME"
+            exit 1
+          fi
 
       - uses: docker/build-push-action@v7
         with:

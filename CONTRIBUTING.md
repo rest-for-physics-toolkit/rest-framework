@@ -83,8 +83,19 @@ runs them all.
 The version of the code is the `VERSION` of `project()` in CMakeLists.txt; the build adds the commit and
 whether the tracked files had uncommitted changes (cmake/RestVersion.cmake, at each build). A release is
 the tag `vX.Y.Z` of the commit whose `VERSION` is `X.Y.Z` (a different tag on the commit is a warning of
-the build). Its tag publishes its documentation (`docs.yml`) and, with the release, its Docker image
-(the `image` job of `validation.yml`). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
+the build). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
+
+A release, once `VERSION` is `X.Y.Z` in master (changed by a pull request):
+
+```bash
+git switch master && git pull
+git tag vX.Y.Z && git push origin vX.Y.Z      # documentation vX.Y.Z (docs.yml)
+gh release create vX.Y.Z --generate-notes     # validation and image ghcr.io/<owner>/rest:vX.Y.Z
+```
+
+The validation of the release fails if its tag is not `vX.Y.Z` of `VERSION` (or `vX.Y.Z-<suffix>`, a
+pre-release: `gh release create vX.Y.Z-rc1 --prerelease`, image without documentation), and the image is
+pushed only if `restManager --version` in it gives the commit of the tag, the tag and a clean tree.
 
 ## Continuous integration
 
