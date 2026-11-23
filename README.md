@@ -13,10 +13,9 @@ REST was born as a collaborative software effort to provide common tools for the
 data analysis of gaseous Time Projection Chambers (TPCs), and its use is not exclusive of detector data
 analysis. rest-for-physics-toolkit is a new version of the framework: the same concepts, with YAML
 configurations, a single repository for the framework, the libraries and the packages, and ROOT RDataFrame for
-the datasets. While REST was mainly focused on TPCs, rest-for-physics-toolkit is built generically for rare
-event searches with any kind of detector: the readout, the detector medium and the response are independent of
-the detector technology (e.g. TPCs with Micromegas readouts, scintillators and vetoes read through GDML
-volumes, or fibre lattices).
+the datasets. It is much more generic regarding the kind of detector: the readout, the detector medium and the
+response are independent of the detector technology (e.g. TPCs with Micromegas readouts or scintillators read
+by photosensors).
 
 The framework (`source/core`) provides three interfaces, the abstract classes `TRestEvent`, `TRestMetadata`
 and `TRestEventProcess`, from which every REST library derives its **specific objects**:
@@ -182,7 +181,7 @@ rest-for-physics-toolkit is a new version of [REST-for-Physics](https://github.c
 ([doi:10.5281/zenodo.4528985](https://doi.org/10.5281/zenodo.4528985)), developed as a joint project in which
 the original developers of REST do not take part.
 
-- **Migration**: JuanAn García migrated the classes of REST-for-Physics (framework, libraries and packages) to
+- **Migration**: the classes of REST-for-Physics (framework, libraries and packages) were migrated to
   rest-for-physics-toolkit. The general structure of the code is the one of REST: events, metadata and event
   processes in processing chains, REST files with the event trees, the analysis tree and the metadata, and the
   same libraries.
@@ -190,14 +189,9 @@ the original developers of REST do not take part.
   configuration fields (every key is a registered field of the class, unknown keys are an error), the AOD
   storage of the events (flat data with views instead of ROOT schema evolution of nested objects) and the
   dataset processes. restDAQ is based on [FEMDAQ](https://github.com/juanangp/femdaq).
-- **Authors of REST-for-Physics** (its
-  [CITATION.cff](https://github.com/rest-for-physics/framework/blob/master/CITATION.cff)): Konrad Altenmüller,
-  Susana Cebrián, Theopisti Dafni, David Díez-Ibáñez, Javier Galán, Javier Galindo, Juan García, Igor
-  Irastorza, Gloria Luzón, Cristina Margalejo, Héctor Mirallas, Luis Obis, Óscar Pérez, Ke Han, Kaixiang Ni,
-  Yann Bedfer, Barbara Biasuzzi, Esther Ferrer-Ribas, Damien Neyret, Thomas Papaevangelou, Cristian Cogollos
-  and Eduardo Picatoste.
-- **Authors of each class**: in its documentation (`\author`), the authors of the class of REST-for-Physics it
-  comes from and those of rest-for-physics-toolkit.
+- **Authors**: those of each class are in its documentation (`\author`): the authors of the class of
+  REST-for-Physics it comes from and those of rest-for-physics-toolkit. The authors of REST-for-Physics are in
+  its [CITATION.cff](https://github.com/rest-for-physics/framework/blob/master/CITATION.cff).
 
 rest-for-physics-toolkit keeps the license of REST-for-Physics: GNU General Public License version 3 or later,
 see [LICENSE](LICENSE).
