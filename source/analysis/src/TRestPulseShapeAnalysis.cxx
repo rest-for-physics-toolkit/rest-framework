@@ -15,8 +15,7 @@
 
 namespace {
 
-constexpr double kAgetPeakU = 1.1664;         // u where u^3 e^{-3u} sin(u) is maximum
-constexpr double kAgetPeakValue = 0.0440895;  // value of the shape at that point
+constexpr double kAgetPeakU = 1.1664;  // u where u^3 e^{-3u} sin(u) is maximum
 
 using TF1Maker = std::function<std::unique_ptr<TF1>(double lower, double upper)>;
 

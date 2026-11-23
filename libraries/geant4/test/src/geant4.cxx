@@ -854,8 +854,8 @@ TEST(Geant4AnalysisProcess, GlobalAndSelectionObservables) {
     // Errors: no metadata, a volume, particle or process not in the simulation, a duplicated name
     TRestGeant4AnalysisProcess noMetadata("g4Ana", YAML::Load("{}"));
     EXPECT_THROW(noMetadata.Initialize(), std::runtime_error);
-    for (const std::string& selection : {"{name: a, volumes: ['^pmt$']}", "{name: a, particles: [alpha]}",
-                                         "{name: a, processes: [nCapture]}", "{name: gas}, {name: gas}"}) {
+    for (const std::string selection : {"{name: a, volumes: ['^pmt$']}", "{name: a, particles: [alpha]}",
+                                        "{name: a, processes: [nCapture]}", "{name: gas}, {name: gas}"}) {
         TRestGeant4AnalysisProcess wrong("g4Ana", YAML::Load("{selections: [" + selection + "]}"));
         wrong.fGeant4Metadata = &metadata;
         EXPECT_THROW(wrong.Initialize(), std::runtime_error) << selection;

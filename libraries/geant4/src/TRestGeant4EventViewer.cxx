@@ -181,9 +181,6 @@ void TRestGeant4EventViewer::AddEvent(TRestEvent* event) {
 
     const int nTracks = fG4Event->GetNumberOfTracks();
 
-    size_t trackCounter = 0;
-    size_t hitsCounter = 0;
-
     map<int, TEveStraightLineSet*> linesSet;
     map<std::string, TEvePointSet*> hitsPoints;
     map<std::string, TEveElementList*> hitsType;
@@ -213,7 +210,6 @@ void TRestGeant4EventViewer::AddEvent(TRestEvent* event) {
         }
 
         gEve->AddElement(line, parentLine);
-        trackCounter++;
 
         const size_t nTrackHits = track.GetNumberOfHits();
 
@@ -247,8 +243,6 @@ void TRestGeant4EventViewer::AddEvent(TRestEvent* event) {
             hitsPoints.at(processName)
                 ->SetNextPoint(fGeomScale * position.X(), fGeomScale * position.Y(),
                                fGeomScale * position.Z());
-
-            hitsCounter++;
         }
     }
 

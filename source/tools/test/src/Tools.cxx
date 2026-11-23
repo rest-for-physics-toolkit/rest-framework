@@ -345,7 +345,9 @@ TEST(Version, VersionCommitAndSummary) {
     } else {
         EXPECT_EQ(REST_Version::GetCommit(), "unknown");
     }
-    if (!REST_Version::IsCleanKnown()) EXPECT_FALSE(REST_Version::IsClean());
+    if (!REST_Version::IsCleanKnown()) {
+        EXPECT_FALSE(REST_Version::IsClean());
+    }
     const std::string summary = REST_Version::GetSummary();
     EXPECT_EQ(summary.rfind("rest-for-physics-toolkit " + REST_Version::GetVersion() + " (commit ", 0), 0u)
         << summary;
