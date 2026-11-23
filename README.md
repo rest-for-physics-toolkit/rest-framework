@@ -175,11 +175,10 @@ changes through pull requests) and the continuous integration.
   classes, and how to port a legacy class to rest-for-physics-toolkit.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, tests and continuous integration.
 
-## Origin, authors and license
+## Origin and license
 
 rest-for-physics-toolkit is a new version of [REST-for-Physics](https://github.com/rest-for-physics/framework)
-([doi:10.5281/zenodo.4528985](https://doi.org/10.5281/zenodo.4528985)), developed as a joint project in which
-the original developers of REST do not take part.
+([doi:10.5281/zenodo.4528985](https://doi.org/10.5281/zenodo.4528985)).
 
 - **Migration**: the classes of REST-for-Physics (framework, libraries and packages) were migrated to
   rest-for-physics-toolkit. The general structure of the code is the one of REST: events, metadata and event
@@ -189,9 +188,6 @@ the original developers of REST do not take part.
   configuration fields (every key is a registered field of the class, unknown keys are an error), the AOD
   storage of the events (flat data with views instead of ROOT schema evolution of nested objects) and the
   dataset processes. restDAQ is based on [FEMDAQ](https://github.com/juanangp/femdaq).
-- **Authors**: those of each class are in its documentation (`\author`): the authors of the class of
-  REST-for-Physics it comes from and those of rest-for-physics-toolkit. The authors of REST-for-Physics are in
-  its [CITATION.cff](https://github.com/rest-for-physics/framework/blob/master/CITATION.cff).
 
 rest-for-physics-toolkit keeps the license of REST-for-Physics: GNU General Public License version 3 or later,
 see [LICENSE](LICENSE).
