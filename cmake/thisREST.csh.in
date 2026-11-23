@@ -2,6 +2,12 @@
 # Source this script to set up the REST v2 environment:
 #   source @CMAKE_INSTALL_PREFIX@/thisREST.csh
 
+# CRY of restG4, found at compile time: as its setup script, unless already set
+if ( "@thisCRYHOME@" != "" ) then
+    if ( $?CRYHOME == 0 ) setenv CRYHOME "@thisCRYHOME@"
+    if ( $?CRYDATAPATH == 0 ) setenv CRYDATAPATH "@thisCRYDATA@"
+endif
+
 setenv REST_SOURCE "@CMAKE_SOURCE_DIR@"
 setenv REST_PATH   "@CMAKE_INSTALL_PREFIX@"
 

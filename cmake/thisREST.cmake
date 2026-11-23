@@ -9,6 +9,20 @@
 # script only sources it if it exists.
 set(thisROOT "${ROOT_BINDIR}/thisroot.sh")
 
+# CRY of restG4 (found at configure time, REST_CRY): the scripts set CRYHOME and
+# CRYDATAPATH as the CRY setup script does, unless already set, so the CRY setup
+# does not need to be sourced (a new configuration finds CRY from CRYHOME)
+set(thisCRYHOME "")
+set(thisCRYDATA "")
+if(REST_G4
+   AND REST_CRY
+   AND CRY_LIBRARY
+   AND CRY_DATA_DIR)
+  get_filename_component(_cryLibDir "${CRY_LIBRARY}" DIRECTORY)
+  get_filename_component(thisCRYHOME "${_cryLibDir}" DIRECTORY)
+  set(thisCRYDATA "${CRY_DATA_DIR}")
+endif()
+
 # Generate the scripts into the build tree; install() copies them
 configure_file("${CMAKE_CURRENT_LIST_DIR}/thisREST.sh.in"
                "${CMAKE_BINARY_DIR}/thisREST.sh" @ONLY)

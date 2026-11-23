@@ -115,7 +115,8 @@ The installation goes to `install/` in the repository (or `$REST_PATH` if define
 
 `thisREST.sh` sets `REST_PATH`, `PATH`, `LD_LIBRARY_PATH` and `ROOT_INCLUDE_PATH`, removing the entries of a
 REST loaded before (e.g. a legacy installation sourced in `~/.bashrc`, whose headers or libraries would
-otherwise be found first).
+otherwise be found first). It also loads the ROOT used to build, and the CRY of restG4 if it was found
+(`CRYHOME` and `CRYDATAPATH`, as the CRY setup script, unless already set).
 
 ### CMake options
 
@@ -128,7 +129,7 @@ otherwise be found first).
 | `REST_GARFIELD` | ON | `restGarfield` (transport and gain tables of the media); disabled if Garfield++ is not found (`$GARFIELD_INSTALL` or `Garfield_DIR`). |
 | `REST_DAQ` | OFF | `femclient` (packages/restDAQ); needs readline and prometheus-cpp (found with `find_package`, e.g. `-DCMAKE_PREFIX_PATH=<prometheus-cpp install>`, otherwise downloaded). |
 | `BUILD_TESTING` | OFF | The tests (GoogleTest). |
-| `REST_WERROR` | OFF | Compiler warnings as errors (recommended for development). |
+| `REST_WARNINGS_AS_ERRORS` | ON | Compiler warnings as errors (gcc also with the warnings of clang it lacks, e.g. unused constants); off for a compiler newer than the validated ones if it adds warnings. |
 | `REST_USE_CCACHE` | ON | `ccache` as compiler launcher if installed (fast rebuilds after reconfiguring or switching branches). |
 | `REST_GIT_COMMIT` | empty | Commit of a build without git (e.g. a tarball or a Docker image without `.git`), stored as the commit of the code; with git it is taken from the checkout. |
 

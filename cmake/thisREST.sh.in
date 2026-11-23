@@ -34,6 +34,12 @@ if [[ -n "${REST_PATH}" ]]; then
 fi
 unset -f _rest_strip
 
+# CRY of restG4, found at compile time: as its setup script, unless already set
+if [[ -n "@thisCRYHOME@" ]]; then
+    export CRYHOME="${CRYHOME:-@thisCRYHOME@}"
+    export CRYDATAPATH="${CRYDATAPATH:-@thisCRYDATA@}"
+fi
+
 export REST_SOURCE="@CMAKE_SOURCE_DIR@"
 export REST_PATH="${thisdir}"
 export ROOT_INCLUDE_PATH="$REST_PATH/include${_INC:+:$_INC}"
