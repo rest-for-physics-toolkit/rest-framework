@@ -47,9 +47,11 @@ seeds (`seed`, a different one per process), so their outputs are reproducible. 
 validation, the `AnalysisTree` of each output is compared event by event with a reference of
 `examples/test/reference/` (every numeric column, scalars and vectors, relative tolerance 1e-5; the results
 of fits, columns with `Gauss` in their name, depend on the platform: tolerance 1e-2, up to 2% of their
-values may differ, and a fit without result, -1, on either side is not compared). Large outputs (the
-datasets of whole runs) are compared on their first entries and their number of entries, so the references
-stay small. After an intended change of the results, the references are written again and committed with
+values may differ, and a fit without result, -1, on either side is not compared; the scores of classifiers
+trained by TMVA, columns ending in `_score`, change on arm64, where ROOT uses fused multiply-adds: absolute
+tolerance 0.1, up to 5% of their values may differ, and a selection by a score is compared on its number of
+entries, within 30%). Large outputs (the datasets of whole runs) are compared on their first entries and
+their number of entries, so the references stay small. After an intended change of the results, the references are written again and committed with
 the change:
 
 ```

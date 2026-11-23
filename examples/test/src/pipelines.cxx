@@ -4,8 +4,9 @@
 /// processes of the examples have fixed seeds), each test in its own work directory, and the analysis tree
 /// of each output is compared event by event with a reference of examples/test/reference: every numeric
 /// column (scalars and vectors; strings are not compared), with a relative tolerance (looser for the results
-/// of fits, which depend on the platform). With the environment variable REST_UPDATE_REFERENCE=1 the
-/// references are written instead (after an intended change, committed with it).
+/// of fits and of the classifiers trained by TMVA, which depend on the platform). With the environment
+/// variable REST_UPDATE_REFERENCE=1 the references are written instead (after an intended change, committed
+/// with it).
 
 #include <TFile.h>
 #include <TLeaf.h>
@@ -45,6 +46,14 @@ constexpr double kFitTolerance = 1e-2;
 constexpr double kFitNoResult = -1;
 constexpr double kFitMismatches = 0.02;
 const std::regex kFitColumn(".*Gauss.*");
+/// Scores of the classifiers trained by ROOT TMVA (e.g. bdt_score): ROOT is not built with -ffp-contract=off,
+/// so on arm64 (macOS) its fused multiply-adds change the cuts of the trees and the scores (by a few
+/// hundredths) of the same training. Their absolute tolerance (scores in [-1, 1]), the fraction of their
+/// values allowed to differ, and the relative tolerance of the number of entries of a selection by a score
+const std::regex kTrainedColumn(".*_score");
+constexpr double kTrainedTolerance = 0.1;
+constexpr double kTrainedMismatches = 0.05;
+constexpr double kTrainedEntries = 0.3;
 /// Mismatches printed per column
 constexpr int kMaxPrinted = 5;
 
@@ -187,8 +196,11 @@ bool Equal(double value, double reference, double tolerance) {
 
 /// Compares the analysis tree of an output with the reference `name` (examples/test/reference/<name>.root),
 /// or writes it with REST_UPDATE_REFERENCE=1. With `maxEntries`, only its first entries and its number of
-/// entries (large outputs, e.g. datasets: the references are committed)
-void CompareWithReference(const std::string& fileName, const std::string& name, Long64_t maxEntries = 0) {
+/// entries (large outputs, e.g. datasets: the references are committed). An output selected by the score of a
+/// trained classifier (`trained`, e.g. a selection by bdt_score): only its number of entries, within
+/// kTrainedEntries
+void CompareWithReference(const std::string& fileName, const std::string& name, Long64_t maxEntries = 0,
+                          bool trained = false) {
     ASSERT_FALSE(fileName.empty());
     const auto columns = ReadAnalysisTree(fileName, maxEntries);
     ASSERT_FALSE(columns.empty()) << "no numeric column in the AnalysisTree of " << fileName;
@@ -229,6 +241,24 @@ void CompareWithReference(const std::string& fileName, const std::string& name, 
     tree->SetBranchAddress("column", &column);
     tree->SetBranchAddress("values", &values);
     tree->SetBranchAddress("sizes", &sizes);
+    // The number of entries of an output or a reference: its [entries] column, or the length of its columns
+    const auto entriesOf = [](const std::string& columnName, const std::vector<double>& columnValues,
+                              const std::vector<int>& columnSizes) {
+        return columnName == kEntriesColumn ? columnValues.at(0) : static_cast<double>(columnSizes.size());
+    };
+    if (trained) {
+        double outputEntries = 0, referenceEntries = 0;
+        for (const auto& [columnName, data] : columns) {
+            outputEntries = std::max(outputEntries, entriesOf(columnName, data.values, data.sizes));
+        }
+        for (Long64_t n = 0; n < tree->GetEntries(); n++) {
+            tree->GetEntry(n);
+            referenceEntries = std::max(referenceEntries, entriesOf(*column, *values, *sizes));
+        }
+        EXPECT_LE(std::abs(outputEntries - referenceEntries), kTrainedEntries * referenceEntries)
+            << name << ": " << outputEntries << " entries (reference " << referenceEntries << ")";
+        return;
+    }
     std::set<std::string> referenced;
     for (Long64_t n = 0; n < tree->GetEntries(); n++) {
         tree->GetEntry(n);
@@ -245,9 +275,11 @@ void CompareWithReference(const std::string& fileName, const std::string& name, 
             continue;
         }
         const bool fit = std::regex_match(*column, kFitColumn);
-        const double tolerance = fit ? kFitTolerance : kTolerance;
-        // The mismatches allowed: a fraction of the values of a fit column, none otherwise
-        const size_t allowed = fit ? static_cast<size_t>(kFitMismatches * values->size()) : 0;
+        const bool score = std::regex_match(*column, kTrainedColumn);
+        const double tolerance = fit ? kFitTolerance : score ? kTrainedTolerance : kTolerance;
+        // The mismatches allowed: a fraction of the values of a fit or score column, none otherwise
+        const double fraction = fit ? kFitMismatches : score ? kTrainedMismatches : 0;
+        const size_t allowed = static_cast<size_t>(fraction * values->size());
         std::vector<std::string> mismatches;
         size_t index = 0;
         for (size_t entry = 0; entry < sizes->size(); entry++) {
@@ -264,7 +296,7 @@ void CompareWithReference(const std::string& fileName, const std::string& name, 
         }
         if (mismatches.size() <= allowed) {
             if (!mismatches.empty()) {
-                std::cout << *column << ": " << mismatches.size() << " fit values differ (allowed " << allowed
+                std::cout << *column << ": " << mismatches.size() << " values differ (allowed " << allowed
                           << ")" << std::endl;
             }
             continue;
@@ -361,8 +393,9 @@ TEST(Pipelines, AlphaCAMMSimulatedCalibration) {
 // as datasets of IAXODataSet.yaml): calibration and gain map of both, log odds of both, BDT of both (trained
 // with the calibration as signal and the background), and selection of the background with each one at 80%
 // of the calibration.
-// The datasets are large: the first entries of each output and its number of entries are compared. About
-// two minutes (TMVA trains twice): in a Long suite (ctest -E Long skips it)
+// The datasets are large: the first entries of each output and its number of entries are compared; the
+// selection by the BDT score only on its number of entries (the training changes on arm64). About two
+// minutes (TMVA trains twice): in a Long suite (ctest -E Long skips it)
 TEST(PipelinesLong, IAXODataSetChain) {
     constexpr Long64_t entries = 1000;
     Input("Dataset_IAXO_D1_Run00229_Calibration.root", "Dataset_Calibration.root");
@@ -383,7 +416,8 @@ TEST(PipelinesLong, IAXODataSetChain) {
         CompareWithReference(Output("Dataset_" + sample + "_TMVA\\.root"), "DataSetTMVA_" + sample, entries);
     }
     ASSERT_TRUE(RestManager("examples/DataSetSignalSelection.yaml", "Dataset_Background_TMVA.root"));
-    CompareWithReference(Output("Dataset_Background_Selected\\.root"), "DataSetSignalSelection", entries);
+    CompareWithReference(Output("Dataset_Background_Selected\\.root"), "DataSetSignalSelection", entries,
+                         true);
     ASSERT_TRUE(RestManager("examples/DataSetLogOddsSelection.yaml", "Dataset_Background_LogOdds.root"));
     CompareWithReference(Output("Dataset_Background_LogOddsSelected\\.root"), "DataSetLogOddsSelection",
                          entries);
