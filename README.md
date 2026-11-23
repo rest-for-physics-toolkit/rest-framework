@@ -170,7 +170,9 @@ changes through pull requests) and the continuous integration.
 
 - [doc/UserGuide.md](doc/UserGuide.md): how to use rest-for-physics-toolkit (configuration, events and file
   formats, processes, runs, cuts and plots, datasets).
-- The README of each component (table above) and the class documentation (Doxygen, target `doc`).
+- The README of each component (table above) and the class documentation (Doxygen, target `doc`), published
+  for master and each release in [GitHub Pages](https://rest-for-physics-toolkit.github.io/rest-framework/)
+  (`master/`, `vX.Y.Z/`).
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md): moving from REST v2.x (legacy): configurations, equivalent
   classes, and how to port a legacy class to rest-for-physics-toolkit.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, tests and continuous integration.

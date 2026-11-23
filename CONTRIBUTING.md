@@ -51,8 +51,8 @@ values may differ, and a fit without result, -1, on either side is not compared;
 trained by TMVA, columns ending in `_score`, change on arm64, where ROOT uses fused multiply-adds: absolute
 tolerance 0.1, up to 5% of their values may differ, and a selection by a score is compared on its number of
 entries, within 30%). Large outputs (the datasets of whole runs) are compared on their first entries and
-their number of entries, so the references stay small. After an intended change of the results, the references are written again and committed with
-the change:
+their number of entries, so the references stay small. After an intended change of the results, the
+references are written again and committed with the change:
 
 ```
 REST_UPDATE_REFERENCE=1 ctest -L pipelines
@@ -83,7 +83,8 @@ runs them all.
 The version of the code is the `VERSION` of `project()` in CMakeLists.txt; the build adds the commit and
 whether the tracked files had uncommitted changes (cmake/RestVersion.cmake, at each build). A release is
 the tag `vX.Y.Z` of the commit whose `VERSION` is `X.Y.Z` (a different tag on the commit is a warning of
-the build). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
+the build). Its tag publishes its documentation (`docs.yml`) and, with the release, its Docker image
+(the `image` job of `validation.yml`). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
 
 ## Continuous integration
 
@@ -96,7 +97,12 @@ Actions access).
 | Workflow | When | What |
 |---|---|---|
 | `validation.yml` | Pull requests to master, pushes to master, releases, by hand | Build (all the packages, compiler warnings as errors, install, `restRoot`, Doxygen), unit tests (a step per component), restG4 examples, format (pre-commit). |
-| `docs.yml` | Pushes to master, by hand | Doxygen documentation in GitHub Pages (Settings, Pages, Source: GitHub Actions). |
+| `docs.yml` | Pushes to master, release tags `vX.Y.Z`, by hand | Doxygen documentation in GitHub Pages, a folder per version (`master/`, `vX.Y.Z/`) with a version selector; the site opens the newest release. |
+
+The documentation site is the `gh-pages` branch, written by `.github/scripts/publish-docs.sh` (a single
+commit, replaced at each publication); GitHub Pages publishes it (Settings, Pages, Source: Deploy from a
+branch, `gh-pages`, `/ (root)`). The documentation of an old release is published again by running
+`docs.yml` by hand on its tag.
 
 Other files of `.github`: the pull request template, CODEOWNERS (reviewers requested automatically),
 dependabot (weekly updates of the actions) and pr-badge.yml (badges of author, size and validation of each

@@ -1,21 +1,24 @@
-# Doxygen documentation of restv2 (CMake target doc) published in GitHub Pages at each push to master.
-# GitHub Pages must use GitHub Actions as source (Settings, Pages, Build and deployment, Source).
+# Doxygen documentation of restv2 (CMake target doc) published in GitHub Pages, a folder per version: master
+# at each push to master and vX.Y.Z at each release tag (or by hand on master or a tag, e.g. to publish again
+# an old release). The site is the gh-pages branch (.github/scripts/publish-docs.sh), with a version selector in
+# each page; GitHub Pages must publish that branch (Settings, Pages, Build and deployment, Source: Deploy from
+# a branch, gh-pages, / (root)).
 name: Docs
 
 on:
   push:
     branches: [master]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
+# Each version on its own: a new push to master cancels its publication in progress, not that of a release
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   packages: read
-  pages: write
-  id-token: write
 
 defaults:
   run:
@@ -30,20 +33,34 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Version
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/master) version=master ;;
+            refs/tags/*) version="$GITHUB_REF_NAME" ;;
+            *) echo "Documentation only of master and the release tags vX.Y.Z, not of $GITHUB_REF"; exit 1 ;;
+          esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v7
+
+      # The workspace belongs to another user than the container
+      - name: Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build the documentation
         run: |
           cmake -S . -B build -G Ninja
           cmake --build build --target doc
 
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: build/doc/html
+      # The version selector (doc/version-selector.js, at the root of the site) in each page
+      - name: Version selector
+        run: |
+          find build/doc/html -maxdepth 1 -name '*.html' \
+            -exec sed -i 's|</head>|<script src="../version-selector.js"></script>\n</head>|' {} +
 
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/publish-docs.sh build/doc/html "$VERSION" doc/version-selector.js
