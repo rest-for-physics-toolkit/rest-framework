@@ -31,3 +31,9 @@ endforeach()
 # .dylib on macOS
 target_compile_definitions(
   restRoot PRIVATE REST_SHARED_LIBRARY_SUFFIX="${CMAKE_SHARED_LIBRARY_SUFFIX}")
+
+# restSubmit (Python): restG4 and restManager as jobs of HTCondor or Slurm
+install(
+  PROGRAMS restSubmit.py
+  DESTINATION bin
+  RENAME restSubmit)

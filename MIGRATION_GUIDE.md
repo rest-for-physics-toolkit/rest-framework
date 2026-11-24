@@ -184,6 +184,15 @@ the compiled macros. Renamed or replaced legacy macros:
 
 The other legacy macros are not migrated.
 
+Legacy scripts (`scripts/` of the framework): the batch scripts `restG4ToCondor.py`,
+`restManagerToCondor.py` and `restG4ToSlurm.py` are replaced by `restSubmit` (HTCondor and Slurm, YAML
+configurations, no paths of a site; see [source/bin/README.md](source/bin/README.md#restsubmit)): `--rml`
+and `--n-jobs` become the configuration and `--jobs`, `--rml-processing` becomes `--process` (run on each
+simulation), `--merge` merges with `REST_MergeRuns` in a single job (no chunks), and the output goes to the
+submission directory (`--dir`; legacy `/data/dust/user/<user>/condor`, `--move-dir`). The other scripts
+(GUI installer, version header, class renaming, RML conversion, git helpers of the submodules, LSF) are not
+migrated: the build, the version and the format are in CMake and pre-commit.
+
 ### 2.5 Output files
 
 The structure of a run file and of a dataset file is described in the [user guide](doc/UserGuide.md). The

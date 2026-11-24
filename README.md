@@ -54,7 +54,7 @@ the REST libraries and macros loaded.
 | [source/core](source/core/README.md) | Events, metadata, runs, processes and their managers, analysis tree, datasets, browser. |
 | [source/analysis](source/analysis/README.md) | Pulse shape analysis and other generic analysis functions. |
 | [source/macros](source/macros/README.md) | Macros of `restRoot`. |
-| [source/bin](source/bin/README.md) | Executables: `restManager`, `restRoot`... |
+| [source/bin](source/bin/README.md) | Executables: `restManager`, `restRoot`, `restSubmit`... |
 | [libraries/raw](libraries/raw/README.md) | Raw signal events (DAQ data), their processes and viewers. |
 | [libraries/detector](libraries/detector/README.md) | Hits and detector signals, readouts, medium, response and their processes. |
 | [libraries/geant4](libraries/geant4/README.md) | Geant4 simulation events and metadata, and their processes. |
@@ -141,6 +141,7 @@ installed, e.g. `cmake .. -DREST_G4=OFF -DREST_GARFIELD=OFF` (`REST_CRY` depends
 restManager --c config.yaml --i input.root --o output.root   # processing chain of a YAML configuration
 restG4 simulation.yaml                                        # Geant4 simulation
 restRoot                                                      # ROOT with the REST libraries and macros
+restSubmit g4 simulation.yaml --jobs 100 --merge              # jobs of HTCondor or Slurm
 ```
 
 The executables print the version of the code with `--version` (also at their start): the `VERSION` of
