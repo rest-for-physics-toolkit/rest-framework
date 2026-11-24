@@ -25,11 +25,27 @@ defaults:
     shell: bash
 
 jobs:
+  # The rest-docker tag of this commit (.github/rest-env), as in validation.yml
+  environment:
+    name: Environment
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.env.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+      - id: env
+        env:
+          RESTV2_IMAGE: ${{ vars.RESTV2_IMAGE }}
+        run: bash .github/scripts/rest-env.sh
+
   docs:
     name: Doxygen
+    needs: environment
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+      image: ${{ needs.environment.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

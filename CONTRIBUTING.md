@@ -85,7 +85,8 @@ whether the tracked files had uncommitted changes (cmake/RestVersion.cmake, at e
 the tag `vX.Y.Z` of the commit whose `VERSION` is `X.Y.Z` (a different tag on the commit is a warning of
 the build). Builds without git give the commit with `-DREST_GIT_COMMIT=<commit>`.
 
-A release, once `VERSION` is `X.Y.Z` in master (changed by a pull request):
+A release, once `VERSION` is `X.Y.Z` in master (changed by a pull request, which also moves the entries of
+"Unreleased" in CHANGELOG.md under `X.Y.Z`; a pull request with a notable change adds its entry there):
 
 ```bash
 git switch master && git pull
@@ -100,10 +101,13 @@ pushed only if `restManager --version` in it gives the commit of the tag, the ta
 ## Continuous integration
 
 The jobs run in the Docker image of the `rest-docker` repository (ROOT, Geant4, Garfield++, CRY,
-prometheus-cpp), `ghcr.io/<owner>/rest-env:latest`, with `<owner>` the owner of this repository; the
-repository variable `RESTV2_IMAGE` (Settings, Secrets and variables, Actions, Variables) sets another
-image. The package of the image must be readable by this repository (public, or Package settings, Manage
-Actions access).
+prometheus-cpp) pinned by each commit: `.github/rest-env` holds a tag of `rest-docker` (`vN`), and the jobs
+use `ghcr.io/<owner>/rest-env:vN`, with `<owner>` the owner of this repository, and the `rest/Dockerfile` of
+that tag for the `rest` image. A release is thus validated, and validated again, with its own environment,
+and a new environment reaches master only through a pull request that changes `.github/rest-env`, after its
+tag is pushed in `rest-docker` and its image is built. The repository variable `RESTV2_IMAGE` (Settings,
+Secrets and variables, Actions, Variables) sets another image. The package of the image must be readable by
+this repository (public, or Package settings, Manage Actions access).
 
 | Workflow | When | What |
 |---|---|---|
@@ -127,7 +131,8 @@ Settings, Rules, Rulesets, New ruleset, Import a ruleset. It applies to the defa
 - no deletion and no force push;
 - changes only through pull requests (no approvals required: a single developer cannot approve their own
   pull requests; raise `required_approving_review_count` when there are reviewers);
-- the checks Build, Unit tests, restG4 examples and Format must pass, with the branch up to date.
+- the checks Environment, Build, Unit tests, restG4 examples and Format must pass, with the branch up to
+  date (Environment too: the jobs after a failed one are skipped, and a skipped check counts as passed).
 
 With the GitHub CLI: `gh api repos/<owner>/<repository>/rulesets --method POST --input .github/rulesets/master.json`.
 The checks can only be selected once they have run at least once (open a first pull request).

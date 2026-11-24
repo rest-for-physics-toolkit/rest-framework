@@ -183,6 +183,7 @@ changes through pull requests) and the continuous integration.
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md): moving from REST v2.x (legacy): configurations, equivalent
   classes, and how to port a legacy class to rest-for-physics-toolkit.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, tests and continuous integration.
+- [CHANGELOG.md](CHANGELOG.md): changes of each release.
 
 ## Origin and license
 

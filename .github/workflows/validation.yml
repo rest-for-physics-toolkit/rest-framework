@@ -2,10 +2,10 @@
 # push to master (merge), each release and by hand. The checks (job names) are required by the protection of
 # master (.github/rulesets/master.json, see CONTRIBUTING.md).
 #
-# The jobs run in the container of the rest-docker repository (ROOT, Geant4, Garfield++, CRY...):
-# ghcr.io/<owner of this repository>/rest-env:latest, or the image of the repository variable RESTV2_IMAGE
-# (Settings, Secrets and variables, Actions, Variables), e.g. if the owner has uppercase letters or the image
-# is published elsewhere.
+# The jobs run in the container of the rest-docker repository (ROOT, Geant4, Garfield++, CRY...) pinned by
+# this commit: ghcr.io/<owner of this repository>/rest-env:<tag of .github/rest-env> (job Environment), or the
+# image of the repository variable RESTV2_IMAGE (Settings, Secrets and variables, Actions, Variables), e.g. if
+# the image is published elsewhere.
 name: Validation
 
 on:
@@ -35,11 +35,29 @@ defaults:
     shell: bash
 
 jobs:
+  # The rest-docker tag of this commit (.github/rest-env): image of the other jobs and Dockerfile of the rest
+  # image. Required by the protection of master: a job skipped because it failed would count as passed
+  environment:
+    name: Environment
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.env.outputs.ref }}
+      image: ${{ steps.env.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+      - id: env
+        env:
+          RESTV2_IMAGE: ${{ vars.RESTV2_IMAGE }}
+        run: bash .github/scripts/rest-env.sh
+
   build:
     name: Build
+    needs: environment
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+      image: ${{ needs.environment.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -89,10 +107,10 @@ jobs:
 
   unit-tests:
     name: Unit tests
-    needs: build
+    needs: [environment, build]
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+      image: ${{ needs.environment.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -132,11 +150,11 @@ jobs:
 
   restg4-examples:
     name: restG4 examples
-    needs: build
+    needs: [environment, build]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     container:
-      image: ${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+      image: ${{ needs.environment.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -155,12 +173,13 @@ jobs:
 
   # Image with restv2 installed (/opt/rest), on the environment image, when the tests pass at each push to
   # master or run by hand on master (tag latest) and each release (its tag): ghcr.io/<owner>/rest. Its
-  # Dockerfile is rest/Dockerfile of the rest-docker repository (built with this repository as context). The
-  # projects and rest-common-readouts use it to run restv2 without building it. It is pushed only if its
-  # version is the commit built, clean, and in a release its tag (CONTRIBUTING.md, Versions and releases)
+  # Dockerfile is rest/Dockerfile of the rest-docker repository at the tag of .github/rest-env (built with
+  # this repository as context). The projects and rest-common-readouts use it to run restv2 without building
+  # it. It is pushed only if its version is the commit built, clean, and in a release its tag
+  # (CONTRIBUTING.md, Versions and releases)
   image:
     name: Image
-    needs: [unit-tests, restg4-examples]
+    needs: [environment, unit-tests, restg4-examples]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -177,6 +196,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/rest-docker
+          ref: ${{ needs.environment.outputs.ref }}
           path: rest-docker
 
       # The image name must be lowercase
@@ -208,7 +228,7 @@ jobs:
           context: rest-framework
           file: rest-docker/rest/Dockerfile
           build-args: |
-            BASE_IMAGE=${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+            BASE_IMAGE=${{ needs.environment.outputs.image }}
             JOBS=4
           load: true
           tags: rest:check
@@ -232,7 +252,7 @@ jobs:
           context: rest-framework
           file: rest-docker/rest/Dockerfile
           build-args: |
-            BASE_IMAGE=${{ vars.RESTV2_IMAGE || format('ghcr.io/{0}/rest-env:latest', github.repository_owner) }}
+            BASE_IMAGE=${{ needs.environment.outputs.image }}
             JOBS=4
           push: true
           tags: ${{ steps.meta.outputs.tags }}
