@@ -186,12 +186,15 @@ The other legacy macros are not migrated.
 
 Legacy scripts (`scripts/` of the framework): the batch scripts `restG4ToCondor.py`,
 `restManagerToCondor.py` and `restG4ToSlurm.py` are replaced by `restSubmit` (HTCondor and Slurm, YAML
-configurations, no paths of a site; see [source/bin/README.md](source/bin/README.md#restsubmit)): `--rml`
+configurations, no paths of a site; see [scripts/README.md](scripts/README.md#restsubmit)): `--rml`
 and `--n-jobs` become the configuration and `--jobs`, `--rml-processing` becomes `--process` (run on each
 simulation), `--merge` merges with `REST_MergeRuns` in a single job (no chunks), and the output goes to the
 submission directory (`--dir`; legacy `/data/dust/user/<user>/condor`, `--move-dir`). The other scripts
 (GUI installer, version header, class renaming, RML conversion, git helpers of the submodules, LSF) are not
-migrated: the build, the version and the format are in CMake and pre-commit.
+migrated: the build, the version and the format are in CMake and pre-commit. The installer
+`installation/install_rest.sh` becomes `scripts/install.sh` (options instead of questions; modes `system`,
+`cvmfs` and `source` as its modes 1, 3 and 2, the last one with the versions of the CI; no submodules nor
+library selection).
 
 ### 2.5 Output files
 

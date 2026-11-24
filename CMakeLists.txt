@@ -385,6 +385,13 @@ endif()
 
 add_subdirectory(source/bin)
 
+# Scripts (scripts/): restSubmit, jobs of restG4 and restManager on HTCondor or
+# Slurm
+install(
+  PROGRAMS scripts/restSubmit.py
+  DESTINATION bin
+  RENAME restSubmit)
+
 # Create thisREST.sh
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(thisREST)

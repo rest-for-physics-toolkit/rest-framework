@@ -15,11 +15,12 @@ Two modes:
 
 Batch systems: HTCondor (a job cluster, and a DAG with the merge job: condor_submit_dag) and Slurm (a job
 array, and the merge job with a dependency on it); --batch chooses one, by default the one installed
-(condor_submit or sbatch). Each job loads the REST environment (--setup, by default
-$REST_PATH/thisREST.sh) and runs in the directory where restSubmit was run, as restG4 or restManager would
-run there. Everything goes to the submission directory (--dir, by default restSubmit/<name>): the
-outputs (output/, the processings of the simulations in output/analysis/), the scripts and submit
-files, and the stdout, stderr and logs of each job (logs/). --dry-run writes everything without submitting.
+(condor_submit or sbatch). Each job loads the REST environment (--setup, by default $REST_SETUP,
+the setup.sh written by scripts/install.sh, otherwise $REST_PATH/thisREST.sh) and runs in the
+directory where restSubmit was run, as restG4 or restManager would run there. Everything goes to the
+submission directory (--dir, by default restSubmit/<name>): the outputs (output/, the processings of
+the simulations in output/analysis/), the scripts and submit files, and the stdout, stderr and logs of
+each job (logs/). --dry-run writes everything without submitting.
 
 Examples:
 
@@ -334,7 +335,7 @@ def main(argv):
     args = arguments(argv)
     batch = batch_system(args.batch)
 
-    setup = args.setup
+    setup = args.setup or os.environ.get("REST_SETUP")
     if not setup:
         if "REST_PATH" not in os.environ:
             sys.exit(

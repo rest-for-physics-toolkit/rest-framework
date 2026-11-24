@@ -47,43 +47,5 @@ restRoot [ROOT options] [file.root] [macro.C ...]
   `_ev` or `_dataSet`); if several are given only the last one is opened (with a warning). The other
   arguments are passed to ROOT (TRint).
 
-## restSubmit
-
-Runs restG4 simulations or restManager processings as jobs of a batch system, HTCondor or Slurm (a Python 3
-script, `restSubmit.py`, installed as `$REST_PATH/bin/restSubmit`).
-
-```
-restSubmit g4 <simulation.yaml> --jobs <n> [--seed <s>] [--process <analysis.yaml>] [options]
-           [-- <restG4 options>]
-restSubmit manager <config.yaml> --input <pattern> [options] [-- <restManager options>]
-```
-
-- `g4`: n restG4 jobs of the same configuration, job i with the seed s + i (s random by default), each
-  one optionally processed by restManager (`--process`).
-- `manager`: a restManager job per file of the pattern (output `<input name>_<name>.root`).
-- `--merge`: a last job, run when all have finished, merges the outputs with `REST_MergeRuns` (in `g4`
-  into a single simulation, also the processings; in `manager` the subruns of a run).
-
-| Option | Description |
-|---|---|
-| `--batch` | `condor` (a job cluster; with `--merge` a DAG, `condor_submit_dag`) or `slurm` (a job array; the merge job depends on it). By default the one installed (`condor_submit` or `sbatch`). |
-| `--name`, `--dir` | Name of the submission (default: the configuration and the date) and its directory (default `restSubmit/<name>`, must be empty). |
-| `--time` | Time per job, e.g. `8h`, `1h30m`: restG4 `--time` (it stops and writes) and the limit of the batch system, one hour more (condor `+RequestRuntime` of DESY NAF and `+MaxRuntime` of CERN, Slurm `--time`). |
-| `--memory`, `--threads` | Memory (MB) and threads of each job (restG4 `--threads`, restManager `--j`). |
-| `--setup` | Script loading the REST environment in the jobs (default `$REST_PATH/thisREST.sh`). |
-| `--env NAME=VALUE` | Environment variable of the jobs (repeatable). |
-| `--batch-option` | A line added to the condor submit files or an option of sbatch (repeatable), e.g. a queue or an account of the site. |
-| `--dry-run` | Writes the scripts and submit files and prints the submission commands without running them. |
-
-The jobs run in the directory where restSubmit was run (as restG4 or restManager there) and write in the
-submission directory: `output/` (the finished outputs; the processings of `g4` in `output/analysis/`),
-`logs/` (stdout, stderr and logs of the batch system), `job.sh` and `merge.sh` (the scripts of the jobs, the
-argument of job.sh is the job index) and the submit files. The merged outputs are `<dir>/<name>.root` (and
-`<name>_analysis.root`).
-
-```bash
-restSubmit g4 Muons.yaml --jobs 100 --time 8h --merge --process Analysis.yaml -- -n 1E5
-restSubmit manager FemDAQToTracks.yaml --input "data/R0122*.aqs" --memory 4000
-```
-
-Other executables are built by the packages (`restG4`, `restGarfield`, `femclient` of restDAQ).
+Other executables are built by the packages (`restG4`, `restGarfield`, `femclient` of restDAQ); the scripts
+(`restSubmit`, the installer) are in [scripts](../../scripts/README.md).

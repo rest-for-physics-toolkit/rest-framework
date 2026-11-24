@@ -54,7 +54,8 @@ the REST libraries and macros loaded.
 | [source/core](source/core/README.md) | Events, metadata, runs, processes and their managers, analysis tree, datasets, browser. |
 | [source/analysis](source/analysis/README.md) | Pulse shape analysis and other generic analysis functions. |
 | [source/macros](source/macros/README.md) | Macros of `restRoot`. |
-| [source/bin](source/bin/README.md) | Executables: `restManager`, `restRoot`, `restSubmit`... |
+| [source/bin](source/bin/README.md) | Executables: `restManager`, `restRoot`... |
+| [scripts](scripts/README.md) | Installer (`install.sh`: dependencies of a server, an LCG view of CVMFS or built) and `restSubmit` (jobs of HTCondor or Slurm). |
 | [libraries/raw](libraries/raw/README.md) | Raw signal events (DAQ data), their processes and viewers. |
 | [libraries/detector](libraries/detector/README.md) | Hits and detector signals, readouts, medium, response and their processes. |
 | [libraries/geant4](libraries/geant4/README.md) | Geant4 simulation events and metadata, and their processes. |
@@ -102,6 +103,11 @@ The Docker image of the continuous integration (repository `rest-docker`) has al
 can be used to build rest-for-physics-toolkit in a clean environment.
 
 ## Build and install
+
+The installer [scripts/install.sh](scripts/README.md#installsh) installs a release with its dependencies
+(those of a server, an LCG view of CVMFS, or built with the versions of the CI) and writes the `setup.sh` to
+source.
+By hand:
 
 ```bash
 mkdir -p build && cd build
