@@ -19,12 +19,13 @@ source /data/$USER/rest/setup.sh
 | Mode | Dependencies |
 |---|---|
 | `system` (default) | ROOT (required), Geant4 and Garfield++ (optional) already in the environment, e.g. a server; `--env <script>` sources a script loading them first (also in setup.sh). |
-| `cvmfs` | The LCG view of `/cvmfs/sft.cern.ch` of `--lcg` (default `LCG_109/x86_64-el9-gcc13-opt`), e.g. lxplus or NAF; its Garfield++ has no CMake configuration, so Garfield++ is built on top of it. ROOT and Geant4 are those of the view. |
+| `cvmfs` | The LCG view of `/cvmfs/sft.cern.ch` of `--lcg` (default `LCG_109/x86_64-el9-gcc13-opt`), e.g. lxplus or NAF. ROOT and Geant4 are those of the view; Garfield++ 4.0, the version of the CI, is built on top of it (about 10 minutes): the view has another one (LCG_109: a later commit, not tested with restGarfield), used instead with `--lcg-garfield`. |
 | `source` | The versions of the CI (rest-env image), any Linux or macOS: the packages of the system checked with apt (Debian, Ubuntu), dnf (RHEL, AlmaLinux, Fedora) or brew (macOS), those the distribution has: the missing ones are installed with sudo only with `--install-packages`, otherwise the command to install them is printed (for the administrator) and the installation goes on (brew needs no privileges and installs them); ROOT (on Ubuntu 24.04 x86_64 the binary of root.cern used by the CI, elsewhere the same version built from its sources, about an hour), Geant4, Garfield++ and CRY. |
 
 In every mode CRY (cry generator of restG4) and yaml-cpp are built if missing. Options: `--prefix` (default
 `~/rest`), `--version` (a release `vX.Y.Z` or `master`; default the last release), `--jobs` (default the
-CPUs, at most one per 2 GB of memory), `--daq` (restDAQ), `--no-g4`, `--no-garfield`.
+CPUs, at most one per 2 GB of memory), `--daq` (restDAQ), `--no-g4`, `--no-garfield`; `--lcg-garfield`
+(cvmfs) uses the Garfield++ of the view.
 
 `<prefix>` holds `src/rest-framework` (the clone), `build/`, `install/` (`REST_PATH`), `deps/` (the
 dependencies built), `setup.sh` and `install.log`. Run again with the same prefix it continues (the

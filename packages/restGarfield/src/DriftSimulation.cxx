@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "FieldMap.h"
@@ -37,6 +38,24 @@ constexpr double kArrivalTolerance = 1e-3;
 double Component(const XYZVector& vector, int axis) {
     return axis == 0 ? vector.X() : (axis == 1 ? vector.Y() : vector.Z());
 }
+
+/// Limits (cm) of the mesh of a field map. ComponentGrid::GetMesh gives the numbers of nodes as std::size_t
+/// in the versions after Garfield++ 4.0 (e.g. that of the LCG views) and as unsigned int in 4.0: the first
+/// overload exists only for the former
+template <typename Grid>
+auto GetMeshLimits(const Grid& grid, double* low, double* high, int)
+    -> decltype(grid.GetMesh(std::declval<std::size_t&>(), std::declval<std::size_t&>(),
+                             std::declval<std::size_t&>(), low[0], high[0], low[1], high[1], low[2], high[2]),
+                void()) {
+    std::size_t nx = 0, ny = 0, nz = 0;
+    grid.GetMesh(nx, ny, nz, low[0], high[0], low[1], high[1], low[2], high[2]);
+}
+
+template <typename Grid>
+void GetMeshLimits(const Grid& grid, double* low, double* high, long) {
+    unsigned int nx = 0, ny = 0, nz = 0;
+    grid.GetMesh(nx, ny, nz, low[0], high[0], low[1], high[1], low[2], high[2]);
+}
 }  // namespace
 
 void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetectorTransportTable& table,
@@ -48,9 +67,8 @@ void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetector
                                           response.fFieldMapOffset[2]};
     auto map = LoadCSTFieldMap(response.fFieldMap, offset);
     map->SetMedium(gas.get());
-    unsigned int nx = 0, ny = 0, nz = 0;
     double low[3], high[3];  // cm
-    map->GetMesh(nx, ny, nz, low[0], high[0], low[1], high[1], low[2], high[2]);
+    GetMeshLimits(*map, low, high, 0);
 
     // The readout normal at the centre of the grid, along an axis: the drift region is cut at the boundary
     const XYZVector centre((response.fXRange.first + response.fXRange.second) / 2,

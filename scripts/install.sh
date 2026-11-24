@@ -7,8 +7,9 @@
 # Modes:
 #   system  ROOT (required), Geant4 and Garfield++ (optional) already in the environment, e.g. a server; --env
 #           sources a script loading them first (also in setup.sh). Default.
-#   cvmfs   The LCG view of /cvmfs/sft.cern.ch given by --lcg (ROOT, Geant4, GSL...), e.g. lxplus or NAF. Its
-#           Garfield++ has no CMake configuration: Garfield++ is built on top of it.
+#   cvmfs   The LCG view of /cvmfs/sft.cern.ch given by --lcg (ROOT, Geant4, GSL...), e.g. lxplus or NAF.
+#           Garfield++ GARFIELD_VERSION (that of the CI) is built on top of it: the view has another version
+#           (LCG_109: a later commit), used instead with --lcg-garfield.
 #   source  Everything with the versions of the rest-env image of the CI (the rest-docker Dockerfile): the
 #           packages of the system checked (apt, dnf or brew; with sudo only if --install-packages, otherwise
 #           the command for the administrator is printed), ROOT (the binary of root.cern of the CI on
@@ -18,6 +19,10 @@
 # Layout of <prefix> (default ~/rest): src/rest-framework (the clone), build/, install/ (REST_PATH), deps/
 # (the dependencies built), setup.sh and install.log. Run again with the same prefix it continues: built
 # dependencies are kept, and the clone (which must have no local changes) is moved to the version asked.
+
+# The whole script in a block, read by bash before running it: a change of the file while it runs (e.g. a git
+# pull) does not reach the run (bash reads a script as it runs it)
+{
 set -euo pipefail
 
 # Versions of the rest-env image (ARG of the rest-docker Dockerfile): keep them equal
@@ -38,6 +43,7 @@ Usage: install.sh [options]
   --version <vX.Y.Z|master>     version of rest-framework (default the last release)
   --env <script>                (system) script loading ROOT, Geant4... sourced before building
   --lcg <view>                  (cvmfs) LCG view (default $DEFAULT_LCG)
+  --lcg-garfield                (cvmfs) the Garfield++ of the view, not $GARFIELD_VERSION (that of the CI)
   --jobs <n>                    parallel jobs (default: CPUs, at most one per 2 GB of memory)
   --install-packages            (source) install the missing packages of the system with sudo
   --daq                         also restDAQ (femclient; needs readline)
@@ -54,7 +60,7 @@ fail() {
 }
 
 mode=system prefix="$HOME/rest" version="" env_script="" lcg="$DEFAULT_LCG" jobs="" daq=OFF g4=ON garfield=ON
-install_packages=OFF
+install_packages=OFF lcg_garfield=OFF
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --mode) mode=${2:?}; shift ;;
@@ -64,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --lcg) lcg=${2:?}; shift ;;
     --jobs) jobs=${2:?}; shift ;;
     --install-packages) install_packages=ON ;;
+    --lcg-garfield) lcg_garfield=ON ;;
     --daq) daq=ON ;;
     --no-g4) g4=OFF ;;
     --no-garfield) garfield=OFF ;;
@@ -75,6 +82,7 @@ done
 [[ "$mode" =~ ^(system|cvmfs|source)$ ]] || fail "--mode must be system, cvmfs or source"
 [[ -z "$env_script" || "$mode" == system ]] || fail "--env is only for --mode system"
 [[ "$install_packages" == OFF || "$mode" == source ]] || fail "--install-packages is only for --mode source"
+[[ "$lcg_garfield" == OFF || "$mode" == cvmfs ]] || fail "--lcg-garfield is only for --mode cvmfs"
 
 mkdir -p "$prefix"
 prefix=$(cd "$prefix" && pwd)
@@ -150,12 +158,18 @@ BREW_PACKAGES="cmake ninja git gcc python numpy openssl@3 tbb gsl fftw xxhash zs
 # administrator) and the installation goes on: the dependencies built in deps/ need no privileges, and a
 # missing package needed makes their build fail
 install_system_packages() {
-    local missing=() package manager command
+    local missing=() package manager command sudo=sudo
+    [[ "$(id -u)" -ne 0 ]] || sudo=""
     if command -v apt-get >/dev/null; then
         manager=apt
+        # The package lists first: without them (e.g. a new container) no package would be available
+        [[ "$install_packages" == OFF ]] || $sudo apt-get update
+        # Available: a version to install (apt-cache show exits with 0 also for a package only referred to
+        # by others, e.g. libpcre3-dev in Debian 13)
         for package in $APT_PACKAGES; do
             dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed" \
-                || { apt-cache show "$package" >/dev/null 2>&1 && missing+=("$package"); }
+                || { apt-cache show --no-all-versions "$package" 2>/dev/null | grep -q '^Package:' \
+                    && missing+=("$package"); }
         done
         command="sudo apt-get install -y --no-install-recommends ${missing[*]:-}"
     elif command -v dnf >/dev/null; then
@@ -181,11 +195,8 @@ install_system_packages() {
     fi
     if [[ ${#missing[@]} -gt 0 ]]; then
         if [[ "$install_packages" == ON ]]; then
-            local sudo=sudo
-            [[ "$(id -u)" -ne 0 ]] || sudo=""
             info "system packages ($manager): ${missing[*]}"
             if [[ "$manager" == apt ]]; then
-                $sudo apt-get update
                 $sudo env DEBIAN_FRONTEND=noninteractive \
                     apt-get install -y --no-install-recommends "${missing[@]}"
             else
@@ -261,9 +272,12 @@ install_garfield() {
         info "Garfield++ $GARFIELD_VERSION"
         rm -rf "$deps/garfield" "$deps/garfield-src" "$deps/garfield-build"
         clone https://gitlab.cern.ch/garfield/garfieldpp.git "$GARFIELD_VERSION" "$deps/garfield-src"
-        # Makefiles, not Ninja (the Fortran of Magboltz through the C preprocessor, as the rest-env image)
+        # Makefiles, not Ninja (the Fortran of Magboltz through the C preprocessor, as the rest-env image).
+        # <cstdint> and <algorithm> in every file: its sources use them without including them, reached
+        # through other headers only on some systems (e.g. not with the GCC 13 of the LCG views: std::find)
         cmake -S "$deps/garfield-src" -B "$deps/garfield-build" -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$deps/garfield" -DWITH_EXAMPLES=OFF -DCMAKE_CXX_FLAGS="-include cstdint"
+            -DCMAKE_INSTALL_PREFIX="$deps/garfield" -DWITH_EXAMPLES=OFF \
+            -DCMAKE_CXX_FLAGS="-include cstdint -include algorithm"
         cmake --build "$deps/garfield-build" -j "$jobs"
         cmake --install "$deps/garfield-build"
         include_cstdint "$deps/garfield/include"
@@ -350,7 +364,12 @@ if [[ "$g4" == ON ]]; then
     fi
 fi
 if [[ "$garfield" == ON ]]; then
-    if [[ "$mode" != system ]]; then
+    if [[ "$lcg_garfield" == ON ]]; then
+        # Its setup.sh sets neither GARFIELD_INSTALL nor HEED_DATABASE (needed by Heed)
+        [[ -d "$lcg/share/Heed/database" ]] || fail "no Garfield++ in the LCG view $lcg (share/Heed/database)"
+        export GARFIELD_INSTALL="$lcg" HEED_DATABASE="$lcg/share/Heed/database"
+        setup_lines+=("export GARFIELD_INSTALL=\"$GARFIELD_INSTALL\" HEED_DATABASE=\"$HEED_DATABASE\"")
+    elif [[ "$mode" != system ]]; then
         install_garfield
     elif [[ -z "${GARFIELD_INSTALL:-}${GARFIELD_HOME:-}" ]]; then
         info "Garfield++ not found (GARFIELD_INSTALL): without restGarfield"
@@ -358,6 +377,15 @@ if [[ "$garfield" == ON ]]; then
     fi
 fi
 install_yaml_cpp
+# The Garfield++ of GARFIELD_INSTALL given to CMake: CMAKE_PREFIX_PATH (e.g. of an LCG view, with its own
+# Garfield++) comes before the HINTS of find_package
+garfield_dir=()
+if [[ "$garfield" == ON ]]; then
+    for dir in "${GARFIELD_INSTALL:-${GARFIELD_HOME:-}}"/lib{64,}/cmake/Garfield; do
+        [[ -f "$dir/GarfieldConfig.cmake" ]] && { garfield_dir=(-DGarfield_DIR="$dir"); break; }
+    done
+    info "Garfield++ ${garfield_dir[*]:-of the environment}"
+fi
 
 # --- rest-framework -----------------------------------------------------------------------------------
 
@@ -386,7 +414,7 @@ info "rest-framework $version ($(git -C "$src" rev-parse --short HEAD))"
 # Warnings are errors in the CI (REST_WARNINGS_AS_ERRORS); here another compiler may warn of something new
 cmake -S "$src" -B "$prefix/build" -G "${generator[@]}" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$prefix/install" -DREST_WARNINGS_AS_ERRORS=OFF \
-    -DREST_G4="$g4" -DREST_GARFIELD="$garfield" -DREST_DAQ="$daq"
+    -DREST_G4="$g4" -DREST_GARFIELD="$garfield" -DREST_DAQ="$daq" "${garfield_dir[@]}"
 cmake --build "$prefix/build" --target install -j "$jobs"
 
 {
@@ -406,3 +434,5 @@ cmake --build "$prefix/build" --target install -j "$jobs"
 )
 info "installed. Load it in each shell (or in ~/.bashrc):"
 echo "    source $prefix/setup.sh"
+exit
+}
