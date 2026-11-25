@@ -49,6 +49,15 @@ TRestDetectorMedium MakeMedium(const std::string& definition, const std::string&
 
 const std::string kArIso = "{name: ArIso, state: gas, components: {Ar: 99, iC4H10: 1}}";
 
+/// A Micromegas readout with its channels in x in [-3, 4] mm, y in [-2, 5] mm (SetGridOnReadout)
+class ChannelsBoxReadout : public TRestMicromegasReadout {
+   public:
+    using TRestMicromegasReadout::TRestMicromegasReadout;
+    std::pair<ROOT::Math::XYZVector, ROOT::Math::XYZVector> GetChannelsBoundingBox() const override {
+        return {{-3, -2, 0}, {4, 5, 0.1}};
+    }
+};
+
 }  // namespace
 
 TEST(RestGarfield, GasOfTheMedium) {
@@ -173,7 +182,8 @@ TEST(RestGarfield, GainTableOfFewAvalanches) {
 
 TEST(RestGarfield, CSTFieldMap) {
     // A CST ASCII export (header with the units, dashes, x fastest): 3 x 3 x 3 nodes in mm, Ez in V/m growing
-    // with z (1e5 V/m at z = 0, 2e5 V/m at z = 10 mm)
+    // with z (1e5 V/m at z = 0, 2e5 V/m at z = 10 mm); the field is 0 at x = y = 10 mm (out of the solved
+    // volume of CST, e.g. a corner of the box around a cylinder)
     const fs::path cstFile = fs::path(TESTS_WORK_DIR) / "CSTFieldMap_efield.txt";
     {
         std::ofstream file(cstFile);
@@ -183,7 +193,8 @@ TEST(RestGarfield, CSTFieldMap) {
         for (const double z : {0., 5., 10.}) {
             for (const double y : {-10., 0., 10.}) {
                 for (const double x : {-10., 0., 10.}) {
-                    file << x << " " << y << " " << z << " 0 0 " << 1e5 * (1 + z / 10) << "\n";
+                    const double ez = x == 10 && y == 10 ? 0 : 1e5 * (1 + z / 10);
+                    file << x << " " << y << " " << z << " 0 0 " << ez << "\n";
                 }
             }
         }
@@ -217,8 +228,12 @@ TEST(RestGarfield, CSTFieldMap) {
     // Out of the map: z = 15 mm in the CST frame
     grid->ElectricField(0.1, 0.2, 0.3 + 1.5, ex, ey, ez, medium, status);
     EXPECT_EQ(status, -11);
+    // A cell with a node of field 0 is out of the gas: no medium, at x = y = 5 mm of the CST frame
+    grid->ElectricField(0.1 + 0.5, 0.2 + 0.5, 0.3 + 0.25, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, -5);
+    EXPECT_EQ(medium, nullptr);
 
-    // Errors: no file, no header with the units, unknown units, a wrong node line
+    // Errors: no file, no header with the units, unknown units, a wrong node line, a node missing
     EXPECT_THROW(LoadCSTFieldMap((fs::path(TESTS_WORK_DIR) / "CSTFieldMap_none.txt").string()),
                  std::runtime_error);
     auto write = [](const fs::path& path, const std::string& content) {
@@ -232,6 +247,10 @@ TEST(RestGarfield, CSTFieldMap) {
     EXPECT_THROW(LoadCSTFieldMap(write(bad, unknown)), std::runtime_error);
     const std::string wrongNode = "x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]\n0 0 zero 0 0 1\n";
     EXPECT_THROW(LoadCSTFieldMap(write(bad, wrongNode)), std::runtime_error);
+    const std::string missing =
+        "x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]\n0 0 0 0 0 1\n1 0 0 0 0 1\n"
+        "0 1 0 0 0 1\n";
+    EXPECT_THROW(LoadCSTFieldMap(write(bad, missing)), std::runtime_error);
 }
 
 TEST(RestGarfield, GasFromTransportTable) {
@@ -307,8 +326,9 @@ TEST(RestGarfield, DriftResponseInAUniformField) {
     // Nodes at z = 0, 5, 10, 15 mm, boundary plane at z = 1 mm
     const std::string config = "{fieldMap: \"" + cstFile.string() +
                                "\", responseFile: r.root, boundary: 1 mm, xRange: [-5 mm, 5 mm], "
-                               "yRange: [-5 mm, 5 mm], zRange: [0 mm, 15 mm], gridNodes: [2, 2, 4], "
-                               "electrons: 20, stepSize: 1 mm, positionBins: 4, timeBins: 4}";
+                               "yRange: [-5 mm, 5 mm], zRange: [0 mm, 15 mm], "
+                               "gridStep: [10 mm, 10 mm, 5 mm], electrons: 20, stepSize: 1 mm, "
+                               "positionBins: 4, timeBins: 4}";
     TRestDetectorDriftResponse response("drift", YAML::Load(config));
     ComputeDriftResponse(medium, table, readout, response, false);
     EXPECT_EQ(response.fMedium, "ArIso");
@@ -329,8 +349,38 @@ TEST(RestGarfield, DriftResponseInAUniformField) {
     }
     EXPECT_NEAR(response.GetSurvival({1, 2, 7}), 1, 1e-12);
 
+    // In 3 processes (every third node each): the same response (no diffusion)
+    TRestDetectorDriftResponse parallel("drift", YAML::Load(config));
+    ComputeDriftResponse(medium, table, readout, parallel, false, 3);
+    ASSERT_EQ(parallel.fNodes.size(), response.fNodes.size());
+    for (size_t index = 0; index < parallel.fNodes.size(); index++) {
+        EXPECT_EQ(parallel.fNodes[index].fArrived, response.fNodes[index].fArrived) << index;
+        EXPECT_NEAR(parallel.fNodes[index].fTMin, response.fNodes[index].fTMin, 1e-9) << index;
+        EXPECT_EQ(parallel.fNodes[index].fTimeCounts, response.fNodes[index].fTimeCounts) << index;
+    }
+
     // The boundary plane above the field map: no drift region
     TRestDetectorDriftResponse high("drift", YAML::Load(config));
     high.fBoundary = 30;
     EXPECT_THROW(ComputeDriftResponse(medium, table, readout, high, false), std::runtime_error);
+
+    // The grid on the readout: x and y not given, the extent of the channels (x in [-3, 4] mm, y in [-2, 5]
+    // mm) plus the margin; the range along the normal (z) is needed
+    const ChannelsBoxReadout channels(
+        "mm", YAML::Load("{readoutParameters: {nChannels: 4, pitch: 1 mm, thickness: 0.1 mm, "
+                         "gasThickness: 50 mm, normal: [0, 0, 1]}}"));
+    const std::string onReadout = "{fieldMap: \"" + cstFile.string() +
+                                  "\", responseFile: r.root, boundary: 1 mm, zRange: [0 mm, 15 mm], "
+                                  "margin: 1 mm, gridStep: [3 mm, 3 mm, 5 mm], electrons: 1}";
+    TRestDetectorDriftResponse grid("drift", YAML::Load(onReadout));
+    EXPECT_THROW(ComputeDriftResponse(medium, table, channels, grid, false), std::runtime_error);
+    SetGridOnReadout(grid, channels);
+    EXPECT_DOUBLE_EQ(grid.fXRange.first, -4);
+    EXPECT_DOUBLE_EQ(grid.fXRange.second, 5);
+    EXPECT_DOUBLE_EQ(grid.fYRange.first, -3);
+    EXPECT_DOUBLE_EQ(grid.fYRange.second, 6);
+    EXPECT_EQ(grid.GetNumberOfNodes(), 4u * 4u * 4u);  // 9 mm in 3 steps of 3 mm, 15 mm in 3 of 5 mm
+    TRestDetectorDriftResponse noZ("drift", YAML::Load("{fieldMap: f.txt, responseFile: r.root, "
+                                                       "gridStep: [3 mm, 3 mm, 5 mm]}"));
+    EXPECT_THROW(SetGridOnReadout(noZ, channels), std::runtime_error);
 }

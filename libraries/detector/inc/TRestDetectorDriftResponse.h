@@ -41,15 +41,20 @@ class TRestDetectorDriftResponse : public TRestMetadata {
     TRestWithUnits fBoundary = 0;
     /// `transportTable`: key of the transport table of the medium file (empty: the only one)
     std::string fTransportTable = "";
-    /// `xRange`, `yRange`, `zRange`: grid of start points (mm, detector frame)
+    /// `xRange`, `yRange`, `zRange`: grid of start points (mm, detector frame); a range not given ([0, 0])
+    /// along an axis of the readout plane is the extent of the readout channels plus `margin` (set by
+    /// restGarfield with SetRange)
     std::pair<TRestWithUnits, TRestWithUnits> fXRange = {0, 0};
     /// `yRange` of the grid (mm)
     std::pair<TRestWithUnits, TRestWithUnits> fYRange = {0, 0};
     /// `zRange` of the grid (mm)
     std::pair<TRestWithUnits, TRestWithUnits> fZRange = {0, 0};
-    /// `gridNodes`: nodes of the grid along x, y and z (at least 2 each)
-    std::vector<int> fGridNodes = {2, 2, 2};
-    /// `electrons`: primary electrons drifted from each node
+    /// `gridStep`: largest spacing (mm) of the nodes along x, y and z: each range is divided into the fewest
+    /// equal steps not larger than it (at least 2 nodes per axis)
+    std::vector<TRestWithUnits> fGridStep = {};
+    /// `margin`: added on each side of the extent of the readout channels for a range not given (mm)
+    TRestWithUnits fMargin = 5;
+    /// `electrons`: primary electrons drifted from each node (at most 65535: 16-bit counts in the file)
     int fElectrons = 1000;
     /// `stepSize`: distance step of the drift (mm, Garfield++ AvalancheMC)
     TRestWithUnits fStepSize = 1;
@@ -81,6 +86,8 @@ class TRestDetectorDriftResponse : public TRestMetadata {
     std::string fMedium = "";
     double fPressure = 0;     ///< Pressure (bar)
     double fTemperature = 0;  ///< Temperature (K)
+    /// Nodes of the grid along x, y and z, from the ranges and gridStep (0 along an axis without range)
+    std::array<int, 3> fGridNodes = {0, 0, 0};  //!
     /// Nodes of the grid, x fastest (NodeIndex)
     std::vector<Node> fNodes;  //!
 
@@ -92,12 +99,18 @@ class TRestDetectorDriftResponse : public TRestMetadata {
     /// \brief Returns the class name, "TRestDetectorDriftResponse".
     std::string GetClassName() const override { return "TRestDetectorDriftResponse"; }
     /// \brief Reads the configuration; throws if a value is out of range (fieldMapOffset not 3 values, a
-    /// range not min < max, gridNodes not 3 values >= 2, electrons, stepSize, bins not > 0, boundary < 0).
+    /// range given not min < max, gridStep not 3 values > 0, electrons not in [1, 65535], stepSize, bins not
+    /// > 0, boundary or margin < 0).
     void LoadConfig() override;
     /// \brief Nothing to initialise.
     void Initialize() override {}
 
-    /// \brief Number of nodes of the grid
+    /// \brief Whether the range of an axis (0: x, 1: y, 2: z) is set (given or SetRange)
+    bool HasRange(int axis) const;
+    /// \brief Sets the range (mm) of an axis (0: x, 1: y, 2: z) and its nodes; the configuration written to
+    /// the response file keeps it. Throws if not min < max.
+    void SetRange(int axis, double min, double max);
+    /// \brief Number of nodes of the grid (0 while a range is not set)
     size_t GetNumberOfNodes() const;
     /// \brief Index of the node (i, j, k) of the grid, x fastest
     size_t NodeIndex(int i, int j, int k) const;
@@ -115,6 +128,17 @@ class TRestDetectorDriftResponse : public TRestMetadata {
     /// drift time in us of each one): the histograms over the range of the arrivals.
     void SetNode(size_t index, int primaries, const std::vector<std::array<double, 3>>& arrivals);
 
+    /// \brief Summary of a node of the grid: what the field does to the electrons started there
+    struct Summary {
+        double fSurvival = 0;  ///< Fraction of the electrons that reach the boundary plane
+        /// Mean displacement (mm) on the readout plane along u and v (PlaneAxes) and mean drift time (us)
+        double fMeanU = 0, fMeanV = 0, fMeanT = 0;
+        /// Standard deviations of the displacement (mm, the transverse diffusion) and of the time (us)
+        double fSigmaU = 0, fSigmaV = 0, fSigmaT = 0;
+    };
+    /// \brief Summary of a node from its histograms (bin centres); means and deviations 0 without arrivals.
+    Summary GetNodeSummary(size_t index) const;
+
     /// \brief Fraction of the electrons from a position (mm) that reach the boundary plane: the fractions
     /// arrived / primaries of the 8 neighbouring nodes interpolated linearly. 0 outside the grid.
     double GetSurvival(const ROOT::Math::XYZVector& position) const;
@@ -126,12 +150,18 @@ class TRestDetectorDriftResponse : public TRestMetadata {
                        double& time) const;
 
     /// \brief Writes the response to a file (opened with RECREATE or UPDATE): its metadata (configuration,
-    /// medium, conditions, grid, bins and generator) in RESTMetadataStore and a tree with a node per entry.
+    /// medium, conditions, grid, bins and generator) in RESTMetadataStore and a tree with a node per entry
+    /// (its histograms and, to draw the response, its position and GetNodeSummary).
     void Write(TFile* file, const YAML::Node& generator) const;
     /// \brief Reads the response of a file. Throws if it has none or it is not consistent.
     static TRestDetectorDriftResponse Read(TFile* file);
 
    private:
+    /// The range of an axis (0: x, 1: y, 2: z)
+    std::pair<TRestWithUnits, TRestWithUnits>& Range(int axis);
+    const std::pair<TRestWithUnits, TRestWithUnits>& Range(int axis) const;
+    /// The nodes of the grid along each axis from its range and gridStep
+    void UpdateGrid();
     /// The 8 neighbouring nodes of a position and their interpolation weights; false outside the grid
     bool Neighbours(const ROOT::Math::XYZVector& position, std::array<size_t, 8>& nodes,
                     std::array<double, 8>& weights) const;

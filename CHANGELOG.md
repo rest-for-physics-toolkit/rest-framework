@@ -17,6 +17,13 @@ releases); the notes of the GitHub release list its pull requests.
   Davix, Geant4 11.0 with Xcode 16 (zlib of the system, g4tools typo patched), packages of dnf by what
   they provide, bash 3.2 of macOS.
 - restG4 example test of the full chain decay: the ground state of Pa234 is a rare branch.
+- restGarfield drift responses in CST field maps: the nodes with the field 0 (out of the solved volume, in
+  the conductors) are out of the gas; the grid of start points by its spacing (`gridStep`, instead of
+  `gridNodes`) and, by default, over the readout channels plus `margin`; `--jobs` splits the start points;
+  the time per electron printed. The response file has a summary per start point (survival, mean
+  displacement, drift time, spread) and the macro `REST_Garfield_DrawDriftResponse` draws it; counts stored
+  as 16-bit integers with LZMA compression (`electrons` at most 65535). Response files computed before must
+  be computed again.
 
 ## 3.0.0 (2026-11-24)
 
