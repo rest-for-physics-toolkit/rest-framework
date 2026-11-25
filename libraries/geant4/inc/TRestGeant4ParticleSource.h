@@ -65,7 +65,9 @@ class TRestGeant4ParticleSource : public TRestMetadata {
     /// again from its section, which has the values used. The Decay0 events are shared
     TRestGeant4ParticleSource Clone() const;
 
-    /// \brief Builds the formulas and reads the histograms and the Decay0 file, needed only to sample
+    /// \brief Builds the formulas and reads the histograms and the Decay0 file, needed only to sample. The
+    /// `filename` of the histograms is relative to the current directory at the first call, and kept as an
+    /// absolute path in the section (the clones, e.g. of other threads, read it from any directory)
     void LoadDistributions();
 
     /// \brief The particles of an event, starting at `origin`. The angle reference is `direction` or, if

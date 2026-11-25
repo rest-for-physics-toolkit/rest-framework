@@ -52,6 +52,14 @@ string Pick(const string& energyValue, const string& angularValue, const string&
     return energyValue.empty() ? angularValue : energyValue;
 }
 
+/// The `filename` of a section (energy or angular) as an absolute path, from the current directory
+void MakeFileNameAbsolute(YAML::Node section) {
+    if (!section || !section.IsMap() || !section["filename"]) return;
+    const string fileName = section["filename"].as<string>();
+    if (fileName.empty() || TRestTools::IsURL(fileName)) return;
+    section["filename"] = TRestTools::GetFullPath(fileName);
+}
+
 /// Reads a Decay0 file, in the format of bxdecay0 ("@nevents=", "@event_start" blocks) or in the old one of
 /// Decay0 (header "First event and full number of events:", then for each event its number, time and number
 /// of particles, and for each particle its Geant3 ID, momentum (MeV/c) and time), as legacy
@@ -212,6 +220,11 @@ TRestGeant4ParticleSource TRestGeant4ParticleSource::Clone() const {
 }
 
 void TRestGeant4ParticleSource::LoadDistributions() {
+    // The histogram files are relative to the current directory when they are first loaded (restG4: that of
+    // the configuration); the clones (Clone, e.g. the generator of each thread, built from the section) load
+    // them again from another one, so the section keeps them as absolute paths
+    MakeFileNameAbsolute(fNode["energy"]);
+    MakeFileNameAbsolute(fNode["angular"]);
     if (IsDecay0()) {
         if (!fDecay0Events) {
             fDecay0Events = make_shared<const vector<vector<TRestGeant4ParticleState>>>(ReadDecay0(fUse));

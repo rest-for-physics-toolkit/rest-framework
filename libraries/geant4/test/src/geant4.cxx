@@ -4,12 +4,14 @@
 /// volumes, and the quenching (Birks and Lindhard factors on known values) and analysis processes with a
 /// small TGeoManager geometry built in memory.
 
+#include <TFile.h>
 #include <TGeoManager.h>
 #include <TGeoMaterial.h>
 #include <TGeoMatrix.h>
 #include <TGeoMedium.h>
 #include <TGeoNode.h>
 #include <TGeoVolume.h>
+#include <TH1D.h>
 #include <TRandom3.h>
 #include <TRestGeant4AnalysisProcess.h>
 #include <TRestGeant4BiasingVolume.h>
@@ -18,6 +20,7 @@
 #include <TRestGeant4Event.h>
 #include <TRestGeant4Manager.h>
 #include <TRestGeant4Metadata.h>
+#include <TRestGeant4ParticleSource.h>
 #include <TRestGeant4PhysicsLists.h>
 #include <TRestGeant4PrimaryGenerator.h>
 #include <TRestGeant4PrimaryGeneratorInfo.h>
@@ -31,6 +34,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -616,6 +620,37 @@ TEST(Geant4Generator, VolumeShapesAndEnergy) {
     EXPECT_NEAR(sum / n, 1500, 25);
     EXPECT_THROW(TRestGeant4EnergyDistribution::Create("energy", YAML::Load("{type: unknown}")),
                  std::runtime_error);
+}
+
+// A histogram file relative to the directory of the first LoadDistributions (restG4: that of the
+// configuration) is found by the clones (the generator of each thread) loaded from another directory
+TEST(Geant4Generator, HistogramFileOfClones) {
+    namespace fs = std::filesystem;
+    const fs::path launchDirectory = fs::current_path();
+    const fs::path configDirectory = fs::temp_directory_path() / "restGeant4HistogramFileOfClones";
+    fs::create_directories(configDirectory);
+    {
+        TFile file((configDirectory / "spectrum.root").string().c_str(), "RECREATE");
+        TH1D spectrum("spectrum", "Spectrum;Energy (keV)", 10, 0, 10);
+        spectrum.SetBinContent(6, 1);  // 5 to 6 keV
+        spectrum.Write();
+    }
+
+    fs::current_path(configDirectory);
+    TRestGeant4ParticleSource source(
+        "source", YAML::Load("{particle: gamma, angular: {type: isotropic},"
+                             " energy: {type: TH1D, filename: spectrum.root, nameInFile: spectrum}}"));
+    EXPECT_NO_THROW(source.LoadDistributions());
+    fs::current_path(launchDirectory);
+
+    auto clone = source.Clone();
+    EXPECT_NO_THROW(clone.LoadDistributions());
+    TRandom3 random(4);
+    const auto particles = clone.Generate(random, {0, 0, 0}, {0, 0, 0}, false);
+    ASSERT_EQ(particles.size(), 1u);
+    EXPECT_GE(particles[0].GetEnergy(), 5);
+    EXPECT_LE(particles[0].GetEnergy(), 6);
+    fs::remove_all(configDirectory);
 }
 
 TEST(Geant4PhysicsLists, ListsOptionsAndCuts) {

@@ -399,8 +399,10 @@ void OutputManager::RemoveUnwantedTracks() {
         }
     }
 
-    cout << "Event " << fEvent->GetID() << " tracks to keep " << trackIDsToKeep.size() << "/"
-         << fEvent->GetNumberOfTracks() << endl;
+    if (metadata->GetVerboseLevel() >= TRestLogManager::REST_Verbose_Level::REST_Debug) {
+        cout << "Event " << fEvent->GetID() << " tracks to keep " << trackIDsToKeep.size() << "/"
+             << fEvent->GetNumberOfTracks() << endl;
+    }
 
     RemoveTracks(trackIDsToKeep);
 

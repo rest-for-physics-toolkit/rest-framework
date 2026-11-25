@@ -17,6 +17,10 @@ releases); the notes of the GitHub release list its pull requests.
   Davix, Geant4 11.0 with Xcode 16 (zlib of the system, g4tools typo patched), packages of dnf by what
   they provide, bash 3.2 of macOS.
 - restG4 example test of the full chain decay: the ground state of Pa234 is a rare branch.
+- restG4: the histogram files of the generator (TH1D, TH2D and cosmic distributions) are found when restG4 is
+  launched from another directory than its configuration (the generator of each thread read them again
+  relative to the launch directory). The tracks kept of each event (removeUnwantedTracks) are printed only
+  with verbose debug.
 - restGarfield drift responses in CST field maps: the nodes with the field 0 (out of the solved volume, in
   the conductors) are out of the gas; the grid of start points by its spacing (`gridStep`, instead of
   `gridNodes`) and, by default, over the readout channels plus `margin`; `--jobs` splits the start points;
