@@ -623,7 +623,8 @@ TEST(Geant4Generator, VolumeShapesAndEnergy) {
 }
 
 // A histogram file relative to the directory of the first LoadDistributions (restG4: that of the
-// configuration) is found by the clones (the generator of each thread) loaded from another directory
+// configuration) is found by the clones (the generator of each thread) loaded from another directory, and
+// loading it keeps the current ROOT directory
 TEST(Geant4Generator, HistogramFileOfClones) {
     namespace fs = std::filesystem;
     const fs::path launchDirectory = fs::current_path();
@@ -643,8 +644,14 @@ TEST(Geant4Generator, HistogramFileOfClones) {
     EXPECT_NO_THROW(source.LoadDistributions());
     fs::current_path(launchDirectory);
 
+    // The current directory (restG4: its output file, where the geometry is written) is kept
+    TFile output((configDirectory / "output.root").string().c_str(), "RECREATE");
+    output.cd();
     auto clone = source.Clone();
     EXPECT_NO_THROW(clone.LoadDistributions());
+    const TDirectory* current = gDirectory;
+    EXPECT_EQ(current, static_cast<TDirectory*>(&output));
+    output.Close();
     TRandom3 random(4);
     const auto particles = clone.Generate(random, {0, 0, 0}, {0, 0, 0}, false);
     ASSERT_EQ(particles.size(), 1u);

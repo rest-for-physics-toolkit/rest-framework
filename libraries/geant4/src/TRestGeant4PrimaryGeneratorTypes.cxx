@@ -1,6 +1,7 @@
 #include "TRestGeant4PrimaryGeneratorTypes.h"
 
 #include <TAxis.h>
+#include <TDirectory.h>
 #include <TF1.h>
 #include <TF2.h>
 #include <TFile.h>
@@ -253,6 +254,9 @@ TF2 EnergyAndAngularDistributionFormulasToRootFormula(EnergyAndAngularDistributi
 // --- Helpers of the generator classes ---
 
 std::unique_ptr<TH1> ReadHistogram(const string& fileName, const string& name) {
+    // The current directory is restored at the end (closing the file makes it gROOT): restG4 writes the
+    // geometry in the current directory, its output file
+    TDirectory::TContext context;
     unique_ptr<TFile> file(TFile::Open(TRestTools::GetFullPath(fileName).c_str(), "READ"));
     if (!file || file->IsZombie()) {
         throw invalid_argument("ReadHistogram: cannot open the file '" + fileName + "'");
