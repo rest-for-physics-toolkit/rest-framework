@@ -1,12 +1,19 @@
 #include "DriftSimulation.h"
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -14,6 +21,7 @@
 #include "Garfield/AvalancheMC.hh"
 #include "Garfield/ComponentGrid.hh"
 #include "Garfield/MediumGas.hh"
+#include "Garfield/Random.hh"
 #include "Garfield/Sensor.hh"
 #include "TFile.h"
 #include "TRestDetectorDriftResponse.h"
@@ -56,12 +64,65 @@ void GetMeshLimits(const Grid& grid, double* low, double* high, long) {
     unsigned int nx = 0, ny = 0, nz = 0;
     grid.GetMesh(nx, ny, nz, low[0], high[0], low[1], high[1], low[2], high[2]);
 }
+
+/// Writes the response of a node to a pipe: primaries, arrived, ranges and counts
+bool WriteNode(FILE* pipe, const TRestDetectorDriftResponse::Node& node) {
+    const int counts[2] = {node.fPrimaries, node.fArrived};
+    const double range[6] = {node.fUMin, node.fUMax, node.fVMin, node.fVMax, node.fTMin, node.fTMax};
+    return fwrite(counts, sizeof(int), 2, pipe) == 2 && fwrite(range, sizeof(double), 6, pipe) == 6 &&
+           fwrite(node.fPositionCounts.data(), sizeof(int), node.fPositionCounts.size(), pipe) ==
+               node.fPositionCounts.size() &&
+           fwrite(node.fTimeCounts.data(), sizeof(int), node.fTimeCounts.size(), pipe) ==
+               node.fTimeCounts.size();
+}
+
+/// Reads the response of a node written by WriteNode
+bool ReadNode(FILE* pipe, TRestDetectorDriftResponse::Node& node, size_t positionSize, size_t timeSize) {
+    int counts[2];
+    double range[6];
+    if (fread(counts, sizeof(int), 2, pipe) != 2 || fread(range, sizeof(double), 6, pipe) != 6) return false;
+    node.fPrimaries = counts[0];
+    node.fArrived = counts[1];
+    node.fUMin = range[0];
+    node.fUMax = range[1];
+    node.fVMin = range[2];
+    node.fVMax = range[3];
+    node.fTMin = range[4];
+    node.fTMax = range[5];
+    node.fPositionCounts.resize(positionSize);
+    node.fTimeCounts.resize(timeSize);
+    return fread(node.fPositionCounts.data(), sizeof(int), positionSize, pipe) == positionSize &&
+           fread(node.fTimeCounts.data(), sizeof(int), timeSize, pipe) == timeSize;
+}
 }  // namespace
+
+void SetGridOnReadout(TRestDetectorDriftResponse& response, const TRestDetectorReadout& readout) {
+    if (response.HasRange(0) && response.HasRange(1) && response.HasRange(2)) return;
+    const std::string error = "restGarfield: drift response " + response.fResponseFile + ": ";
+    const auto [low, high] = readout.GetChannelsBoundingBox();
+    if (std::isnan(low.X()) || std::isnan(high.X())) {
+        throw std::runtime_error(error + "the readout has no channels: give xRange, yRange and zRange");
+    }
+    const XYZVector normal = readout.GetReadoutNormal((low + high) / 2);
+    if (normal.R() == 0) throw std::runtime_error(error + "the readout has no normal");
+    for (int axis = 0; axis < 3; axis++) {
+        if (response.HasRange(axis)) continue;
+        if (std::abs(Component(normal, axis)) > 1e-6) {
+            throw std::runtime_error(error + "the range along the readout normal (" + "xyz"[axis] +
+                                     "Range) must be given, and the normal must be along x, y or z");
+        }
+        response.SetRange(axis, Component(low, axis) - response.fMargin,
+                          Component(high, axis) + response.fMargin);
+    }
+}
 
 void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetectorTransportTable& table,
                           const TRestDetectorReadout& readout, TRestDetectorDriftResponse& response,
-                          bool verbose) {
+                          bool verbose, int jobs) {
     const std::string error = "restGarfield: drift response " + response.fResponseFile + ": ";
+    if (!response.HasRange(0) || !response.HasRange(1) || !response.HasRange(2)) {
+        throw std::runtime_error(error + "the ranges of the grid are not set (SetGridOnReadout)");
+    }
     auto gas = CreateGasFromTable(medium, table, medium.GetPressure());
     const std::array<double, 3> offset = {response.fFieldMapOffset[0], response.fFieldMapOffset[1],
                                           response.fFieldMapOffset[2]};
@@ -99,23 +160,37 @@ void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetector
     Garfield::AvalancheMC drift;
     drift.SetSensor(&sensor);
     drift.SetDistanceSteps(response.fStepSize * kCmPerMm);
+    // Without attachment in the table (e.g. Ar + isobutane), AvalancheMC does not integrate it along each
+    // drift line: faster, and without its message (ComputeAlphaEta, status -5) for the lines whose steps
+    // cross a cell out of the gas near a wall
+    const auto electron = table.fCarriers.find("electron");
+    if (electron == table.fCarriers.end() ||
+        std::all_of(electron->second.fAttachment.begin(), electron->second.fAttachment.end(),
+                    [](double attachment) { return attachment <= 0; })) {
+        drift.DisableAttachment();
+    }
 
     response.fMedium = medium.GetName();
     response.fPressure = medium.GetPressure();
     response.fTemperature = medium.GetTemperature();
     response.fTransportTable = table.GetKey();
-    const auto [u, v] = TRestDetectorDriftResponse::PlaneAxes(normal);
+    // Not a structured binding: captured by the lambdas below (C++17)
+    const auto axes = TRestDetectorDriftResponse::PlaneAxes(normal);
+    const XYZVector u = axes.first, v = axes.second;
     const size_t nodes = response.GetNumberOfNodes();
     response.fNodes.assign(nodes, TRestDetectorDriftResponse::Node());
-    size_t reported = 0;
-    for (size_t index = 0; index < nodes; index++) {
+
+    // The response of a node: its electrons drifted
+    auto computeNode = [&](size_t index) {
         const XYZVector start = response.GetNodePosition(index);
         const double distance = readout.GetDistanceToReadout(start);
         const XYZVector startOnBoundary = start - (distance - boundary) * normal;
         std::vector<std::array<double, 3>> arrivals;
         const double x[3] = {start.X() * kCmPerMm, start.Y() * kCmPerMm, start.Z() * kCmPerMm};
+        // Start points out of the gas of the map (e.g. the corners of a grid around a cylinder, nodes with
+        // the field 0) are not drifted: survival 0, without the message of AvalancheMC for each electron
         const bool inArea = x[0] >= low[0] && x[0] <= high[0] && x[1] >= low[1] && x[1] <= high[1] &&
-                            x[2] >= low[2] && x[2] <= high[2];
+                            x[2] >= low[2] && x[2] <= high[2] && map->GetMedium(x[0], x[1], x[2]) != nullptr;
         if (distance <= boundary + kArrivalTolerance) {
             // On or below the boundary plane: the drift belongs to the amplification
             arrivals.assign(response.fElectrons, std::array<double, 3>{0, 0, 0});
@@ -133,15 +208,83 @@ void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetector
             }
         }
         response.SetNode(index, response.fElectrons, arrivals);
-        if (verbose && (index + 1) * 10 / nodes > reported) {
-            reported = (index + 1) * 10 / nodes;
-            RESTInfo << "restGarfield: drift response, " << index + 1 << " of " << nodes << " nodes"
-                     << RESTendl;
+    };
+    // The nodes of a process (part of parts: every parts-th node, the drift lengths mixed), with its progress
+    auto computePart = [&](size_t part, size_t parts) {
+        const size_t partNodes = (nodes - part + parts - 1) / parts;
+        size_t done = 0, reported = 0;
+        for (size_t index = part; index < nodes; index += parts) {
+            computeNode(index);
+            done++;
+            if (verbose && done * 10 / partNodes > reported) {
+                reported = done * 10 / partNodes;
+                RESTInfo << "restGarfield: drift response, " << done << " of " << partNodes << " nodes"
+                         << (parts > 1 ? " (process " + std::to_string(part + 1) + ")" : "") << RESTendl;
+            }
         }
+    };
+
+    const size_t parts = std::max<size_t>(1, std::min<size_t>(std::max(jobs, 1), nodes));
+    if (parts == 1) {
+        computePart(0, 1);
+        return;
     }
+    // In parallel (Garfield++ is not thread safe): forked processes, each with its own random seed (from the
+    // generator of Garfield++, drawn once here), send their nodes through a pipe
+    const auto seed = static_cast<unsigned int>(Garfield::RndmUniform() * 1e9) + 1;
+    struct Child {
+        pid_t pid;
+        FILE* pipe;
+    };
+    std::vector<Child> children;
+    for (size_t part = 0; part < parts; part++) {
+        int fd[2];
+        if (pipe(fd) != 0) throw std::runtime_error(error + "cannot create a pipe");
+        std::cout.flush();
+        std::fflush(nullptr);
+        const pid_t pid = fork();
+        if (pid < 0) throw std::runtime_error(error + "cannot create a process");
+        if (pid == 0) {
+            close(fd[0]);
+            int status = 1;
+            try {
+                Garfield::randomEngine.Seed(seed + part);
+                computePart(part, parts);
+                FILE* output = fdopen(fd[1], "wb");
+                bool ok = output != nullptr;
+                for (size_t index = part; ok && index < nodes; index += parts) {
+                    ok = WriteNode(output, response.fNodes[index]);
+                }
+                if (output && fclose(output) == 0 && ok) status = 0;
+            } catch (const std::exception& exception) {
+                std::cerr << "restGarfield: " << exception.what() << std::endl;
+            }
+            std::cout.flush();
+            // Without the exit handlers of the parent (ROOT)
+            _exit(status);
+        }
+        close(fd[1]);
+        children.push_back({pid, fdopen(fd[0], "rb")});
+    }
+    RESTInfo << "restGarfield: " << nodes << " nodes of the drift response in " << parts << " processes"
+             << RESTendl;
+    bool ok = true;
+    const size_t positionSize = static_cast<size_t>(response.fPositionBins) * response.fPositionBins;
+    for (size_t part = 0; part < parts; part++) {
+        auto& child = children[part];
+        for (size_t index = part; ok && index < nodes; index += parts) {
+            ok = child.pipe && ReadNode(child.pipe, response.fNodes[index], positionSize, response.fTimeBins);
+        }
+        if (child.pipe) fclose(child.pipe);
+        int status = 0;
+        waitpid(child.pid, &status, 0);
+        ok &= WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    }
+    if (!ok) throw std::runtime_error(error + "a process computing the nodes failed");
 }
 
-void RunDriftResponse(const TRestDetectorMedium& medium, TRestDetectorDriftResponse& response, bool verbose) {
+void RunDriftResponse(const TRestDetectorMedium& medium, TRestDetectorDriftResponse& response, bool verbose,
+                      int jobs) {
     const std::string error = "restGarfield: drift response " + response.fResponseFile + ": ";
     const std::string fileName = response.fResponseFile;
     if (!response.fOverwrite && std::filesystem::exists(fileName)) {
@@ -184,10 +327,24 @@ void RunDriftResponse(const TRestDetectorMedium& medium, TRestDetectorDriftRespo
             TRestDetectorTransportTable::Read(file.get(), medium.GetName(), key));
     }
 
+    SetGridOnReadout(response, *readout);
     RESTInfo << "restGarfield: computing the drift response " << fileName << " ("
              << response.GetNumberOfNodes() << " nodes, " << response.fElectrons << " electrons each)"
              << RESTendl;
-    ComputeDriftResponse(medium, *table, *readout, response, verbose);
+    const std::pair<TRestWithUnits, TRestWithUnits>* ranges[3] = {&response.fXRange, &response.fYRange,
+                                                                  &response.fZRange};
+    for (int axis = 0; axis < 3; axis++) {
+        RESTInfo << "    " << "xyz"[axis] << ": [" << ranges[axis]->first << ", " << ranges[axis]->second
+                 << "] mm, " << response.fGridNodes[axis] << " nodes" << RESTendl;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    ComputeDriftResponse(medium, *table, *readout, response, verbose, jobs);
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    // The time of an electron in one process (the start points out of the gas included), to plan a grid
+    const double electrons = static_cast<double>(response.GetNumberOfNodes()) * response.fElectrons;
+    RESTInfo << "restGarfield: drift response computed in " << seconds << " s with " << std::max(jobs, 1)
+             << " processes, " << seconds * std::max(jobs, 1) / electrons * 1e3 << " ms per electron"
+             << RESTendl;
 
     YAML::Node generator;
     generator["program"] = "Garfield++ AvalancheMC (field map)";

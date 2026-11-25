@@ -6,8 +6,9 @@
 /// restGarfield computes it (the `drift` key of a TRestDetectorTransportManager, after the transport and gain
 /// tables): it loads the field map in Garfield++ (ComponentGrid), builds the Garfield gas from a transport
 /// table of the medium file (without Magboltz) and drifts `electrons` primary electrons (AvalancheMC, steps
-/// of `stepSize`, with diffusion and attachment) from each node of a regular grid of start points in the
-/// detector frame (xRange, yRange, zRange, gridNodes). The drift ends at the boundary plane, at the distance
+/// of `stepSize`, with diffusion, and attachment if the table has it) from each node of a regular grid of
+/// start points in the detector frame (xRange, yRange, zRange, gridStep). The drift ends at the boundary
+/// plane, at the distance
 /// `boundary` from the readout (TRestDetectorReadout::GetDistanceToReadout), above the mesh, where the
 /// amplification starts; the drift region is cut there (the normal of the readout must be along an axis).
 /// An electron reaches the boundary if it ends on that plane; ending elsewhere (cathode, walls, out of the
@@ -26,29 +27,38 @@
 ///
 /// Parameters (`drift` key): fieldMap, fieldMapOffset ([0, 0, 0] mm), readouts (YAML file with the
 /// TRestDetectorReadoutManager), readout (empty: its data readout), boundary (0 mm), transportTable (key of
-/// the table of the medium file; empty: the only one), xRange, yRange, zRange (mm), gridNodes ([2, 2, 2], at
-/// least 2 per axis), electrons (1000), stepSize (1 mm), positionBins (20), timeBins (20), responseFile and
-/// overwrite (false: an existing responseFile is not computed again). The pressure and temperature are those
-/// of the medium. The time of the computation grows with the nodes, the electrons and the drift length over
-/// stepSize.
+/// the table of the medium file; empty: the only one), xRange, yRange, zRange (mm; a range not given along an
+/// axis of the readout plane is the extent of the readout channels, TRestDetectorReadout::
+/// GetChannelsBoundingBox, plus `margin` on each side; the range along the normal is needed), margin (5 mm),
+/// gridStep (required: the largest spacing of the nodes along x, y and z; each range is divided into the
+/// fewest equal steps not larger than it, at least 2 nodes per axis), electrons (1000, at most 65535),
+/// stepSize (1 mm), positionBins (20), timeBins (20), responseFile and overwrite (false: an existing
+/// responseFile is not computed again). The pressure and temperature are those of the medium. The time of the
+/// computation grows with the nodes, the electrons and the drift length over stepSize. The response file
+/// keeps the ranges used (those of the readout included).
 ///
 ///    drift:
 ///      fieldMap: "drift_field.txt"
 ///      fieldMapOffset: [0 mm, 0 mm, 0 mm]
 ///      readouts: "readouts.yaml"
 ///      boundary: 0.5 mm
-///      xRange: [-100 mm, 100 mm]
-///      yRange: [-100 mm, 100 mm]
-///      zRange: [0 mm, 190 mm]
-///      gridNodes: [21, 21, 20]
+///      zRange: [0 mm, 190 mm]          # x and y: the readout channels plus margin
+///      margin: 5 mm
+///      gridStep: [4 mm, 4 mm, 10 mm]
 ///      electrons: 1000
 ///      responseFile: "drift_response.root"
 ///
 /// Response file: the metadata `DriftResponse` in RESTMetadataStore (YAML: `configuration`, the `drift` keys;
 /// medium, pressure, temperature, transportTable, positionBins, timeBins and `generator`, the program, date
 /// and code that computed it) and the tree `DriftResponse`, an entry per node (x fastest, then y, then z)
-/// with primaries, arrived, range (u min, u max, v min, v max, t min, t max; mm and us), positionCounts (u
-/// bin + positionBins * v bin) and timeCounts.
+/// with primaries, arrived, range (float[6]: u min, u max, v min, v max, t min, t max; mm and us),
+/// positionCounts (UShort_t[positionBins * positionBins], u bin + positionBins * v bin) and timeCounts
+/// (UShort_t[timeBins]); hence electrons <= 65535. The file is compressed with LZMA. To draw the response,
+/// each entry also has the position of the node (x, y, z, mm) and its summary (GetNodeSummary, floats):
+/// survival, meanU, meanV (mean displacement on the readout plane, mm: the distortion of the field), meanT
+/// (mean drift time, us), sigmaU, sigmaV (transverse spread, mm) and sigmaT (us), e.g.
+/// `DriftResponse->Draw("meanU:x", "z == 90")`; restGarfield macro REST_Garfield_DrawDriftResponse draws
+/// them as maps on the readout plane.
 ///
 /// \author JuanAn García <juanangp@unizar.es>
 
@@ -58,8 +68,11 @@
 #include <cmath>
 #include <memory>
 #include <stdexcept>
+#include <string>
 
+#include "Compression.h"
 #include "TFile.h"
+#include "TLeaf.h"
 #include "TRandom.h"
 #include "TTree.h"
 
@@ -77,7 +90,8 @@ static const bool TRestDetectorDriftResponse_FieldsRegistered = []() {
     reg.RegisterField<D>("xRange", &D::fXRange);
     reg.RegisterField<D>("yRange", &D::fYRange);
     reg.RegisterField<D>("zRange", &D::fZRange);
-    reg.RegisterField<D>("gridNodes", &D::fGridNodes);
+    reg.RegisterField<D>("gridStep", &D::fGridStep);
+    reg.RegisterField<D>("margin", &D::fMargin);
     reg.RegisterField<D>("electrons", &D::fElectrons);
     reg.RegisterField<D>("stepSize", &D::fStepSize);
     reg.RegisterField<D>("positionBins", &D::fPositionBins);
@@ -127,20 +141,56 @@ void TRestDetectorDriftResponse::LoadConfig() {
     if (fFieldMap.empty()) throw std::runtime_error(prefix + "fieldMap is needed");
     if (fResponseFile.empty()) throw std::runtime_error(prefix + "responseFile is needed");
     if (fFieldMapOffset.size() != 3) throw std::runtime_error(prefix + "fieldMapOffset must have 3 values");
-    for (const auto* range : {&fXRange, &fYRange, &fZRange}) {
-        if (!(range->first < range->second)) {
+    for (int axis = 0; axis < 3; axis++) {
+        const auto& range = Range(axis);
+        if (!HasRange(axis) && !(range.first == 0 && range.second == 0)) {
             throw std::runtime_error(prefix + "xRange, yRange and zRange must be [min, max] with min < max");
         }
     }
-    if (fGridNodes.size() != 3 || *std::min_element(fGridNodes.begin(), fGridNodes.end()) < 2) {
-        throw std::runtime_error(prefix + "gridNodes must be 3 values >= 2");
+    if (fGridStep.size() != 3 || !(*std::min_element(fGridStep.begin(), fGridStep.end()) > 0)) {
+        throw std::runtime_error(prefix + "gridStep must be 3 lengths > 0");
     }
-    if (fElectrons <= 0) throw std::runtime_error(prefix + "electrons must be > 0");
+    if (fMargin < 0) throw std::runtime_error(prefix + "margin must be >= 0");
+    // The counts of a node are stored as 16-bit integers
+    if (fElectrons <= 0 || fElectrons > 65535) {
+        throw std::runtime_error(prefix + "electrons must be > 0 and <= 65535");
+    }
     if (fStepSize <= 0) throw std::runtime_error(prefix + "stepSize must be > 0");
     if (fPositionBins <= 0 || fTimeBins <= 0) {
         throw std::runtime_error(prefix + "positionBins and timeBins must be > 0");
     }
     if (fBoundary < 0) throw std::runtime_error(prefix + "boundary must be >= 0");
+    UpdateGrid();
+    UpdateYAMLFromParams<TRestDetectorDriftResponse>(fNode);
+}
+
+std::pair<TRestWithUnits, TRestWithUnits>& TRestDetectorDriftResponse::Range(int axis) {
+    return axis == 0 ? fXRange : (axis == 1 ? fYRange : fZRange);
+}
+
+const std::pair<TRestWithUnits, TRestWithUnits>& TRestDetectorDriftResponse::Range(int axis) const {
+    return axis == 0 ? fXRange : (axis == 1 ? fYRange : fZRange);
+}
+
+bool TRestDetectorDriftResponse::HasRange(int axis) const { return Range(axis).first < Range(axis).second; }
+
+void TRestDetectorDriftResponse::UpdateGrid() {
+    for (int axis = 0; axis < 3; axis++) {
+        fGridNodes[axis] = 0;
+        if (!HasRange(axis) || fGridStep.size() != 3) continue;
+        // The fewest equal steps not larger than gridStep (a relative tolerance for an exact division)
+        const double steps = (Range(axis).second - Range(axis).first) / fGridStep[axis];
+        fGridNodes[axis] = std::max(2, static_cast<int>(std::ceil(steps * (1 - 1e-9))) + 1);
+    }
+    fNodes.clear();
+}
+
+void TRestDetectorDriftResponse::SetRange(int axis, double min, double max) {
+    if (!(min < max)) {
+        throw std::runtime_error("TRestDetectorDriftResponse '" + fName + "': a range must have min < max");
+    }
+    Range(axis) = {min, max};
+    UpdateGrid();
     UpdateYAMLFromParams<TRestDetectorDriftResponse>(fNode);
 }
 
@@ -206,7 +256,7 @@ void TRestDetectorDriftResponse::SetNode(size_t index, int primaries,
 
 bool TRestDetectorDriftResponse::Neighbours(const XYZVector& position, std::array<size_t, 8>& nodes,
                                             std::array<double, 8>& weights) const {
-    if (fNodes.size() != GetNumberOfNodes()) return false;
+    if (GetNumberOfNodes() == 0 || fNodes.size() != GetNumberOfNodes()) return false;
     const double coordinates[3] = {position.X(), position.Y(), position.Z()};
     const std::pair<TRestWithUnits, TRestWithUnits>* ranges[3] = {&fXRange, &fYRange, &fZRange};
     int first[3];
@@ -227,6 +277,35 @@ bool TRestDetectorDriftResponse::Neighbours(const XYZVector& position, std::arra
                           (dk ? fraction[2] : 1 - fraction[2]);
     }
     return true;
+}
+
+TRestDetectorDriftResponse::Summary TRestDetectorDriftResponse::GetNodeSummary(size_t index) const {
+    Summary summary;
+    const Node& node = fNodes.at(index);
+    if (node.fPrimaries > 0) summary.fSurvival = static_cast<double>(node.fArrived) / node.fPrimaries;
+    // Mean and standard deviation of counts over [min, max] (bin centres)
+    auto moments = [](const std::vector<int>& counts, size_t stride, size_t bins, double min, double max,
+                      double& mean, double& sigma) {
+        std::vector<double> projected(bins, 0);
+        for (size_t i = 0; i < counts.size(); i++) projected[(i / stride) % bins] += counts[i];
+        double total = 0, sum = 0, sum2 = 0;
+        for (size_t bin = 0; bin < bins; bin++) {
+            const double centre = min + (bin + 0.5) * (max - min) / bins;
+            total += projected[bin];
+            sum += projected[bin] * centre;
+            sum2 += projected[bin] * centre * centre;
+        }
+        if (total <= 0) return;
+        mean = sum / total;
+        sigma = std::sqrt(std::max(0.0, sum2 / total - mean * mean));
+    };
+    if (node.fArrived <= 0) return summary;
+    const size_t positionBins = fPositionBins, timeBins = fTimeBins;
+    moments(node.fPositionCounts, 1, positionBins, node.fUMin, node.fUMax, summary.fMeanU, summary.fSigmaU);
+    moments(node.fPositionCounts, positionBins, positionBins, node.fVMin, node.fVMax, summary.fMeanV,
+            summary.fSigmaV);
+    moments(node.fTimeCounts, 1, timeBins, node.fTMin, node.fTMax, summary.fMeanT, summary.fSigmaT);
+    return summary;
 }
 
 double TRestDetectorDriftResponse::GetSurvival(const XYZVector& position) const {
@@ -300,23 +379,50 @@ void TRestDetectorDriftResponse::Write(TFile* file, const YAML::Node& generator)
     metadata["generator"] = YAML::Clone(generator);
     TRestMetadata::WriteMetadata(file, kName, metadata);
 
+    // LZMA: the counts compress about 20 % better than with the default algorithm (the response file is its
+    // own); the counts as 16-bit integers (electrons <= 65535) and the ranges as float: 120 MB were 70 MB
+    file->SetCompressionSettings(ROOT::CompressionSettings(ROOT::RCompressionSetting::EAlgorithm::kLZMA, 8));
     file->cd();
     auto tree = std::make_unique<TTree>(kName.c_str(), "Drift response per node of the grid");
+    const size_t positionSize = static_cast<size_t>(fPositionBins) * fPositionBins;
+    const size_t timeSize = fTimeBins;
     int primaries = 0, arrived = 0;
-    double range[6];
-    std::vector<int> positionCounts, timeCounts;
+    float range[6];
+    std::vector<UShort_t> positionCounts(positionSize), timeCounts(timeSize);
     tree->Branch("primaries", &primaries, "primaries/I");
     tree->Branch("arrived", &arrived, "arrived/I");
-    tree->Branch("range", range, "range[6]/D");
-    tree->Branch("positionCounts", &positionCounts);
-    tree->Branch("timeCounts", &timeCounts);
-    for (const Node& node : fNodes) {
+    tree->Branch("range", range, "range[6]/F");
+    tree->Branch("positionCounts", positionCounts.data(),
+                 ("positionCounts[" + std::to_string(positionSize) + "]/s").c_str());
+    tree->Branch("timeCounts", timeCounts.data(), ("timeCounts[" + std::to_string(timeSize) + "]/s").c_str());
+    // To draw the response (not read back): the node and its summary, e.g. Draw("meanU:x", "z == 90")
+    float x = 0, y = 0, z = 0;
+    float summary[7];
+    tree->Branch("x", &x, "x/F");
+    tree->Branch("y", &y, "y/F");
+    tree->Branch("z", &z, "z/F");
+    const char* names[7] = {"survival", "meanU", "meanV", "meanT", "sigmaU", "sigmaV", "sigmaT"};
+    for (int i = 0; i < 7; i++) tree->Branch(names[i], &summary[i], (std::string(names[i]) + "/F").c_str());
+    for (size_t index = 0; index < fNodes.size(); index++) {
+        const Node& node = fNodes[index];
+        if (node.fPositionCounts.size() != positionSize || node.fTimeCounts.size() != timeSize) {
+            throw std::runtime_error("TRestDetectorDriftResponse: node " + std::to_string(index) +
+                                     " has not the bins of the response");
+        }
+        const XYZVector position = GetNodePosition(index);
+        x = position.X();
+        y = position.Y();
+        z = position.Z();
+        const Summary values = GetNodeSummary(index);
+        const double summaryValues[7] = {values.fSurvival, values.fMeanU,  values.fMeanV, values.fMeanT,
+                                         values.fSigmaU,   values.fSigmaV, values.fSigmaT};
+        std::copy(summaryValues, summaryValues + 7, summary);
         primaries = node.fPrimaries;
         arrived = node.fArrived;
-        const double values[6] = {node.fUMin, node.fUMax, node.fVMin, node.fVMax, node.fTMin, node.fTMax};
-        std::copy(values, values + 6, range);
-        positionCounts = node.fPositionCounts;
-        timeCounts = node.fTimeCounts;
+        const double ranges[6] = {node.fUMin, node.fUMax, node.fVMin, node.fVMax, node.fTMin, node.fTMax};
+        std::copy(ranges, ranges + 6, range);
+        std::copy(node.fPositionCounts.begin(), node.fPositionCounts.end(), positionCounts.begin());
+        std::copy(node.fTimeCounts.begin(), node.fTimeCounts.end(), timeCounts.begin());
         tree->Fill();
     }
     tree->Write(kName.c_str(), TObject::kOverwrite);
@@ -339,24 +445,37 @@ TRestDetectorDriftResponse TRestDetectorDriftResponse::Read(TFile* file) {
     if (static_cast<size_t>(tree->GetEntries()) != response.GetNumberOfNodes()) {
         throw std::runtime_error(error + "the tree has not an entry per node of the grid");
     }
+    // The counts: fixed arrays of 16-bit integers with the bins of the response (files of the earlier format,
+    // vectors of int, must be computed again)
+    const size_t positionSize = static_cast<size_t>(response.fPositionBins) * response.fPositionBins;
+    const size_t timeSize = response.fTimeBins;
+    auto checkLeaf = [&](const char* name, const char* type, size_t length) {
+        const TLeaf* leaf = tree->GetLeaf(name);
+        if (!leaf || std::string(leaf->GetTypeName()) != type ||
+            static_cast<size_t>(leaf->GetLen()) != length) {
+            throw std::runtime_error(error + "the branch " + name + " is not " + type + "[" +
+                                     std::to_string(length) +
+                                     "] (a file of an earlier format: compute it again)");
+        }
+    };
+    checkLeaf("range", "Float_t", 6);
+    checkLeaf("positionCounts", "UShort_t", positionSize);
+    checkLeaf("timeCounts", "UShort_t", timeSize);
     int primaries = 0, arrived = 0;
-    double range[6];
-    std::vector<int>* positionCounts = nullptr;
-    std::vector<int>* timeCounts = nullptr;
+    float range[6];
+    std::vector<UShort_t> positionCounts(positionSize), timeCounts(timeSize);
+    tree->SetBranchStatus("*", false);
+    for (const char* name : {"primaries", "arrived", "range", "positionCounts", "timeCounts"}) {
+        tree->SetBranchStatus(name, true);
+    }
     tree->SetBranchAddress("primaries", &primaries);
     tree->SetBranchAddress("arrived", &arrived);
     tree->SetBranchAddress("range", range);
-    tree->SetBranchAddress("positionCounts", &positionCounts);
-    tree->SetBranchAddress("timeCounts", &timeCounts);
-    const size_t positionSize = static_cast<size_t>(response.fPositionBins) * response.fPositionBins;
+    tree->SetBranchAddress("positionCounts", positionCounts.data());
+    tree->SetBranchAddress("timeCounts", timeCounts.data());
     response.fNodes.resize(response.GetNumberOfNodes());
     for (Long64_t entry = 0; entry < tree->GetEntries(); entry++) {
         tree->GetEntry(entry);
-        if (!positionCounts || !timeCounts || positionCounts->size() != positionSize ||
-            timeCounts->size() != static_cast<size_t>(response.fTimeBins)) {
-            throw std::runtime_error(error + "node " + std::to_string(entry) +
-                                     " has not the bins of the grid");
-        }
         Node& node = response.fNodes[entry];
         node.fPrimaries = primaries;
         node.fArrived = arrived;
@@ -366,11 +485,10 @@ TRestDetectorDriftResponse TRestDetectorDriftResponse::Read(TFile* file) {
         node.fVMax = range[3];
         node.fTMin = range[4];
         node.fTMax = range[5];
-        node.fPositionCounts = *positionCounts;
-        node.fTimeCounts = *timeCounts;
+        node.fPositionCounts.assign(positionCounts.begin(), positionCounts.end());
+        node.fTimeCounts.assign(timeCounts.begin(), timeCounts.end());
     }
     tree->ResetBranchAddresses();
-    delete positionCounts;
-    delete timeCounts;
+    tree->SetBranchStatus("*", true);
     return response;
 }

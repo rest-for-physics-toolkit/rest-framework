@@ -22,7 +22,11 @@ class ComponentGrid;
 /// `x y z Ex Ey Ez` (CST 2026). The units of the header (any length and field units of REST_Units, e.g. mm,
 /// m and V/m, V/cm) convert the values to the Garfield units (cm, V/cm); the grid is deduced from the nodes
 /// (ComponentGrid "XYZ"). The coordinates are moved by `offset` (mm), the position in the detector frame of
-/// the origin of the CST frame. The Garfield medium of the grid is not set (ComponentGrid::SetMedium).
+/// the origin of the CST frame. The nodes with the field exactly 0 (Ex = Ey = Ez = 0) are out of the gas:
+/// CST writes 0 out of the solved volume (e.g. the corners of the exported box around a cylindrical gas
+/// volume) and inside the conductors. They are inactive nodes of the grid: in a cell with one of them,
+/// ComponentGrid gives no medium (status -5) and a drift ends there, like at a wall. The Garfield medium of
+/// the grid is not set (ComponentGrid::SetMedium).
 ///
 /// \param fileName ASCII export of CST.
 /// \param offset Position (mm) of the origin of the CST frame in the detector frame.

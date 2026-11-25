@@ -856,7 +856,7 @@ TRestDetectorDriftResponse SmallDriftResponse(const std::string& responseFile) {
     return TRestDetectorDriftResponse(
         "drift", YAML::Load("{fieldMap: field.txt, responseFile: \"" + responseFile +
                             "\", xRange: [-10 mm, 10 mm], yRange: [-10 mm, 10 mm], zRange: [0 mm, 50 mm], "
-                            "gridNodes: [2, 2, 2], positionBins: 4, timeBins: 4}"));
+                            "gridStep: [20 mm, 20 mm, 50 mm], positionBins: 4, timeBins: 4}"));
 }
 
 /// The 4 nodes of a layer k of the small response with `arrived` of 100 electrons at (u, v, t)
@@ -889,6 +889,14 @@ TEST(DetectorDriftResponse, WriteReadAndSample) {
     EXPECT_EQ(node.fPositionCounts[0], 1);
     EXPECT_EQ(node.fPositionCounts[3 + 4 * 3], 1);
     EXPECT_EQ(node.fTimeCounts[3], 1);
+    // Its summary from the bin centres (0.125 and 0.875 mm, us): survival 2 / 10
+    const auto summary = response.GetNodeSummary(0);
+    EXPECT_NEAR(summary.fSurvival, 0.2, 1e-12);
+    EXPECT_NEAR(summary.fMeanU, 0.5, 1e-12);
+    EXPECT_NEAR(summary.fMeanV, 0.5, 1e-12);
+    EXPECT_NEAR(summary.fMeanT, 0.5, 1e-12);
+    EXPECT_NEAR(summary.fSigmaU, 0.375, 1e-12);
+    EXPECT_NEAR(summary.fSigmaT, 0.375, 1e-12);
 
     // All the electrons of the readout side arrive (u = 1, v = -2 mm at 0 us), half of those of the cathode
     // side (at 5 us)
@@ -904,6 +912,17 @@ TEST(DetectorDriftResponse, WriteReadAndSample) {
     EXPECT_EQ(read.fMedium, "ArIso");
     ASSERT_EQ(read.fNodes.size(), 8u);
     EXPECT_EQ(read.fNodes[read.NodeIndex(0, 1, 1)].fArrived, 50);
+    const auto cathode = read.GetNodeSummary(read.NodeIndex(0, 1, 1));
+    EXPECT_NEAR(cathode.fSurvival, 0.5, 1e-12);
+    EXPECT_NEAR(cathode.fMeanU, 1, 1e-12);
+    EXPECT_NEAR(cathode.fMeanV, -2, 1e-12);
+    EXPECT_NEAR(cathode.fMeanT, 5, 1e-12);
+    EXPECT_NEAR(cathode.fSigmaU, 0, 1e-12);
+    // The summary in the tree, to draw the response
+    auto* tree = file->Get<TTree>("DriftResponse");
+    ASSERT_NE(tree, nullptr);
+    EXPECT_EQ(tree->Draw("meanT", "z == 50 && x == -10 && y == 10", "goff"), 1);
+    EXPECT_NEAR(tree->GetV1()[0], 5, 1e-12);
 
     EXPECT_TRUE(read.Contains({0, 0, 25}));
     EXPECT_FALSE(read.Contains({0, 0, 51}));
@@ -934,10 +953,42 @@ TEST(DetectorDriftResponse, WriteReadAndSample) {
                                                                 "xRange: [1 mm, 0 mm], yRange: [0 mm, 1 mm], "
                                                                 "zRange: [0 mm, 1 mm]}")),
                  std::runtime_error);
-    const std::string oneNode =
+    const std::string twoSteps =
         "{fieldMap: f.txt, responseFile: r.root, xRange: [0 mm, 1 mm], yRange: [0 mm, 1 mm], "
-        "zRange: [0 mm, 1 mm], gridNodes: [2, 1, 2]}";
-    EXPECT_THROW(TRestDetectorDriftResponse("drift", YAML::Load(oneNode)), std::runtime_error);
+        "zRange: [0 mm, 1 mm], gridStep: [1 mm, 1 mm]}";
+    EXPECT_THROW(TRestDetectorDriftResponse("drift", YAML::Load(twoSteps)), std::runtime_error);
+    const std::string manyElectrons =
+        "{fieldMap: f.txt, responseFile: r.root, xRange: [0 mm, 1 mm], yRange: [0 mm, 1 mm], "
+        "zRange: [0 mm, 1 mm], gridStep: [1 mm, 1 mm, 1 mm], electrons: 70000}";  // counts of 16 bits
+    EXPECT_THROW(TRestDetectorDriftResponse("drift", YAML::Load(manyElectrons)), std::runtime_error);
+
+    // gridStep: the fewest equal steps not larger than it (at least 2 nodes); x and y not given (the readout
+    // area, set with SetRange): no nodes until they are set, and the file keeps them
+    TRestDetectorDriftResponse onReadout(
+        "drift", YAML::Load("{fieldMap: f.txt, responseFile: r.root, zRange: [0 mm, 10 mm], "
+                            "gridStep: [3 mm, 30 mm, 4 mm]}"));
+    EXPECT_FALSE(onReadout.HasRange(0));
+    EXPECT_TRUE(onReadout.HasRange(2));
+    EXPECT_EQ(onReadout.fGridNodes[2], 4);  // 10 mm in 3 steps of 3.33 mm
+    EXPECT_EQ(onReadout.GetNumberOfNodes(), 0u);
+    EXPECT_FALSE(onReadout.Contains({0, 0, 5}));
+    onReadout.SetRange(0, -6, 6);
+    onReadout.SetRange(1, -6, 6);
+    EXPECT_EQ(onReadout.fGridNodes[0], 5);  // 12 mm in 4 steps of 3 mm (exact)
+    EXPECT_EQ(onReadout.fGridNodes[1], 2);
+    EXPECT_EQ(onReadout.GetNumberOfNodes(), 40u);
+    EXPECT_DOUBLE_EQ(onReadout.GetNodePosition(onReadout.NodeIndex(1, 0, 0)).X(), -3);
+    for (size_t index = 0; index < onReadout.GetNumberOfNodes(); index++) onReadout.SetNode(index, 1, {});
+    const std::string onReadoutFile = std::string(TESTS_WORK_DIR) + "/DriftResponse_OnReadout.root";
+    {
+        std::unique_ptr<TFile> out(TFile::Open(onReadoutFile.c_str(), "RECREATE"));
+        onReadout.Write(out.get(), YAML::Load("{program: test}"));
+    }
+    std::unique_ptr<TFile> in(TFile::Open(onReadoutFile.c_str(), "READ"));
+    const auto readOnReadout = TRestDetectorDriftResponse::Read(in.get());
+    EXPECT_EQ(readOnReadout.GetNumberOfNodes(), 40u);
+    EXPECT_DOUBLE_EQ(readOnReadout.fXRange.first, -6);
+    EXPECT_THROW(onReadout.SetRange(0, 1, 1), std::runtime_error);
 }
 
 TEST(DetectorHitsDriftResponseProcess, ElectronsFromTheResponse) {

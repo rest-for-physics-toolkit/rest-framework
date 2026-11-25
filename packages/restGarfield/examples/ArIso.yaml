@@ -44,10 +44,9 @@ transportManager:
 #    fieldMapOffset: [0 mm, 0 mm, 0 mm]   # origin of the CST frame in the detector frame
 #    readouts: "readouts.yaml"  # a TRestDetectorReadoutManager section (its data readout, or `readout`)
 #    boundary: 1 mm             # end of the drift: plane above the mesh, where the amplification starts
-#    xRange: [-30 mm, 30 mm]
-#    yRange: [-30 mm, 30 mm]
-#    zRange: [0 mm, 90 mm]
-#    gridNodes: [7, 7, 10]
+#    zRange: [0 mm, 90 mm]      # x and y: the readout channels plus margin (or xRange, yRange)
+#    margin: 5 mm
+#    gridStep: [10 mm, 10 mm, 10 mm]   # largest spacing of the start points
 #    electrons: 500
 #    stepSize: 0.5 mm
 #    responseFile: "ArIso_drift.root"

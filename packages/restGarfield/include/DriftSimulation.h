@@ -25,22 +25,36 @@ class TRestDetectorTransportTable;
 /// \param readout Readout of the detector: distance to the readout and normal.
 /// \param response Configuration of the response, filled.
 /// \param verbose Print the progress.
+/// \param jobs Processes (fork) sharing the nodes, every jobs-th node each (Garfield++ is not thread safe),
+/// each with its own random seed drawn from the generator of Garfield++; 1: in this process.
 /// \throws std::runtime_error if the field map cannot be loaded, the readout has no distance or its normal
-/// is not along an axis, or the field map is not above the boundary plane.
+/// is not along an axis, the field map is not above the boundary plane, or a process fails.
 void ComputeDriftResponse(const TRestDetectorMedium& medium, const TRestDetectorTransportTable& table,
                           const TRestDetectorReadout& readout, TRestDetectorDriftResponse& response,
-                          bool verbose);
+                          bool verbose, int jobs = 1);
+
+/// \brief Sets the ranges of the grid not given (xRange, yRange or zRange [0, 0]) along the axes of the
+/// readout plane: the extent of the readout channels (TRestDetectorReadout::GetChannelsBoundingBox) plus the
+/// `margin` of the response on each side. The range along the readout normal must be given.
+///
+/// \param response Configuration of the response, its ranges set.
+/// \param readout Readout of the detector.
+/// \throws std::runtime_error if a range is needed and the readout has no channels, no normal, a normal not
+/// along x, y or z, or the range along the normal is not given.
+void SetGridOnReadout(TRestDetectorDriftResponse& response, const TRestDetectorReadout& readout);
 
 /// \brief Computes the drift response of a configuration and writes it to its responseFile (skipped if the
 /// file exists, unless overwrite): the readout from the TRestDetectorReadoutManager of the `readouts` YAML
 /// file (`readout`, or its data readout) and the transport table `transportTable` of the medium file (or its
-/// only table), then ComputeDriftResponse.
+/// only table), then SetGridOnReadout and ComputeDriftResponse.
 ///
 /// \param medium Gas medium of the response, with its medium file.
 /// \param response Configuration of the response (the `drift` section of TRestDetectorTransportManager).
 /// \param verbose Print the progress.
+/// \param jobs Processes sharing the nodes (`--jobs` of restGarfield).
 /// \throws std::runtime_error if there is no readouts file or readout, the medium file has no transport
 /// table (or several and no transportTable), or ComputeDriftResponse fails.
-void RunDriftResponse(const TRestDetectorMedium& medium, TRestDetectorDriftResponse& response, bool verbose);
+void RunDriftResponse(const TRestDetectorMedium& medium, TRestDetectorDriftResponse& response, bool verbose,
+                      int jobs = 1);
 
 #endif

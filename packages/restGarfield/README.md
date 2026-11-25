@@ -111,22 +111,24 @@ tables, so the transport table they use can be computed in the same run.
 
 | Key | Default | Description |
 |---|---|---|
-| `fieldMap` | (required) | ASCII export of the electric field by CST (header `x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]`, the units read from it; x fastest). |
+| `fieldMap` | (required) | ASCII export of the electric field by CST (header `x [mm] y [mm] z [mm] Ex [V/m] Ey [V/m] Ez [V/m]`, the units read from it; x fastest). Nodes with the field exactly 0 are out of the gas (CST writes 0 out of the solved volume, e.g. the corners of the box around a cylinder, and in the conductors): an electron reaching a cell with one of them is lost, as at a wall; start points there are not drifted (survival 0). |
 | `fieldMapOffset` | [0, 0, 0] | Position of the origin of the CST frame in the detector frame. |
 | `readouts` | (required) | YAML file with the `TRestDetectorReadoutManager` of the readout (distance and normal; the normal must be along x, y or z). |
 | `readout` | data readout | Name of the readout in the manager. |
 | `boundary` | 0 | Distance from the readout to the plane where the drift ends (above the mesh); the field map must reach above it. |
 | `transportTable` | the only one | Key of the transport table of the medium file (the gas at the pressure of the medium). |
-| `xRange`, `yRange`, `zRange` | (required) | Grid of start points (detector frame). |
-| `gridNodes` | [2, 2, 2] | Nodes of the grid along x, y and z (at least 2 each). |
-| `electrons` | 1000 | Electrons drifted from each node. |
+| `xRange`, `yRange`, `zRange` | the readout | Grid of start points (detector frame). A range not given along an axis of the readout plane is the extent of the readout channels plus `margin`; the range along the readout normal is required. The response file keeps the ranges used. |
+| `margin` | 5 mm | Added on each side of the extent of the readout channels. |
+| `gridStep` | (required) | Largest spacing of the nodes along x, y and z: each range is divided into the fewest equal steps not larger than it (at least 2 nodes per axis), e.g. a multiple of the readout pitch. |
+| `electrons` | 1000 | Electrons drifted from each node (at most 65535: the counts are stored as 16-bit integers, the file compressed with LZMA). |
 | `stepSize` | 1 mm | Distance step of `AvalancheMC`. |
 | `positionBins` | 20 | Bins per axis of the displacement histogram of each node. |
 | `timeBins` | 20 | Bins of the drift time histogram of each node. |
 | `responseFile` | (required) | Output file of the response. |
 | `overwrite` | false | Compute the response again if the file exists. |
 
-The drift of the nodes is not split in processes (`--jobs` applies to the transport tables only).
+`--jobs N` also splits the start points of the drift response in N processes (every N-th point each,
+so that each process gets points at all the drift lengths; each process with its own random seed).
 
 See the TRestDetectorTransportManager, TRestDetectorMedium and TRestDetectorDriftResponse documentation for the validation of these
 keys.
@@ -137,10 +139,19 @@ keys.
   one color per table, one line style per carrier; scaled to `pressure` in bar if > 0) and the gain tables
   (mean gain and Polya theta) of a medium file.
 
+- `REST_Garfield_DrawDriftResponse(fileName, z = -1)`: draws a drift response, for the layer of start
+  points at `z` (by default the farthest from the readout): maps on the readout plane of the survival, the
+  mean displacement of the arrival (the distortion of the field, with arrows), the mean drift time and the
+  transverse spread; the radial displacement versus the radius; the drift time versus z at the centre and
+  the edges. The tree `DriftResponse` of the file has the same summary per start point (`x`, `y`, `z`,
+  `survival`, `meanU`, `meanV`, `meanT`, `sigmaU`, `sigmaV`, `sigmaT`) for other plots.
+
 ```
 restRoot
 root [0] REST_Garfield_DrawMedium("ArIso.root")
 root [1] REST_Garfield_DrawMedium("ArIso.root", "", 1.4)
+root [2] REST_Garfield_DrawDriftResponse("AlphaCAMM_drift.root")
+root [3] DriftResponse->Draw("meanU:x", "z == 90 && abs(y) < 5")   // after TFile f("AlphaCAMM_drift.root")
 ```
 
 ## Tests
@@ -148,6 +159,7 @@ root [1] REST_Garfield_DrawMedium("ArIso.root", "", 1.4)
 With `BUILD_TESTING` (`test/`, ctest label `restGarfield`): the Garfield++ gas of a medium and the transport
 and gain tables computed with small grids (a silicon table, a gas table with one Magboltz collision in two
 processes, a gain table of a few avalanches at a low field), written to medium files of the build directory
-and read back; a small CST field map, the Garfield++ gas of a transport table and the drift response in a
-uniform field map (straight drift to the boundary plane at the drift velocity of the table). The suites
-`*Long` (the transport table in two processes) are skipped with `ctest -L restGarfield -E Long`.
+and read back; a small CST field map (with a node out of the gas), the Garfield++ gas of a transport table
+and the drift response in a uniform field map (straight drift to the boundary plane at the drift velocity of
+the table). The suites `*Long` (the transport table in two processes) are skipped with
+`ctest -L restGarfield -E Long`.

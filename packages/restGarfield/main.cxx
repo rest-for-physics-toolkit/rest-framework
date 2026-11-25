@@ -5,8 +5,9 @@
 ///    restGarfield --version
 ///
 /// `--set` sets a parameter of the section `parameters` of the configuration for this execution
-/// (repeatable; the file is not changed). `--jobs N` splits the field nodes of each gas transport table in up
-/// to N processes (Magboltz is not thread safe; default 1). Any other argument is an error.
+/// (repeatable; the file is not changed). `--jobs N` splits the field nodes of each gas transport table and
+/// the start points of each drift response in up to N processes (Garfield++ is not thread safe; default 1).
+/// Any other argument is an error.
 ///
 ///    transportManager:
 ///      class: "TRestDetectorTransportManager"
@@ -92,7 +93,9 @@ int main(int argc, char* argv[]) {
         for (const auto& table : manager.fTransport)
             RunTransportSimulation(*manager.fMedium, *table, verbose, jobs);
         for (const auto& table : manager.fGain) RunGainSimulation(*manager.fMedium, *table, verbose);
-        for (const auto& response : manager.fDrift) RunDriftResponse(*manager.fMedium, *response, verbose);
+        for (const auto& response : manager.fDrift) {
+            RunDriftResponse(*manager.fMedium, *response, verbose, jobs);
+        }
     } catch (const std::exception& error) {
         std::cerr << "restGarfield: " << error.what() << std::endl;
         return 1;
