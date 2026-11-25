@@ -12,7 +12,11 @@ releases); the notes of the GitHub release list its pull requests.
 - restGarfield builds with the Garfield++ versions after 4.0 (e.g. that of the LCG views).
 - `scripts/install.sh`: Garfield++ 4.0 builds on the LCG views (C++20) and is the one used even when the
   view has another (`--lcg-garfield` to use that of the view); the packages of the system checked by the
-  version available to install (Debian 13); the script is read whole before running.
+  version available to install (Debian 13); the script is read whole before running. Source mode checked on
+  Ubuntu 24.04, Debian 13, AlmaLinux 9 and macOS 15: ROOT 6.36 with the recent CMake versions and without
+  Davix, Geant4 11.0 with Xcode 16 (zlib of the system, g4tools typo patched), packages of dnf by what
+  they provide, bash 3.2 of macOS.
+- restG4 example test of the full chain decay: the ground state of Pa234 is a rare branch.
 
 ## 3.0.0 (2026-11-24)
 

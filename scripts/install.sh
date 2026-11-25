@@ -165,17 +165,21 @@ install_system_packages() {
         # The package lists first: without them (e.g. a new container) no package would be available
         [[ "$install_packages" == OFF ]] || $sudo apt-get update
         # Available: a version to install (apt-cache show exits with 0 also for a package only referred to
-        # by others, e.g. libpcre3-dev in Debian 13)
+        # by others, e.g. libpcre3-dev in Debian 13). grep without -q: it would stop at the first match and
+        # the command writing to it would end with SIGPIPE, a failure with pipefail (the package skipped)
         for package in $APT_PACKAGES; do
-            dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed" \
-                || { apt-cache show --no-all-versions "$package" 2>/dev/null | grep -q '^Package:' \
+            dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep "install ok installed" >/dev/null \
+                || { apt-cache show --no-all-versions "$package" 2>/dev/null | grep '^Package:' >/dev/null \
                     && missing+=("$package"); }
         done
         command="sudo apt-get install -y --no-install-recommends ${missing[*]:-}"
     elif command -v dnf >/dev/null; then
         manager=dnf
+        # Installed also as another package providing it, and the command curl as curl-minimal (minimal
+        # images, it conflicts with the package curl)
         for package in $DNF_PACKAGES; do
-            rpm -q "$package" >/dev/null 2>&1 \
+            rpm -q --whatprovides "$package" >/dev/null 2>&1 \
+                || { [[ "$package" == curl ]] && command -v curl >/dev/null; } \
                 || { dnf -q info "$package" >/dev/null 2>&1 && missing+=("$package"); }
         done
         command="sudo dnf install -y ${missing[*]:-}"
@@ -234,10 +238,16 @@ install_root() {
             info "ROOT $ROOT_VERSION (built from its sources, it takes a while)"
             rm -rf "$deps/root-src" "$deps/root-build"
             clone https://github.com/root-project/root.git "v${ROOT_VERSION//./-}" "$deps/root-src"
+            # The values of the cache variables quoted in an if() of ROOT 6.36: unquoted, a list with "="
+            # (CMAKE_DIAGNOSTIC_INIT of the new CMake versions, e.g. brew on macOS) breaks the configuration
+            perl -pi -e 's/\(NOT \$\{\$\{var\}\} STREQUAL ""\)/(NOT "\${\${var}}" STREQUAL "")/' \
+                "$deps/root-src/CMakeLists.txt"
+            # Without remote files (xrootd, davix: their builtin copies fail on some systems); REST downloads
+            # with the command curl
             cmake -S "$deps/root-src" -B "$deps/root-build" -G "${generator[@]}" \
                 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$deps/root" -DCMAKE_CXX_STANDARD=17 \
                 -Dgdml=ON -Dopengl=ON -Droofit=ON -Dtmva=ON -Dimt=ON -Dmathmore=ON -Dxrootd=OFF \
-                -Dbuiltin_xrootd=OFF
+                -Dbuiltin_xrootd=OFF -Ddavix=OFF
             cmake --build "$deps/root-build" -j "$jobs"
             cmake --install "$deps/root-build"
             rm -rf "$deps/root-src" "$deps/root-build"
@@ -251,14 +261,20 @@ install_geant4() {
         info "Geant4 $GEANT4_VERSION (with its data, it takes a while)"
         rm -rf "$deps/geant4-src" "$deps/geant4-build"
         clone https://github.com/Geant4/geant4.git "v$GEANT4_VERSION" "$deps/geant4-src"
+        # Typo of g4tools in Geant4 11.0, an error with clang >= 19 (Xcode 16), which checks templates
+        perl -pi -e 's/a_from\.m_barnch/a_from.m_branch/' \
+            "$deps/geant4-src/source/externals/g4tools/include/tools/wroot/columns.icc"
         # <cstdint> in every file (GCC >= 13); the Expat of Geant4 (with the one of the system, Geant4 11.0
-        # writes an empty EXPAT_LIBRARY with CMake >= 3.27, which breaks find_package(Geant4))
-        local x11=ON
-        [[ "$(uname)" != Darwin ]] || x11=OFF
+        # writes an empty EXPAT_LIBRARY with CMake >= 3.27, which breaks find_package(Geant4)). On macOS
+        # no X11 and the zlib of the system (the one of Geant4 11.0 defines fdopen as a macro, an error with
+        # the stdio.h of the recent SDKs)
+        local x11=ON zlib=OFF
+        [[ "$(uname)" != Darwin ]] || { x11=OFF; zlib=ON; }
         cmake -S "$deps/geant4-src" -B "$deps/geant4-build" -G "${generator[@]}" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$deps/geant4" \
             -DGEANT4_USE_GDML=ON -DGEANT4_INSTALL_DATA=ON -DGEANT4_BUILD_MULTITHREADED=ON \
-            -DGEANT4_USE_SYSTEM_EXPAT=OFF -DGEANT4_USE_OPENGL_X11="$x11" -DCMAKE_CXX_FLAGS="-include cstdint"
+            -DGEANT4_USE_SYSTEM_EXPAT=OFF -DGEANT4_USE_SYSTEM_ZLIB="$zlib" -DGEANT4_USE_OPENGL_X11="$x11" \
+            -DCMAKE_CXX_FLAGS="-include cstdint"
         cmake --build "$deps/geant4-build" -j "$jobs"
         cmake --install "$deps/geant4-build"
         include_cstdint "$deps/geant4/include"
@@ -388,7 +404,9 @@ install_yaml_cpp
 # Garfield++) comes before the HINTS of find_package
 garfield_dir=()
 if [[ "$garfield" == ON ]]; then
-    for dir in "${GARFIELD_INSTALL:-${GARFIELD_HOME:-}}"/lib{64,}/cmake/Garfield; do
+    # lib/cmake of the LCG views, share/Garfield/cmake of Garfield++ 4.0
+    garfield_root="${GARFIELD_INSTALL:-${GARFIELD_HOME:-}}"
+    for dir in "$garfield_root"/{lib64/cmake/Garfield,lib/cmake/Garfield,share/Garfield/cmake}; do
         [[ -f "$dir/GarfieldConfig.cmake" ]] && { garfield_dir=(-DGarfield_DIR="$dir"); break; }
     done
     info "Garfield++ ${garfield_dir[*]:-of the environment}"
@@ -421,12 +439,12 @@ info "rest-framework $version ($(git -C "$src" rev-parse --short HEAD))"
 # Warnings are errors in the CI (REST_WARNINGS_AS_ERRORS); here another compiler may warn of something new
 cmake -S "$src" -B "$prefix/build" -G "${generator[@]}" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$prefix/install" -DREST_WARNINGS_AS_ERRORS=OFF \
-    -DREST_G4="$g4" -DREST_GARFIELD="$garfield" -DREST_DAQ="$daq" "${garfield_dir[@]}"
+    -DREST_G4="$g4" -DREST_GARFIELD="$garfield" -DREST_DAQ="$daq" ${garfield_dir[@]+"${garfield_dir[@]}"}
 cmake --build "$prefix/build" --target install -j "$jobs"
 
 {
     echo "# Environment of rest-for-physics-toolkit (install.sh, $(date +%F), $version, mode $mode)"
-    printf '%s\n' "${setup_lines[@]}"
+    printf '%s\n' ${setup_lines[@]+"${setup_lines[@]}"}
     echo "source \"$prefix/install/thisREST.sh\""
     echo "export REST_SETUP=\"$prefix/setup.sh\""
 } >"$prefix/setup.sh"

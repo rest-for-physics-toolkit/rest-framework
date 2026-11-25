@@ -319,14 +319,21 @@ TEST(restG4Examples, FullChainDecay) {
     ASSERT_TRUE(RestG4("07.FullChainDecay", "fullChain.yaml", "-o fullChain.root"));
     Simulation fullChain(Path("07.FullChainDecay", "fullChain.root"));
     // The main U238 chain, and some isotopes of its rare branches (they appear or not with the random
-    // numbers)
+    // numbers, which differ between platforms in Geant4). Th234 decays to the metastable Pa234 (Geant4
+    // name with its level, Pa234[73.920]): its ground state, by isomeric transition (0.16%), is a rare branch
     const auto chain = DecayingIsotopes(fullChain);
-    for (const std::string isotope : {"U238", "Th234", "Pa234", "U234", "Th230", "Ra226", "Rn222", "Po218",
-                                      "Pb214", "Bi214", "Po214", "Pb210", "Bi210", "Po210"}) {
-        EXPECT_TRUE(chain.count(isotope)) << isotope;
+    std::string found;
+    for (const auto& isotope : chain) found += " " + isotope;
+    for (const std::string isotope : {"U238", "Th234", "U234", "Th230", "Ra226", "Rn222", "Po218", "Pb214",
+                                      "Bi214", "Po214", "Pb210", "Bi210", "Po210"}) {
+        EXPECT_TRUE(chain.count(isotope)) << isotope << " not in:" << found;
     }
-    EXPECT_GE(chain.size(), 16u);
-    EXPECT_LE(chain.size(), 18u);
+    EXPECT_TRUE(std::any_of(
+        chain.begin(), chain.end(),
+        [](const std::string& isotope) { return isotope.size() > 5 && isotope.rfind("Pa234", 0) == 0; }))
+        << "Metastable Pa234 not in:" << found;
+    EXPECT_GE(chain.size(), 16u) << found;
+    EXPECT_LE(chain.size(), 18u) << found;
 
     ASSERT_TRUE(RestG4("07.FullChainDecay", "singleDecay.yaml", "-n 1000 -o singleDecay.root"));
     Simulation singleDecay(Path("07.FullChainDecay", "singleDecay.root"));
