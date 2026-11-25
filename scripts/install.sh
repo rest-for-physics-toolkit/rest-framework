@@ -272,6 +272,13 @@ install_garfield() {
         info "Garfield++ $GARFIELD_VERSION"
         rm -rf "$deps/garfield" "$deps/garfield-src" "$deps/garfield-build"
         clone https://gitlab.cern.ch/garfield/garfieldpp.git "$GARFIELD_VERSION" "$deps/garfield-src"
+        # Garfield++ takes the C++ standard of ROOT: C++20 in the LCG views, where the constructors and
+        # destructors of Heed written with their template arguments (Garfield++ 4.0) are errors
+        perl -pi -e 's/^(\s*(?:virtual\s+)?~?)(EqualStepCoorMesh)<T>\(/$1$2(/;' \
+            -e 's/^(\s*(?:virtual\s+)?~?)(PointCoorMesh)<T, D>\(/$1$2(/' \
+            "$deps/garfield-src/Heed/wcpplib/math/tline.h"
+        perl -pi -e 's/^(\s*)PassivePtr<X>\(const PassivePtr<Y>/$1PassivePtr(const PassivePtr<Y>/' \
+            "$deps/garfield-src/Heed/wcpplib/safetl/AbsPtr.h"
         # Makefiles, not Ninja (the Fortran of Magboltz through the C preprocessor, as the rest-env image).
         # <cstdint> and <algorithm> in every file: its sources use them without including them, reached
         # through other headers only on some systems (e.g. not with the GCC 13 of the LCG views: std::find)
