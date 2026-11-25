@@ -9,6 +9,10 @@ releases); the notes of the GitHub release list its pull requests.
 - Continuous integration on the environment pinned by each commit: `.github/rest-env` holds the tag of the
   `rest-docker` repository (image `rest-env` and `rest/Dockerfile`), so a release is validated again with
   its own environment.
+- restGarfield builds with the Garfield++ versions after 4.0 (e.g. that of the LCG views).
+- `scripts/install.sh`: Garfield++ 4.0 builds on the LCG views (C++20) and is the one used even when the
+  view has another (`--lcg-garfield` to use that of the view); the packages of the system checked by the
+  version available to install (Debian 13); the script is read whole before running.
 
 ## 3.0.0 (2026-11-24)
 
