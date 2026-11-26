@@ -37,6 +37,9 @@
 /// Parameters:
 /// * projections: see above (default none).
 /// * gaussFit: compute GaussSigmaX/Y/Z (default false).
+/// * gaussResolution: [X, Y, Z] of the gaussian fits: 0 for strips (of width the smallest distance between
+///   positions), > 0 for a continuous coordinate with this resolution of each position, as the drift
+///   (default [0, 0, 0.1 mm]; hits of a simulation, continuous in X and Y too, need the three).
 /// * fiducialCenter: center of the fiducial cylinder (default [0, 0, 0] mm).
 /// * fiducialAxis: direction of its axis, any length (default [0, 0, 1]).
 /// * fiducialRadius: its radius, 0 for none (default 0 mm).
@@ -92,6 +95,7 @@ static const bool TRestDetectorHitsAnalysisProcess_FieldsRegistered = []() {
     using P = TRestDetectorHitsAnalysisProcess;
     reg.RegisterField<P>("projections", &P::fProjections);
     reg.RegisterField<P>("gaussFit", &P::fGaussFit);
+    reg.RegisterField<P>("gaussResolution", &P::fGaussResolution);
     reg.RegisterField<P>("fiducialCenter", &P::fFiducialCenter);
     reg.RegisterField<P>("fiducialAxis", &P::fFiducialAxis);
     reg.RegisterField<P>("fiducialRadius", &P::fFiducialRadius);
@@ -289,7 +293,7 @@ bool TRestDetectorHitsAnalysisProcess::ProcessEvent(const TRestEvent& input, TRe
                 values.push_back(hits.GetCoordinate(n, a));
                 energies.push_back(hits.GetEnergy(n));
             }
-            *gaussSigmas[a] = TRestHitsAnalysis::GetGaussSigma(values, energies);
+            *gaussSigmas[a] = TRestHitsAnalysis::GetGaussSigma(values, energies, fGaussResolution[a]);
         }
     }
 

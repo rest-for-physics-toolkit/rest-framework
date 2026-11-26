@@ -8,11 +8,12 @@
 /// (squared distance of the farthest hits); MeanX/Y/Z (energy weighted); SigmaX/Y/Z (energy weighted
 /// size, TRestHits::GetSigmaX, ...); GaussSigmaX/Y/Z (gaussian fit, TRestHitsAnalysis::GetGaussSigma,
 /// gaussian integrated over each strip, centre and sigma fitted; only with gaussFit: true, otherwise 0; -1
-/// without result, e.g. a single position); Twist, TwistWeighted
-/// (TRestHitsAnalysis::GetTwist, GetTwistWeighted) and TwistLow, TwistHigh (lowest and highest twist of the
-/// first and last twistTailPercentage% of the hits); Size and MaxNodeSize: sum and maximum of the node sizes,
-/// sqrt(sigmaX² + sigmaY² + sigmaZ²) of the coordinates the node defines (the sigmas given by
-/// TRestTrackReductionProcess; 0 for tracks not reduced).
+/// without result, e.g. a single position; a continuous coordinate, as the drift distance, with
+/// gaussResolution: [X, Y, Z], 0 for the strips, default [0, 0, 0.1 mm]); Twist,
+/// TwistWeighted (TRestHitsAnalysis::GetTwist, GetTwistWeighted) and TwistLow, TwistHigh (lowest and
+/// highest twist of the first and last twistTailPercentage% of the hits); Size and MaxNodeSize: sum and
+/// maximum of the node sizes, sqrt(sigmaX² + sigmaY² + sigmaZ²) of the coordinates the node defines (the
+/// sigmas given by TRestTrackReductionProcess; 0 for tracks not reduced).
 ///
 /// Observables:
 /// * NTracks, TotalEnergy.
@@ -98,6 +99,7 @@ static const bool TRestTrackAnalysisProcess_FieldsRegistered = []() {
     using P = TRestTrackAnalysisProcess;
     reg.RegisterField<P>("projections", &P::fProjections);
     reg.RegisterField<P>("gaussFit", &P::fGaussFit);
+    reg.RegisterField<P>("gaussResolution", &P::fGaussResolution);
     reg.RegisterField<P>("twistTailPercentage", &P::fTwistTailPercentage);
     reg.RegisterField<P>("cutsEnabled", &P::fCutsEnabled);
     reg.RegisterField<P>("nTracksCut", &P::fNTracksCut);
@@ -371,7 +373,7 @@ TRestTrackAnalysisProcess::TrackObservables TRestTrackAnalysisProcess::GetHitsOb
                 values.push_back(hits.GetCoordinate(n, a));
                 energies.push_back(hits.GetEnergy(n));
             }
-            *gaussObs[a] = TRestHitsAnalysis::GetGaussSigma(values, energies);
+            *gaussObs[a] = TRestHitsAnalysis::GetGaussSigma(values, energies, fGaussResolution[a]);
         }
     }
 

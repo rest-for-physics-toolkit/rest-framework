@@ -261,6 +261,44 @@ TEST(HitsAnalysis, GaussSigma) {
     EXPECT_EQ(HA::GetGaussSigma({0, 0}, {10, 20}), -1);
     // Deterministic: the same value again
     EXPECT_EQ(HA::GetGaussSigma(stripValues, stripEnergies), HA::GetGaussSigma(stripValues, stripEnergies));
+    // A long track, as a muon along the drift: 600 positions of 0.1 mm, with a narrow gaussian (sigma 0.5 mm,
+    // only the strips near it evaluated) and a wide one (sigma 6 mm, each position with less than 1% of the
+    // total energy: the three positions needed are above 1% of the largest one). As strips and as a
+    // continuous coordinate (resolution 0.1 mm per position): sigma and the spread of the positions,
+    // sqrt(0.5^2 + 0.1^2 / 12)
+    const auto bin = [](double x, double sigma, double centre) {
+        const double scale = 1 / (sigma * std::sqrt(2.0));
+        return 1000 * 0.5 * (std::erf((x + 0.05 - centre) * scale) - std::erf((x - 0.05 - centre) * scale));
+    };
+    std::vector<double> longValues, narrowEnergies, wideTrackEnergies;
+    for (int n = 0; n < 600; n++) {
+        const double x = 0.1 * n + 0.05;
+        longValues.push_back(x);
+        narrowEnergies.push_back(bin(x, 0.5, 20.03));
+        wideTrackEnergies.push_back(bin(x, 6, 30.03));
+    }
+    EXPECT_NEAR(HA::GetGaussSigma(longValues, narrowEnergies), 0.5, 1e-3);
+    EXPECT_NEAR(HA::GetGaussSigma(longValues, wideTrackEnergies), 6, 1e-3);
+    EXPECT_NEAR(HA::GetGaussSigma(longValues, narrowEnergies, 0.1), std::sqrt(0.25 + 0.01 / 12), 1e-4);
+    EXPECT_NEAR(HA::GetGaussSigma(longValues, wideTrackEnergies, 0.1), 6, 1e-3);
+    // A continuous coordinate, a hit anywhere in each mm with the energy of the gaussian in that mm: sigma
+    // and the spread of the hits
+    std::vector<double> continuousValues, continuousEnergies;
+    const double scale6 = 1 / (6 * std::sqrt(2.0));
+    for (int n = 0; n < 60; n++) {
+        continuousValues.push_back(n + 0.5 + 0.4 * std::sin(1.7 * n));
+        continuousEnergies.push_back(1000 * 0.5 *
+                                     (std::erf((n + 1 - 30.03) * scale6) - std::erf((n - 30.03) * scale6)));
+    }
+    EXPECT_NEAR(HA::GetGaussSigma(continuousValues, continuousEnergies, 0.1), 6, 0.03);
+    // A point-like cloud, 7 hits of the same energy (RMS 0.17 mm), and a cloud with a hit of 80% of the
+    // energy (without the resolution, a sigma -> 0 on that hit): finite
+    std::vector<double> cloud = {-1.07, -0.57, -0.18, 0, 0.18, 0.57, 1.07};
+    for (auto& x : cloud) x = 5 + 0.25 * x;
+    EXPECT_NEAR(HA::GetGaussSigma(cloud, std::vector<double>(7, 100), 0.1), 0.1745, 1e-3);
+    const double dominant = HA::GetGaussSigma({5, 5.2, 5.3, 4.9}, {500, 50, 40, 30}, 0.1);
+    EXPECT_GT(dominant, 0.01);
+    EXPECT_LT(dominant, 0.2);
 }
 
 TEST(HitsAnalysis, Twist) {

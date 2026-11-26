@@ -511,7 +511,7 @@ are not migrated.
 | TRestDetectorElectronDiffusionProcess, TRestDetectorGarfieldDriftProcess | TRestDetectorHitsDriftProcess |
 | TRestDetectorFiducializationProcess | TRestDetectorHitsDriftProcess (hits outside the drift volume) |
 | TRestDetectorHitsNormalizationProcess, TranslationProcess, RotationProcess, SpecularProcess | TRestDetectorHitsTransformationProcess |
-| TRestDetectorHitsGaussAnalysisProcess, TRestDetectorHitsReadoutAnalysisProcess | Not migrated: TRestDetectorHitsAnalysisProcess (`gaussFit`, FiducialEnergy). GaussSigma: gaussian integrated over each strip (centre and sigma fitted, without Minuit), not evaluated at the strip centres; -1 with fewer than three strips with energy |
+| TRestDetectorHitsGaussAnalysisProcess, TRestDetectorHitsReadoutAnalysisProcess | Not migrated: TRestDetectorHitsAnalysisProcess (`gaussFit`, FiducialEnergy). GaussSigma: gaussian integrated over each strip (centre and sigma fitted, without Minuit), not evaluated at the strip centres; -1 with fewer than three strips with energy (1% of the largest); continuous coordinates (the drift) with a resolution per hit, `gaussResolution` (default [0, 0, 0.1 mm]) |
 | TRestDetectorHitmapAnalysisProcess | Not migrated: TRestDetectorHitsTransformationProcess + MeanX/Y/Z |
 | TRestDetectorHitsReductionProcess | Not migrated: TRestTrackReductionProcess |
 | TRestDetectorSingleChannelAnalysisProcess, TRestDetectorGainMap, TRestDetectorPositionMappingProcess | Not migrated: TRestDataSetGainMap |

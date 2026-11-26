@@ -578,7 +578,7 @@ std::pair<double, double> MinimizeOnInterval(const std::function<double(double)>
 }  // namespace
 
 double TRestHitsAnalysis::GetGaussSigma(const std::vector<double>& values,
-                                        const std::vector<double>& energies) {
+                                        const std::vector<double>& energies, double resolution) {
     if (values.empty()) return 0;
 
     // Energy of each position (several hits in a strip are added); positions closer than a millionth
@@ -595,52 +595,102 @@ double TRestHitsAnalysis::GetGaussSigma(const std::vector<double>& values,
     }
 
     double total = 0;
+    double largest = 0;
     double pitch = std::numeric_limits<double>::max();
     for (size_t n = 0; n < positions.size(); n++) {
         total += positions[n].second;
+        largest = std::max(largest, positions[n].second);
         if (n > 0) pitch = std::min(pitch, positions[n].first - positions[n - 1].first);
     }
     if (!(total > 0)) return -1;
-    // With two strips any sigma below the pitch fits (the centre moving with it): three are needed
+    // With two positions any sigma below the pitch fits (the centre moving with it): three with more than
+    // 1% of the energy of the largest one are needed
     const auto significant = std::count_if(positions.begin(), positions.end(),
-                                           [total](const auto& p) { return p.second > 0.01 * total; });
+                                           [largest](const auto& p) { return p.second > 0.01 * largest; });
     if (significant < 3) return -1;
     const double xMin = positions.front().first;
     const double xMax = positions.back().first;
 
-    // Strips of width pitch from one before the first to one after the last (0 where there is no hit)
-    const long nStrips = std::lround((xMax - xMin) / pitch) + 3;
-    if (nStrips > 100000) return -1;
-    std::vector<double> stripEnergy(nStrips, 0);
-    for (const auto& [x, e] : positions) stripEnergy[std::lround((x - xMin) / pitch) + 1] += e;
-
-    // Least squares of the energies against the gaussian of integral total integrated over each strip
-    const double halfPitch = pitch / 2;
-    const auto chi2 = [&](double mean, double sigma) {
-        const double scale = 1 / (sigma * std::sqrt(2.0));
-        double sum = 0;
+    // Least squares of the energies against the gaussian of integral total, as a function of its centre
+    // and sigma. The width of a position: the pitch (strips) or the resolution (continuous)
+    const bool continuous = resolution > 0;
+    const double width = continuous ? resolution : pitch;
+    std::function<double(double, double)> chi2;
+    std::vector<double> stripEnergy;
+    std::vector<double> cumulativeE2;
+    if (continuous) {
+        // A continuous coordinate (e.g. the drift distance, from the time of each pulse) has no strips:
+        // with strips of width -> 0 a position with a third of the energy is fitted by sigma -> 0, so the
+        // positions and the gaussian are both smoothed with a gaussian of width resolution (r). The least
+        // squares of the smoothed densities, up to a constant, with s1 = sqrt(sigma^2 + r^2) and
+        // s2 = sqrt(sigma^2 + 2 r^2):
+        //   total^2 / (2 sqrt(pi) s1) - 2 total sum_i e_i exp(-(x_i - mean)^2 / (2 s2^2)) / (sqrt(2 pi) s2)
+        // sigma is the width of the distribution (without the resolution); the time of each evaluation
+        // depends on the number of positions only
+        chi2 = [&positions, total, resolution](double mean, double sigma) {
+            const double s1 = std::sqrt(sigma * sigma + resolution * resolution);
+            const double s2 = std::sqrt(sigma * sigma + 2 * resolution * resolution);
+            double sum = 0;
+            for (const auto& [x, e] : positions) {
+                const double d = (x - mean) / s2;
+                sum += e * std::exp(-0.5 * d * d);
+            }
+            constexpr double kPi = 3.14159265358979323846;
+            return total * total / (2 * std::sqrt(kPi) * s1) - 2 * total * sum / (std::sqrt(2 * kPi) * s2);
+        };
+    } else {
+        // Strips of width pitch from one before the first to one after the last (0 where there is no hit).
+        // Strip k covers [xMin + (k - 1.5) pitch, xMin + (k - 0.5) pitch]; the energy expected in it is the
+        // gaussian integrated over it. The strips farther than kTail sigmas from the centre expect no energy
+        // (less than 1e-18 of it): they add their energy squared, from cumulative sums, and only the strips
+        // near the centre are evaluated, each edge once (the upper edge of a strip is the lower edge of the
+        // next), in a time that depends on sigma / pitch, not on the extent
+        const long nStrips = std::lround((xMax - xMin) / pitch) + 3;
+        if (nStrips > 100000) return -1;
+        stripEnergy.assign(nStrips, 0);
+        for (const auto& [x, e] : positions) stripEnergy[std::lround((x - xMin) / pitch) + 1] += e;
+        cumulativeE2.assign(nStrips + 1, 0);
         for (long k = 0; k < nStrips; k++) {
-            const double x = xMin + (k - 1) * pitch - mean;
-            const double expected =
-                total * 0.5 * (std::erf((x + halfPitch) * scale) - std::erf((x - halfPitch) * scale));
-            sum += (stripEnergy[k] - expected) * (stripEnergy[k] - expected);
+            cumulativeE2[k + 1] = cumulativeE2[k] + stripEnergy[k] * stripEnergy[k];
         }
-        return sum;
-    };
+        chi2 = [&stripEnergy, &cumulativeE2, nStrips, xMin, pitch, total](double mean, double sigma) {
+            constexpr double kTail = 9;
+            const double scale = 1 / (sigma * std::sqrt(2.0));
+            const double reach = kTail * sigma;
+            const double low = std::floor((mean - reach - xMin) / pitch + 0.5);
+            const double high = std::ceil((mean + reach - xMin) / pitch + 1.5);
+            const long first = std::clamp(static_cast<long>(low), 0L, nStrips - 1);
+            const long last = std::clamp(static_cast<long>(high), first, nStrips - 1);
+            double sum = cumulativeE2[first] + (cumulativeE2[nStrips] - cumulativeE2[last + 1]);
+            double lowerErf = std::erf((xMin + (first - 1.5) * pitch - mean) * scale);
+            for (long k = first; k <= last; k++) {
+                const double upperErf = std::erf((xMin + (k - 0.5) * pitch - mean) * scale);
+                const double expected = total * 0.5 * (upperErf - lowerErf);
+                sum += (stripEnergy[k] - expected) * (stripEnergy[k] - expected);
+                lowerErf = upperErf;
+            }
+            return sum;
+        };
+    }
 
-    // For each sigma (in log, from pitch / 100 to the extent) the best centre, within the strips
-    const double extent = xMax - xMin + 2 * pitch;
+    // For each sigma (in log, from width / 100 to the extent) the best centre, within the positions and
+    // half a strip (or a resolution) beyond them. The golden section search after each scan (two scan
+    // steps, divided by 0.618 at each step) ends within 1e-6 of the interval scanned
+    constexpr int nScan = 40;
+    constexpr int nGolden = 25;
+    const double margin = continuous ? resolution : pitch / 2;
+    const double extent = xMax - xMin + 2 * width;
     const auto bestForSigma = [&](double logSigma) {
         const double sigma = std::exp(logSigma);
         int best = 0;
-        return MinimizeOnInterval([&](double mean) { return chi2(mean, sigma); }, xMin - halfPitch,
-                                  xMax + halfPitch, 40, 40, best)
+        return MinimizeOnInterval([&](double mean) { return chi2(mean, sigma); }, xMin - margin,
+                                  xMax + margin, nScan, nGolden, best)
             .second;
     };
-    constexpr int nScan = 40;
+    const double logMin = std::log(width / 100);
+    const double logMax = std::log(extent);
     int best = 0;
-    const double logSigma =
-        MinimizeOnInterval(bestForSigma, std::log(pitch / 100), std::log(extent), nScan, 40, best).first;
+    const double logSigma = MinimizeOnInterval(bestForSigma, logMin, logMax, nScan, nGolden, best).first;
     // At the extent: the energy does not decrease away from the centre (no gaussian)
     if (best == nScan) return -1;
     return std::exp(logSigma);

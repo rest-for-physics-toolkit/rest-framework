@@ -101,5 +101,6 @@ manager:
       projections: ["XZ", "YZ"]
       nTracksCut: [1, 10]
       gaussFit: true
+      gaussResolution: [0, 0, 0.1 mm]  # X, Y: the strips; Z (drift): continuous, 0.1 mm per hit
       observables:
         - "all"

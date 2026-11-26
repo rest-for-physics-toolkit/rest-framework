@@ -1,6 +1,7 @@
 #ifndef TRESTTRACKANALYSISPROCESS_H
 #define TRESTTRACKANALYSISPROCESS_H
 
+#include <array>
 #include <string>
 #include <utility>
 #include <vector>
@@ -97,6 +98,10 @@ class TRestTrackAnalysisProcess : public TRestEventProcess {
 
     /// If true, the gaussian sigmas are computed (a fit per coordinate and track); otherwise they are 0
     bool fGaussFit = false;
+
+    /// Gaussian fits along X, Y and Z: 0, strips (of width the smallest distance between positions); > 0,
+    /// a continuous coordinate with this resolution of each position, as the drift (0.1 mm by default)
+    std::array<TRestWithUnits, 3> fGaussResolution = {0.0, 0.0, 0.1};
 
     /// Percentage of the hits at each end of a track used for TwistLow and TwistHigh
     double fTwistTailPercentage = 20;

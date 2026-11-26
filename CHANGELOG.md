@@ -29,6 +29,11 @@ releases); the notes of the GitHub release list its pull requests.
   displacement, drift time, spread) and the macro `REST_Garfield_DrawDriftResponse` draws it; counts stored
   as 16-bit integers with LZMA compression (`electrons` at most 65535). Response files computed before must
   be computed again.
+- Gaussian sigma of tracks and hits (`gaussFit`): the drift coordinate is fitted as continuous, with a
+  resolution per hit (`gaussResolution`, default [0, 0, 0.1 mm]: the strips along X and Y), instead of
+  strips as wide as the smallest distance between hits (slow on long tracks); three positions with more
+  than 1% of the energy of the largest one (not of the total: long tracks fit); the strip fit evaluates
+  only the strips near the centre (faster, same results).
 
 ## 3.0.0 (2026-11-24)
 

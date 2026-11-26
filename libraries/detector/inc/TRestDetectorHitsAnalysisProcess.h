@@ -58,6 +58,9 @@ class TRestDetectorHitsAnalysisProcess : public TRestEventProcess {
 
     /// GaussSigmaX/Y/Z from gaussian fits (slow), otherwise 0
     bool fGaussFit = false;
+    /// Gaussian fits along X, Y and Z: 0, strips (of width the smallest distance between positions); > 0,
+    /// a continuous coordinate with this resolution of each position, as the drift (0.1 mm by default)
+    std::array<TRestWithUnits, 3> fGaussResolution = {0.0, 0.0, 0.1};
 
     /// Fiducial cylinder for FiducialEnergy: center, axis direction, radius (0: none) and length along the
     /// axis, centered on the center (0: infinite)
