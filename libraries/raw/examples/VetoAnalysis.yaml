@@ -4,6 +4,9 @@
 # 2. baseLineCorrection: baseline of the veto signals as a moving average (optional).
 # 3. vetoAna: one entry per veto signal: vetoAna_SignalsID, vetoAna_AmpSgnMaxMethod (legacy
 #    MaxPeakAmplitude), vetoAna_PeakTime (legacy PeakTime) and vetoAna_PointsOverThr.
+# 4. vetoPeaks: all the peaks of the veto signals over 5 sigmas of the baseline of each signal (no threshold
+#    in ADC: vetoes with different gains alike, legacy TRestRawPeaksFinderProcess), and their coincidence
+#    windows: vetoPeaks_PeaksSignalID, _PeaksTime (bins), _PeaksAmplitude, _WindowTime...
 # The detector is analysed in another run on the same input, removing the veto signals (as legacy did):
 #   removeVeto: {class: "TRestRawSignalChannelSelectionProcess", removeChannelRange: [[288, 346]]}
 # and both analysis trees are combined by event ID.
@@ -11,6 +14,8 @@
 #   MaxPeakAmplitude (0 under threshold):  vetoAna_AmpSgnMaxMethod * (vetoAna_PointsOverThr >= 4)
 #   VetoAboveThreshold / NvetoAboveThreshold:  Any(vetoAna_AmpSgnMaxMethod > 500) / Sum(... > 500)
 #   VetoInTimeWindow / NVetoInTimeWindow:  Sum(vetoAna_PeakTime > 100 && vetoAna_PeakTime < 300) (> 0)
+#   peaks in a time window (any amplitude over the noise):  Sum(vetoPeaks_PeaksTime > 100 &&
+#                                                               vetoPeaks_PeaksTime < 300) > 0
 #   group (vetoGroup):  vetoAna_AmpSgnMaxMethod[vetoAna_SignalsID >= 288 && vetoAna_SignalsID <= 299]
 manager:
   class: "TRestManager"
@@ -51,3 +56,13 @@ manager:
       signalThreshold: 1.5
       pointsOverThreshold: 4
       observables: ["SignalsID", "AmpSgnMaxMethod", "PeakTime", "PointsOverThr"]
+
+    vetoPeaks:
+      class: "TRestRawSignalPeaksFinderProcess"
+      name: "vetoPeaks"
+      baselineRange: [5, 55]
+      baselineOption: "robust"
+      sigmaThreshold: 5
+      distance: 10
+      window: 20
+      observables: ["all"]

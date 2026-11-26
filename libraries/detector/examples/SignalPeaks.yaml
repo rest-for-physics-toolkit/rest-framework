@@ -32,3 +32,4 @@ manager:
       refineMaximum: true
       amplitudeHalfWindow: 1
       window: 200ns
+      observables: ["all"]
