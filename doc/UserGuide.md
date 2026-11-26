@@ -689,9 +689,9 @@ restManager --c libraries/track/examples/TrackLinePlots.yaml --i "R*_LINEAR.root
 | `panels` | Text panels: `labels` (`text`, `position`), `textSize`, `precision`, `cuts`. |
 | `plots` | Plots: `name`, `title`, `xLabel`, `yLabel`, `logX/Y/Z`, `legend`, `timeDisplay`, `normalize`, `scale`, `save`... and `histos` (`name`, `variables`, `cuts`, `option`, colours and styles). |
 
-Labels are texts with `{expression|format}`: `entries`, `runLength` (hours), `meanRate` (Hz), `startTime`,
-`endTime`, `cuts`, `run.key` (e.g. `run.runTag`, `run.runInfo.meshVoltage`), `instance.key` (any metadata of
-the first file), `mean/sigma/min/max(observable)` and arithmetic of them. Histogram variables are observables
+Labels are texts with `{expression|format}`: `entries`, `allEntries` (global cuts only, e.g.
+`{entries/allEntries}`), `runLength` (hours), `meanRate` (Hz), `startTime`, `endTime`, `cuts`, `run.key`
+(e.g. `run.runTag`, `run.runInfo.meshVoltage`), `instance.key` (any metadata of the first file), `mean/sigma/min/max(observable)` and arithmetic of them. Histogram variables are observables
 or C++ expressions of them; vector observables fill one entry per element. Ranges accept units:
 
 ```yaml

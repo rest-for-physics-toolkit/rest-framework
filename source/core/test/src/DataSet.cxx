@@ -272,12 +272,15 @@ TEST(AnalysisPlot, HistogramsPanelAndOutputFile) {
     YAML::Node config = YAML::Load(R"(
 class: TRestAnalysisPlot
 previewPlot: false
-canvasDivisions: [2, 1]
+canvasDivisions: [3, 1]
 panels:
   - labels:
       - {text: "Entries {entries}", position: [0.1, 0.8]}
       - {text: "Mean {mean(ana_energy)|%.1f}", position: [0.1, 0.6]}
       - {text: "Tag {run.runTag}", position: [0.1, 0.4]}
+  - cuts: [high]
+    labels:
+      - {text: "Fraction {entries/allEntries|%.2f}", position: [0.1, 0.8]}
 plots:
   - name: energy
     legend: true
@@ -309,7 +312,7 @@ plots:
     ASSERT_NE(canvas, nullptr);
     std::vector<std::string> texts;
     CollectTexts(canvas, texts);
-    for (const std::string text : {"Entries 5", "Mean 30.0", "Tag Test"}) {
+    for (const std::string text : {"Entries 5", "Mean 30.0", "Tag Test", "Fraction 0.60"}) {
         EXPECT_NE(std::find(texts.begin(), texts.end(), text), texts.end()) << text;
     }
 }

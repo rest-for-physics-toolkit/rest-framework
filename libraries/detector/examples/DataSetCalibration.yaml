@@ -42,7 +42,10 @@ manager:
         - {energy: "2.9 keV"}
 
     # Calibration by segments of the readout of the dataset (its TRestDetectorReadoutManager):
-    # gainMap_Energy and gainMap_EnergyNoSegmentation
+    # gainMap_Energy and gainMap_EnergyNoSegmentation. Computed here with the usual calibration to show and
+    # test the process (pipeline test PipelinesLong.IAXODataSetChain); a gain map is usually computed apart,
+    # from a special run with a large statistics over the whole readout (each segment needs its peaks), and
+    # applied to the other datasets as its reference
     gainMap:
       class: "TRestDataSetGainMap"
       referenceFileName: "Dataset_Calibration.root"

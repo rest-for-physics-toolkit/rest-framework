@@ -34,8 +34,9 @@
 /// names, besides the global ones), enabled (true) and `labels`: list of text and position ([x, y] in
 /// pad coordinates). In the text, each {expression|format} is replaced by its value; the format is
 /// optional, printf style (%.2f) or a number of significant digits. In the expression:
-/// * entries, runLength (hours, from the start and end time of each run, not affected by the cuts;
-///   without them, from the first and last timeSeconds), meanRate (Hz),
+/// * entries, allEntries (with the global cuts only, e.g. {entries/allEntries} is the fraction of the
+///   events that pass the cuts of the panel), runLength (hours, from the start and end time of each run,
+///   not affected by the cuts; without them, from the first and last timeSeconds), meanRate (Hz),
 ///   startTime and endTime (dates), cuts (expression of the cuts of the panel);
 /// * run.key (TRestRunInfo of the first run, e.g. run.runTag, and its runInfo, e.g. run.runInfo.meshVoltage)
 ///   and instance.key... (any metadata of the first file, e.g. medium.charge.driftField);
@@ -306,8 +307,11 @@ class Evaluator {
    private:
     static std::string Number(double value) {
         char buffer[64];
-        std::snprintf(buffer, sizeof(buffer), "(%.17g)", value);
-        return buffer;
+        std::snprintf(buffer, sizeof(buffer), "%.17g", value);
+        std::string number = buffer;
+        // A double literal: TFormula compiles the expression as C++, (3)/(5) would be an integer division
+        if (std::isfinite(value) && number.find_first_of(".e") == std::string::npos) number += ".";
+        return "(" + number + ")";
     }
 
     /// Text of a variable or a metadata reference (instance.key...), nullopt if none
@@ -739,6 +743,7 @@ void TRestAnalysisPlot::DrawFrame(ROOT::RDF::RNode frame, const std::map<std::st
     global.metadata = &metadata;
     global.run.reset(run);
     global.numbers["entries"] = *totalEntries;
+    global.numbers["allEntries"] = *totalEntries;
     global.numbers["runLength"] = duration / 3600.;
     global.numbers["meanRate"] = duration > 0 ? *totalEntries / duration : 0;
     global.texts["startTime"] = TRestTools::GetTimeStampFromUnixTime(startTime);
