@@ -38,9 +38,11 @@ releases); the notes of the GitHub release list its pull requests.
   strips as wide as the smallest distance between hits (slow on long tracks); three positions with more
   than 1% of the energy of the largest one (not of the total: long tracks fit); the strip fit evaluates
   only the strips near the centre (faster, same results).
-- TRestRawSignalPeaksFinderProcess: all the peaks of raw signals over a threshold in sigmas of the
-  baseline of each signal, and their coincidence windows, so channels with different gains (e.g. vetoes)
-  need no threshold in ADC nor a calibration.
+- TRestDataSetSignalSelection: `applyCuts` (false by default): the cuts select the events of the reference
+  only, unless `applyCuts` is true or the reference is the processed dataset itself (e.g. a fiducial cut
+  of the calibration does not restrict the background).
+- TRestRawToDetectorSignalProcess: `keepEmptyEvents` keeps the events without signals (e.g. vetoes without
+  any pulse), so the output has an entry per input event.
 
 ## 3.0.0 (2026-11-24)
 
