@@ -99,11 +99,17 @@ inline std::map<std::string, std::pair<Physical_Unit, double>> REST_Units_Map = 
     {"arcmin", {Angle, TMath::DegToRad() / 60.}},
     {"arcsec", {Angle, TMath::DegToRad() / 3600.}},
 
-    // ================== Frequency (base = MHz = 1/us, the inverse of the time unit) ==================
+    // ======== Frequency and activity (base = MHz = 1/us, the inverse of the time unit) ========
     {"Hz", {Frequency, 1e-6}},
     {"kHz", {Frequency, 1e-3}},
     {"MHz", {Frequency, 1.}},  // base
     {"GHz", {Frequency, 1e3}},
+    // Activity: decays per second, as Hz
+    {"uBq", {Frequency, 1e-12}},
+    {"mBq", {Frequency, 1e-9}},
+    {"Bq", {Frequency, 1e-6}},
+    {"kBq", {Frequency, 1e-3}},
+    {"MBq", {Frequency, 1.}},
 };
 
 /// \brief Factor to REST units of a units expression (e.g. "kV/cm", "keV^2"); 1 if empty. Throws

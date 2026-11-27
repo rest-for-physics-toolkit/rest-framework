@@ -234,8 +234,8 @@ class TRestDataSet : public TRestMetadata {
     std::vector<std::optional<std::string>> GetRunParameter(const std::string& name) const;
     /// \brief Sum of endTime - startTime of the runs, in seconds
     double GetTotalTime() const;
-    /// \brief Sum of the simulatedTime of the runs (the time the simulations represent), in seconds
-    double GetTotalSimulatedTime() const;
+    /// \brief Sum of the exposureTime of the runs (the real time the simulations represent), in seconds
+    double GetTotalExposureTime() const;
     /// \brief Earliest startTime of the runs
     double GetStartTime() const;
     /// \brief Latest endTime of the runs

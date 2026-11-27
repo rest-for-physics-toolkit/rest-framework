@@ -29,7 +29,7 @@ static const bool TRestRunInfo_FieldsRegistered = []() {
     reg.RegisterField<TRestRunInfo>("startTime", &TRestRunInfo::fStartTime);
     reg.RegisterField<TRestRunInfo>("endTime", &TRestRunInfo::fEndTime);
     reg.RegisterField<TRestRunInfo>("entriesSaved", &TRestRunInfo::fEntriesSaved);
-    reg.RegisterField<TRestRunInfo>("simulatedTime", &TRestRunInfo::fSimulatedTime);
+    reg.RegisterField<TRestRunInfo>("exposureTime", &TRestRunInfo::fExposureTime);
 
     return true;
 }();

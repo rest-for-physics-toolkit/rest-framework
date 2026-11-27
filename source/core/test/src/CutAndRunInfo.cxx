@@ -139,15 +139,15 @@ TEST(RunInfo, SettersAndParameters) {
     info.SetStartTimeStamp(100);
     info.SetEndTimeStamp(200);
     info.SetEntriesSaved(42);
-    EXPECT_DOUBLE_EQ(info.GetSimulatedTime(), 0);  // data
-    info.SetSimulatedTime(3600);
+    EXPECT_DOUBLE_EQ(info.GetExposureTime(), 0);  // data
+    info.SetExposureTime(3600);
     // GetParameters reads the members, not the node
     const YAML::Node parameters = info.GetParameters();
     EXPECT_EQ(parameters["runNumber"].as<int>(), 7);
     EXPECT_EQ(parameters["runTag"].as<std::string>(), "Background");
     EXPECT_DOUBLE_EQ(parameters["endTime"].as<double>(), 200.);
     EXPECT_EQ(parameters["entriesSaved"].as<long long>(), 42);
-    EXPECT_DOUBLE_EQ(parameters["simulatedTime"].as<double>(), 3600.);
+    EXPECT_DOUBLE_EQ(parameters["exposureTime"].as<double>(), 3600.);
     EXPECT_EQ(info.GetParameter("runTag"), "Background");
 }
 

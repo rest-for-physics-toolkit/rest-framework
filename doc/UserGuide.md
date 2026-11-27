@@ -147,8 +147,8 @@ darkCountRate: 100 kHz   # 0.1 (MHz, per us)
 
 Units of each quantity: `meV eV keV MeV GeV TeV J kJ`, `ns us ms s hr day yr`, `nm um mm cm m km`,
 `mg g kg ton`, `mV V kV`, `mT T G`, `bar mbar atm Pa kPa MPa torr`, `rad deg degree arcmin arcsec`,
-`Hz kHz MHz GHz`, and expressions of them (`kV/cm`, `mm/us`). A number without units is taken in REST
-units. The list is in [TRestSystemOfUnits.h](../source/tools/inc/TRestSystemOfUnits.h).
+`Hz kHz MHz GHz` (activities `uBq mBq Bq kBq MBq`, the same), and expressions of them (`kV/cm`, `mm/us`).
+A number without units is taken in REST units. The list is in [TRestSystemOfUnits.h](../source/tools/inc/TRestSystemOfUnits.h).
 
 ### 2.3 Parameters (`parameters`, `${PARAM:name}`, `--set`)
 
@@ -563,7 +563,7 @@ run:
 | `runInfo` | user | Map key: value (e.g. voltages, gain), stored as written; read in REST units with `GetParameterValue("runInfo.meshVoltage")`. |
 | `startTime`, `endTime` | REST | Start and end of the data taking, unix time in seconds. |
 | `entriesSaved` | REST | Entries written in the file. |
-| `simulatedTime` | REST | Time (s) a simulation represents, to normalize to a rate: written by restG4 for the cosmic and cry generators (0 for data and other simulations), kept by the runs processed from it. |
+| `exposureTime` | REST | Exposure (s): the real time a simulation represents (not its computing time), to normalize to a rate: written by restG4 for the cosmic and cry generators (0 for data and other simulations), kept by the runs processed from it. |
 | `mergedSubRuns` | REST | Subruns of a file merged with `REST_MergeRuns` (empty for a single subrun). |
 | `outputEvent` | REST | Last event type saved, selected when the file is opened. |
 | `codeVersion`, `codeCommit`, `codeClean` | REST | Code that wrote the file: the version (`VERSION` of the project), the commit of the build ("unknown" without git) and whether it had no uncommitted changes. Read from the run of an input file, not inherited; never checked. |
@@ -630,7 +630,7 @@ root [1] REST_MergeRuns("Simulation_seed*.root", "Simulation.root")
 - **Subruns of a run**: the files must have the same `runNumber`, consecutive `subRunNumber` (also of files
   already merged), the same trees and branches and the same processing (all the metadata but the `TRestRun`).
   The merged `TRestRun` has the first `subRunNumber`, `mergedSubRuns` with all of them, the earliest
-  `startTime`, the latest `endTime` and the sums of `entriesSaved` and `simulatedTime`; `codeVersion`,
+  `startTime`, the latest `endTime` and the sums of `entriesSaved` and `exposureTime`; `codeVersion`,
   `codeCommit` and `codeClean` are those of the first subrun (the code that wrote the data).
 - **Simulations** (files with a `TRestGeant4Metadata`) of the same configuration with different seeds (e.g.
   parallel `restG4 -s` jobs) are merged as one simulation: `nEvents` (and the CRY exposure) are added, a
@@ -691,8 +691,8 @@ restManager --c libraries/track/examples/TrackLinePlots.yaml --i "R*_LINEAR.root
 | `plots` | Plots: `name`, `title`, `xLabel`, `yLabel`, `logX/Y/Z`, `legend`, `timeDisplay`, `normalize`, `scale`, `save`... and `histos` (`name`, `variables`, `cuts`, `option`, colours and styles). |
 
 Labels are texts with `{expression|format}`: `entries`, `allEntries` (global cuts only, e.g.
-`{entries/allEntries}`), `runLength` (hours), `simulatedTime` (hours, the sum of the `simulatedTime` of
-the runs: the time simulations of cosmic rays represent), `meanRate` (Hz), `startTime`, `endTime`, `cuts`, `run.key`
+`{entries/allEntries}`), `runLength` (hours), `exposureTime` (hours, the sum of the `exposureTime` of
+the runs: the real time simulations of cosmic rays represent), `meanRate` (Hz), `startTime`, `endTime`, `cuts`, `run.key`
 (e.g. `run.runTag`, `run.runInfo.meshVoltage`), `instance.key` (any metadata of the first file), `mean/sigma/min/max(observable)` and arithmetic of them. Histogram variables are observables
 or C++ expressions of them; vector observables fill one entry per element. Ranges accept units:
 

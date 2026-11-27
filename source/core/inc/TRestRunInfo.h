@@ -31,7 +31,7 @@
 ///   runInfo:
 ///     meshVoltage: 300 V
 ///     driftVoltage: 1000 V
-///   # mergedSubRuns, startTime, endTime, entriesSaved and simulatedTime are written by REST
+///   # mergedSubRuns, startTime, endTime, entriesSaved and exposureTime are written by REST
 /// \endcode
 ///
 /// \author Igor G. Irastorza
@@ -55,10 +55,11 @@ class TRestRunInfo : public TRestMetadata {
     double fStartTime = 0;        ///< Start timestamp of the run, unix time in seconds (`startTime`).
     double fEndTime = 0;          ///< End timestamp of the run, unix time in seconds (`endTime`).
     long long fEntriesSaved = 0;  ///< Number of entries saved in the run file (`entriesSaved`).
-    /// Time (s) a simulation represents (`simulatedTime`), to normalize to a rate: written by restG4 (the
-    /// equivalent simulated time of the cosmic and cry generators, TRestGeant4Metadata), kept by the runs
-    /// processed from it and summed by REST_MergeRuns; 0 for data and the other simulations
-    double fSimulatedTime = 0;
+    /// Exposure of a simulation (`exposureTime`, s): the real time it represents (not its computing time), to
+    /// normalize to a rate: written by restG4 (TRestGeant4Metadata::GetEquivalentExposureTime, cosmic and cry
+    /// generators), kept by the runs processed from it and summed by REST_MergeRuns; 0 for data (their time
+    /// is endTime - startTime) and the other simulations
+    double fExposureTime = 0;
 
     /// \brief Default constructor.
     TRestRunInfo() = default;
@@ -98,7 +99,7 @@ class TRestRunInfo : public TRestMetadata {
     double GetStartTime() const { return fStartTime; }           ///< Start timestamp (unix seconds).
     double GetEndTime() const { return fEndTime; }               ///< End timestamp (unix seconds).
     long long GetEntriesSaved() const { return fEntriesSaved; }  ///< Entries saved in the run file.
-    double GetSimulatedTime() const { return fSimulatedTime; }   ///< Time a simulation represents (s).
+    double GetExposureTime() const { return fExposureTime; }     ///< Exposure of a simulation (s).
 
     /// \name Setters
     /// The setters change the members only, not the YAML node (GetParameters reads the members).
@@ -113,7 +114,7 @@ class TRestRunInfo : public TRestMetadata {
     void SetStartTimeStamp(double v) { fStartTime = v; }                   ///< Sets the start time (unix s).
     void SetEndTimeStamp(double v) { fEndTime = v; }                       ///< Sets the end time (unix s).
     void SetEntriesSaved(long long v) { fEntriesSaved = v; }               ///< Sets the saved entries.
-    void SetSimulatedTime(double v) { fSimulatedTime = v; }  ///< Sets the time a simulation represents (s).
+    void SetExposureTime(double v) { fExposureTime = v; }  ///< Sets the exposure of a simulation (s).
     ///@}
 
     /// \brief Parameters of the run (the fields of TRestRunInfo, current values; also for a TRestRun, without

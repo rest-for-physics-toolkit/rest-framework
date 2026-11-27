@@ -9,6 +9,8 @@ static const bool TRestGeant4PrimaryGeneratorInfo_FieldsRegistered = []() {
     reg.RegisterField<TRestGeant4PrimaryGeneratorInfo>(
         "spatialDensityFunction", &TRestGeant4PrimaryGeneratorInfo::fSpatialDensityFunction);
     reg.RegisterField<TRestGeant4PrimaryGeneratorInfo>("source", &TRestGeant4PrimaryGeneratorInfo::fSources);
+    reg.RegisterField<TRestGeant4PrimaryGeneratorInfo>("activity",
+                                                       &TRestGeant4PrimaryGeneratorInfo::fActivity);
     return true;
 }();
 
@@ -64,6 +66,12 @@ void TRestGeant4PrimaryGeneratorInfo::LoadConfig() {
         throw runtime_error(GetClassName() +
                             ": 'spatialDensityFunction' needs a volume or surface generator");
     }
+    if (fActivity < 0) throw runtime_error(GetClassName() + ": 'activity' must be positive");
+    if (fActivity > 0 && (IsCosmic() || IsCRY())) {
+        throw runtime_error(GetClassName() +
+                            ": 'activity' is not used by the cosmic and cry generators (their exposure is "
+                            "computed from their flux)");
+    }
     if (IsCosmic() && (fSources.size() != 1 || fSources[0].IsDecay0())) {
         throw runtime_error(GetClassName() +
                             ": the cosmic generator needs a single source, not a Decay0 one");
@@ -80,7 +88,7 @@ void TRestGeant4PrimaryGeneratorInfo::LoadDistributions(long seed) {
     for (auto& source : fSources) source.LoadDistributions();
     // The cosmic generator (a single source): the flux of its source, to normalize to a time
     if (auto* cosmic = dynamic_cast<TRestGeant4SpatialGeneratorCosmic*>(fSpatialGenerator.get())) {
-        if (fSources.size() == 1) cosmic->SetFlux(fSources[0].GetJointIntegral());
+        if (fSources.size() == 1) cosmic->SetFlux(fSources[0].GetFlux());
     }
     if (auto* cry = dynamic_cast<TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get())) cry->Start(seed);
 }

@@ -233,8 +233,9 @@ class TRestGeant4Metadata : public TRestMetadata {
     /// Time before simulation is ended and saved (wall time in seconds, 0: no limit)
     double fSimulationMaxTimeSeconds = 0.0;
 
-    /// The time, in seconds, that the simulation took to complete (wall time)
-    double fSimulationTime = 0.0;
+    /// The computing time of the simulation (s, wall clock of restG4; `computingTime`, written by restG4),
+    /// not the time it represents (the exposure, GetEquivalentExposureTime)
+    double fComputingTime = 0.0;
 
     /// The seed value used for Geant4 random event generator (0 in the YAML: a random one)
     long fSeed = 0;
@@ -523,16 +524,18 @@ class TRestGeant4Metadata : public TRestMetadata {
     }
     /// \brief cosmic generator: the time (us) the output represents, GetEquivalentNumberOfEvents / (flux of
     /// its source * GetCosmicGeneratorSurfaceCm2); 0 without the flux (not cosmic, or a source that is not a
-    /// distribution of energy and angle, see TRestGeant4ParticleSource::GetJointIntegral)
+    /// distribution of energy and angle, see TRestGeant4ParticleSource::GetFlux)
     double GetCosmicExposureTime() const;
-    /// \brief The time (us) the output represents, to normalize to a rate: GetEquivalentCRYExposureTime (cry
-    /// generator), GetCosmicExposureTime (cosmic generator), 0 for the other generators (e.g. the decays of
-    /// a contamination: normalized with its activity)
-    double GetEquivalentSimulatedTime() const;
-    /// \brief Wall time of the simulation (s)
-    inline double GetSimulationWallTime() const { return fSimulationTime; }
-    /// \brief Sets the wall time of the simulation (s)
-    inline void SetSimulationWallTime(double time) { fSimulationTime = time; }
+    /// \brief The exposure (us): the real time the output represents, to normalize to a rate (not the
+    /// computing time, GetComputingTime): GetEquivalentCRYExposureTime (cry generator), GetCosmicExposureTime
+    /// (cosmic generator) or, for the other generators, GetEquivalentNumberOfEvents over the `activity` of
+    /// the generator (e.g. the decays of a contamination); 0 if it cannot be computed (no activity, or a
+    /// cosmic source that is not a flux)
+    double GetEquivalentExposureTime() const;
+    /// \brief Computing time of the simulation (s, wall clock of restG4)
+    inline double GetComputingTime() const { return fComputingTime; }
+    /// \brief Sets the computing time of the simulation (s), also in the YAML node to be stored
+    void SetComputingTime(double time);
 
     /// \brief Index of an active physical volume in the active volume list (-1 if not active)
     int GetActiveVolumeID(const std::string& name);

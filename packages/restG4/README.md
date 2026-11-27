@@ -195,6 +195,12 @@ the output represents `biasingTotalFactor` times the statistics of the primaries
   of the source). The completed fraction is 1 when all the stages were completed, the fraction of the last stage
   simulated when it was stopped early (`-e`, `--time`), and 0 if the simulation was stopped before the last stage.
   With the `cry` generator, `GetEquivalentCRYExposureTime()` is the exposure the output represents.
+- `GetEquivalentExposureTime()`: the exposure, the real time the output represents (not the computing time,
+  `computingTime`): that of CRY (`cry`), the events / (flux x surface) of the `cosmic` generator (the flux of
+  its source, from the units of its histogram, the title of its z axis: counts / s / cm2 per bin or per eV,
+  keV, MeV or GeV; not computed without them), or the events / `activity` of the other generators (e.g.
+  `activity: 10 mBq`, the decays of a contamination); 0 if it cannot be computed. restG4 writes it in the run
+  (`exposureTime`, seconds), used by the datasets and `TRestAnalysisPlot` for the rates.
 
 Without `biasingVolumes` restG4 runs as before (a single stage), the equivalent number of events is `nEvents` and
 the weight 1. The time limit (`--time`) is for the whole simulation; if it is reached (or CTRL-C) before the last

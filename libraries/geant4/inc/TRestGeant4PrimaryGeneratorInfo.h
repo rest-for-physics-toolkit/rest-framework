@@ -15,8 +15,11 @@
 /// \class TRestGeant4PrimaryGeneratorInfo
 /// \brief The `generator` section of TRestGeant4Metadata: the spatial generator (its `type` selects a
 /// TRestGeant4SpatialGenerator, which reads its fields from this same section), the optional
-/// `spatialDensityFunction` and the `source` (one or a list of TRestGeant4ParticleSource; none for the
-/// cry generator, which gives the particles). Each part is
+/// `spatialDensityFunction`, the `source` (one or a list of TRestGeant4ParticleSource; none for the
+/// cry generator, which gives the particles) and the optional `activity` of the source (primaries per
+/// time, e.g. 10 mBq: the decays of a contamination), to normalize the simulation to a time (the exposure,
+/// TRestGeant4Metadata::GetEquivalentExposureTime; not for the cosmic and cry generators, which compute it
+/// from their flux). Each part is
 /// configured with UpdateParamsFromYAML and written back with UpdateYAMLFromParams, so the stored YAML
 /// has the values used (e.g. the cosmic radius). The options are documented in
 /// TRestGeant4PrimaryGenerator, which samples the primaries.
@@ -39,6 +42,8 @@ class TRestGeant4PrimaryGeneratorInfo : public TRestMetadata {
    public:
     /// TF3 formula of x, y, z (mm) in [0, 1], the probability to accept a volume or surface position
     std::string fSpatialDensityFunction;
+    /// `activity`: primaries generated per time (REST units: per us; e.g. 10 mBq), 0 if not given
+    TRestWithUnits fActivity = 0.0;
 
     /// `source`: one or a list of TRestGeant4ParticleSource (none for the cry generator)
     std::vector<TRestGeant4ParticleSource> fSources;  //!
@@ -109,6 +114,8 @@ class TRestGeant4PrimaryGeneratorInfo : public TRestMetadata {
     /// \brief Flux of the source of the cosmic generator (counts / s / cm2), written when it is loaded
     /// (LoadDistributions); 0 if not cosmic or not a distribution of energy and angle
     double GetCosmicFlux() const;
+    /// \brief `activity` (primaries per us), 0 if not given
+    double GetActivity() const { return fActivity; }
 
     /// \brief Prints the generator class, the GDML volume, the cosmic surface, the cry file, the density and
     /// the sources.

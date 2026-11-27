@@ -72,6 +72,18 @@ std::unique_ptr<TH1D> ReadHistogram1D(const std::string& fileName, const std::st
 /// errors); an error if it is not 2D
 std::unique_ptr<TH2D> ReadHistogram2D(const std::string& fileName, const std::string& name);
 
+/// \brief The units of the content of a histogram of a distribution, from the title of its content axis (y
+/// of a TH1, z of a TH2), e.g. "Counts / s / cm2" or "c/keV/cm2/s"
+struct HistogramContentUnits {
+    bool known = false;    ///< the title has units (empty or without any unit: not known)
+    bool flux = false;     ///< counts per second and per cm2, optionally per energy: a flux
+    double perEnergy = 0;  ///< the energy unit (keV) of a content per energy (e.g. 1000 for /MeV), 0 per bin
+};
+/// \brief Parses the title of the content axis: the units are the words eV, keV, MeV, GeV, TeV (per energy),
+/// s or sec (per second) and cm2, cm^2, cm^{2} or cm^-2 (per cm2), separated by any other characters; a
+/// content per solid angle or angle (sr, deg, rad) is not a flux here
+HistogramContentUnits ParseHistogramContentUnits(const std::string& title);
+
 /// \brief A uniform direction in 4 pi
 ROOT::Math::XYZVector IsotropicDirection(TRandom& random);
 

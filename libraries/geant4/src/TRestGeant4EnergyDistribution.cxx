@@ -193,10 +193,18 @@ void TRestGeant4EnergyDistributionTH1D::LoadDistribution() {
     const std::string title = fHistogram->GetXaxis()->GetTitle();
     const auto contains = [&title](const char* unit) { return title.find(unit) != std::string::npos; };
     fUnit = contains("GeV") ? 1e6 : contains("MeV") ? 1e3 : 1;
+    // A content per energy (the title of the y axis, e.g. "Counts / keV"): multiplied by the width of its
+    // bin, the counts of the bin to sample it
+    const auto units = ParseHistogramContentUnits(fHistogram->GetYaxis()->GetTitle());
 
     for (int i = 1; i <= fHistogram->GetNbinsX(); i++) {
         const double energy = fHistogram->GetBinCenter(i) * fUnit;
-        if (energy < fRange.first || energy > fRange.second) fHistogram->SetBinContent(i, 0);
+        if (energy < fRange.first || energy > fRange.second) {
+            fHistogram->SetBinContent(i, 0);
+        } else if (units.perEnergy > 0) {
+            const double width = fHistogram->GetBinWidth(i) * fUnit / units.perEnergy;
+            fHistogram->SetBinContent(i, fHistogram->GetBinContent(i) * width);
+        }
     }
     if (fHistogram->Integral() <= 0) {
         throw runtime_error(GetClassName() + ": the histogram is empty in 'range'");

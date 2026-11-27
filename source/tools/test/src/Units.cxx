@@ -30,6 +30,8 @@ TEST(Units, ParseUnitFactors) {
     EXPECT_DOUBLE_EQ(ParseUnit("deg"), TMath::DegToRad());
     EXPECT_DOUBLE_EQ(ParseUnit("kHz"), 1e-3);
     EXPECT_DOUBLE_EQ(ParseUnit("kHz") * ParseUnit("ms"), 1.);  // a rate times a time
+    EXPECT_DOUBLE_EQ(ParseUnit("Bq"), ParseUnit("Hz"));        // an activity, decays per second
+    EXPECT_DOUBLE_EQ(ParseUnit("mBq") * ParseUnit("s"), 1e-3);
     // Empty: no units
     EXPECT_DOUBLE_EQ(ParseUnit(""), 1.);
 }

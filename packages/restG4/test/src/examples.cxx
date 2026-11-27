@@ -495,12 +495,12 @@ TEST(restG4Examples, CosmicGenerator) {
     const double flux = simulation.metadata->GetGeant4PrimaryGeneratorInfo().GetCosmicFlux();
     EXPECT_LT(Relative(flux, 0.0172229), 0.02);
     const double events = simulation.metadata->GetEquivalentNumberOfEvents();
-    EXPECT_LT(Relative(simulation.metadata->GetEquivalentSimulatedTime(),
+    EXPECT_LT(Relative(simulation.metadata->GetEquivalentExposureTime(),
                        events / (flux * simulation.metadata->GetCosmicGeneratorSurfaceCm2()) * 1e6),
               1e-9);
     // Stored in the run (s), for the rates of the files processed from it
-    const double seconds = simulation.metadata->GetEquivalentSimulatedTime() / 1e6;
-    EXPECT_LT(Relative(simulation.run.GetSimulatedTime(), seconds), 1e-9);
+    const double seconds = simulation.metadata->GetEquivalentExposureTime() / 1e6;
+    EXPECT_LT(Relative(simulation.run.GetExposureTime(), seconds), 1e-9);
     simulation.ForEachEvent([&](const TRestGeant4Event& event) {
         EXPECT_LT(Relative(event.GetPrimaryPosition().R(), radius), 1e-3);
     });

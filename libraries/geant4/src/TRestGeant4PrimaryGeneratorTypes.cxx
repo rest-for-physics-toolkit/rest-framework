@@ -14,7 +14,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <map>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "TRestTools.h"
@@ -254,6 +256,43 @@ TF2 EnergyAndAngularDistributionFormulasToRootFormula(EnergyAndAngularDistributi
 }
 
 // --- Helpers of the generator classes ---
+
+HistogramContentUnits ParseHistogramContentUnits(const string& title) {
+    HistogramContentUnits units;
+    bool perSecond = false, perArea = false, perAngle = false;
+    // The words of the title: letters, digits, ^, braces (cm^{2}) and the sign of an exponent (cm^-2); the
+    // base of a word is before ^ or {
+    string word;
+    auto parse = [&]() {
+        if (word.empty()) return;
+        const string base = word.substr(0, word.find_first_of("^{"));
+        const bool squared = word.find('2') != string::npos;
+        static const map<string, double> energies = {
+            {"eV", 1e-3}, {"keV", 1}, {"MeV", 1e3}, {"GeV", 1e6}, {"TeV", 1e9}};
+        if (energies.count(base)) {
+            units.perEnergy = energies.at(base);
+            units.known = true;
+        } else if (base == "s" || base == "sec") {
+            perSecond = units.known = true;
+        } else if (base == "cm2" || (base == "cm" && squared)) {
+            perArea = units.known = true;
+        } else if (base == "sr" || base == "deg" || base == "rad") {
+            perAngle = units.known = true;
+        }
+        word.clear();
+    };
+    for (const char c : title) {
+        const bool exponentSign = c == '-' && !word.empty() && (word.back() == '^' || word.back() == '{');
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '^' || c == '{' || c == '}' || exponentSign) {
+            word += c;
+        } else {
+            parse();
+        }
+    }
+    parse();
+    units.flux = perSecond && perArea && !perAngle;
+    return units;
+}
 
 std::unique_ptr<TH1> ReadHistogram(const string& fileName, const string& name) {
     // The current directory is restored at the end (closing the file makes it gROOT): restG4 writes the

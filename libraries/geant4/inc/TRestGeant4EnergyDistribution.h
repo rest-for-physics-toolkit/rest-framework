@@ -148,7 +148,9 @@ class TRestGeant4EnergyDistributionFormula : public TRestGeant4EnergyDistributio
 
 /// \class TRestGeant4EnergyDistributionTH1D
 /// \brief `type: "TH1D"`: the histogram `nameInFile` of `filename`, the bins with the center in `range`.
-/// The x axis is in MeV or GeV if its title says so, otherwise in keV; uniform inside the bin.
+/// The x axis is in MeV or GeV if its title says so, otherwise in keV; uniform inside the bin. The content is
+/// per bin, or per energy if the title of the y axis says so (e.g. "Counts / keV / s / cm2",
+/// ParseHistogramContentUnits): then each bin is weighted by its width.
 class TRestGeant4EnergyDistributionTH1D : public TRestGeant4EnergyDistribution {
    public:
     std::string fFilename;    ///< `filename`: ROOT file with the histogram

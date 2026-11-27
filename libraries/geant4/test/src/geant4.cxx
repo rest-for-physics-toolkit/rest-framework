@@ -12,6 +12,7 @@
 #include <TGeoNode.h>
 #include <TGeoVolume.h>
 #include <TH1D.h>
+#include <TH2D.h>
 #include <TRandom3.h>
 #include <TRestGeant4AnalysisProcess.h>
 #include <TRestGeant4BiasingVolume.h>
@@ -24,6 +25,7 @@
 #include <TRestGeant4PhysicsLists.h>
 #include <TRestGeant4PrimaryGenerator.h>
 #include <TRestGeant4PrimaryGeneratorInfo.h>
+#include <TRestGeant4PrimaryGeneratorTypes.h>
 #include <TRestGeant4QuenchingProcess.h>
 #include <TRestGeant4SpatialGenerator.h>
 #include <TRestGeant4Track.h>
@@ -39,6 +41,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 using ROOT::Math::XYZVector;
@@ -611,7 +614,7 @@ TEST(Geant4Metadata, CRYGeneratorWorld) {
     info.UpdateCRYExposure();
     EXPECT_EQ(metadata.GetCRYShowersUsed(), 3);
     EXPECT_NEAR(metadata.GetCRYExposureTime(), 3e6, 1e-6);
-    EXPECT_NEAR(metadata.GetEquivalentSimulatedTime(), 3e6, 1e-6);
+    EXPECT_NEAR(metadata.GetEquivalentExposureTime(), 3e6, 1e-6);
     TRestGeant4SpatialGeneratorCRY::SetEngineFactory(nullptr);
 }
 
@@ -968,4 +971,78 @@ TEST(Geant4AnalysisProcess, GlobalAndSelectionObservables) {
         wrong.fGeant4Metadata = &metadata;
         EXPECT_THROW(wrong.Initialize(), std::runtime_error) << selection;
     }
+}
+
+// The units of the content of a histogram from the title of its axis
+TEST(Geant4Generator, HistogramContentUnits) {
+    using TRestGeant4PrimaryGeneratorTypes::ParseHistogramContentUnits;
+    const auto perBin = ParseHistogramContentUnits("Counts / s / cm2");
+    EXPECT_TRUE(perBin.known);
+    EXPECT_TRUE(perBin.flux);
+    EXPECT_EQ(perBin.perEnergy, 0);
+    const auto perKeV = ParseHistogramContentUnits("c/keV/cm2/s");
+    EXPECT_TRUE(perKeV.flux);
+    EXPECT_EQ(perKeV.perEnergy, 1);
+    EXPECT_EQ(ParseHistogramContentUnits("Counts / MeV / s / cm^{2}").perEnergy, 1000);
+    EXPECT_EQ(ParseHistogramContentUnits("counts eV^-1 s^-1 cm^-2").perEnergy, 1e-3);
+    EXPECT_TRUE(ParseHistogramContentUnits("counts eV^-1 s^-1 cm^-2").flux);
+    // Not a flux: no title, events, per solid angle
+    EXPECT_FALSE(ParseHistogramContentUnits("").known);
+    EXPECT_FALSE(ParseHistogramContentUnits("#Events").known);
+    EXPECT_FALSE(ParseHistogramContentUnits("Counts / s / cm2 / sr").flux);
+    EXPECT_FALSE(ParseHistogramContentUnits("Counts / keV").flux);
+    EXPECT_EQ(ParseHistogramContentUnits("Counts / keV").perEnergy, 1);
+}
+
+// The flux of a distribution of energy and angle from the units of its content: per bin, per keV (each bin
+// times its width), or not a flux (no title of its z axis: 0, the exposure is not computed)
+TEST(Geant4Generator, HistogramFlux) {
+    namespace fs = std::filesystem;
+    const fs::path directory = fs::temp_directory_path() / "restGeant4HistogramFlux";
+    fs::create_directories(directory);
+    const std::string fileName = (directory / "flux.root").string();
+    {
+        TFile file(fileName.c_str(), "RECREATE");
+        const double edges[] = {0, 1, 3};  // MeV: bins of 1 and 2 MeV
+        const std::vector<std::pair<std::string, std::string>> titles = {
+            {"perBin", "Counts / s / cm2"}, {"perKeV", "Counts / keV / s / cm2"}, {"noTitle", ""}};
+        for (const auto& [name, title] : titles) {
+            TH2D histogram(name.c_str(), "", 2, edges, 1, 0, 90);  // zenith angle in deg
+            histogram.GetZaxis()->SetTitle(title.c_str());
+            histogram.SetBinContent(1, 1, 1);
+            histogram.SetBinContent(2, 1, 1);
+            histogram.Write();
+        }
+    }
+    auto flux = [&](const std::string& name) {
+        const std::string section = "{type: TH2D, filename: \"" + fileName + "\", nameInFile: " + name + "}";
+        TRestGeant4ParticleSource source(
+            "source", YAML::Load("{particle: gamma, energy: " + section + ", angular: " + section + "}"));
+        source.LoadDistributions();
+        return source.GetFlux();
+    };
+    EXPECT_NEAR(flux("perBin"), 2, 1e-9);
+    EXPECT_NEAR(flux("perKeV"), 1000 + 2000, 1e-6);
+    EXPECT_EQ(flux("noTitle"), 0);
+    fs::remove_all(directory);
+}
+
+// The exposure of a source with an activity: the primaries over the activity
+TEST(Geant4Metadata, ActivityExposure) {
+    const std::string source =
+        "  source: {particle: gamma, angular: {type: isotropic}, energy: {type: mono, energy: 1 MeV}}\n";
+    TRestGeant4Metadata metadata("geant4Metadata", YAML::Load("generator:\n"
+                                                              "  type: point\n"
+                                                              "  activity: 10 mBq\n" +
+                                                              source));
+    metadata.SetNumberOfEvents(1000);
+    EXPECT_NEAR(metadata.GetEquivalentExposureTime() / 1e6, 1e5, 1e-6);  // 1000 / 0.01 Bq = 1e5 s
+    // Without activity, not computed
+    TRestGeant4Metadata none("geant4Metadata", YAML::Load("generator:\n  type: point\n" + source));
+    none.SetNumberOfEvents(1000);
+    EXPECT_EQ(none.GetEquivalentExposureTime(), 0);
+    // The cosmic generator computes its own
+    EXPECT_THROW(TRestGeant4Metadata("geant4Metadata",
+                                     YAML::Load("generator:\n  type: cosmic\n  activity: 1 Bq\n" + source)),
+                 std::runtime_error);
 }

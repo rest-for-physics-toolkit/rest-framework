@@ -6,15 +6,21 @@ releases); the notes of the GitHub release list its pull requests.
 
 ## Unreleased
 
-- `simulatedTime` of the runs (`TRestRunInfo`): the time a simulation represents, written by restG4 (cosmic
-  and cry generators), kept by the runs processed from it and summed by `REST_MergeRuns`; datasets
-  (`GetTotalSimulatedTime`) and `TRestAnalysisPlot` (`simulatedTime`, hours, as `runLength`) to give the
-  rates of the simulations.
+- restG4: the units of the content of the histograms of the sources from the title of its axis (z of a
+  TH2, y of a TH1): counts / s / cm2 per bin or per eV, keV, MeV or GeV (each bin weighted by its width, also
+  to sample it); the flux and the exposure of the `cosmic` generator are not computed without them.
+  `activity` of the generator (e.g. `10 mBq`, units `uBq` to `MBq`): the exposure of the other generators
+  (events / activity, e.g. a contamination).
+- `exposureTime` of the runs (`TRestRunInfo`): the real time a simulation represents (not its computing
+  time), written by restG4 (cosmic and cry generators), kept by the runs processed from it and summed by
+  `REST_MergeRuns`; datasets (`GetTotalExposureTime`) and `TRestAnalysisPlot` (`exposureTime`, hours, as
+  `runLength`) to give the rates of the simulations. The computing time of restG4 is stored as
+  `computingTime` of the `TRestGeant4Metadata` (`GetComputingTime`; it was not stored).
 - restG4, formula `CosmicMuons` (Guan): the azimuth factor 2 pi was counted twice (as legacy before
   geant4lib#151): its flux is 6.28 times lower (0.0172 counts / s / cm2); the sampled distribution is the
   same.
 - restG4, `cosmic` generator: the flux of its source (the integral of its distribution of energy and angle
-  in `range`) is stored (`flux`), and `TRestGeant4Metadata::GetEquivalentSimulatedTime` gives the time a
+  in `range`) is stored (`flux`), and `TRestGeant4Metadata::GetEquivalentExposureTime` gives the time a
   simulation represents (events / (flux * surface); the exposure of CRY for the `cry` generator).
 - restG4, `cry` generator: as the `cosmic` one, only the particles crossing the world are simulated, from
   where they enter it (their time delayed by the flight); the showers without any are skipped (they count in

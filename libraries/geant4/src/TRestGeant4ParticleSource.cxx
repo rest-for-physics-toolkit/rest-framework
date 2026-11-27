@@ -216,7 +216,7 @@ TRestGeant4ParticleSource TRestGeant4ParticleSource::Clone() const {
     TRestGeant4ParticleSource copy(GetName(), YAML::Clone(fNode));
     copy.fDecay0Events = fDecay0Events;
     copy.fJointCumulative = fJointCumulative;  // Read only: shared
-    copy.fJointIntegral = fJointIntegral;
+    copy.fFlux = fFlux;
     return copy;
 }
 
@@ -263,7 +263,7 @@ void TRestGeant4ParticleSource::BuildJointCumulative() {
     }
     const double total = cumulative->back();
     if (!(total > 0)) throw runtime_error(GetClassName() + ": the integral of the formula is zero");
-    fJointIntegral = total;
+    fFlux = total;  // The formulas (CosmicMuons) are fluxes: counts / s / cm2 / keV / rad
     for (auto& value : *cumulative) value /= total;
     fJointCumulative = cumulative;
 }
@@ -310,15 +310,21 @@ void TRestGeant4ParticleSource::LoadJointDistribution() {
         return;
     }
 
-    // As legacy, the histograms have the energy in MeV and the angle in deg
+    // As legacy, the histograms have the energy in MeV and the angle in deg; the units of the content from
+    // the title of the z axis: a content per energy is multiplied by the width of its bin (the counts of the
+    // bin), to sample it and for the flux
     fJointHistogram = ReadHistogram2D(fJointFile, fJointName);  // Any 2D histogram, as a TH2D
     fJointEnergyUnit = 1000;
     fJointAngleUnit = TMath::DegToRad();
+    const std::string title = fJointHistogram->GetZaxis()->GetTitle();
+    const auto units = ParseHistogramContentUnits(title);
     for (int i = 1; i <= fJointHistogram->GetNbinsX(); i++) {
         const double energy = fJointHistogram->GetXaxis()->GetBinCenter(i) * fJointEnergyUnit;
+        const double binWidth = fJointHistogram->GetXaxis()->GetBinWidth(i) * fJointEnergyUnit;
+        const double width = units.perEnergy > 0 ? binWidth / units.perEnergy : 1;
         for (int j = 1; j <= fJointHistogram->GetNbinsY(); j++) {
             const double angle = fJointHistogram->GetYaxis()->GetBinCenter(j) * fJointAngleUnit;
-            double content = fJointHistogram->GetBinContent(i, j);
+            double content = fJointHistogram->GetBinContent(i, j) * width;
             if (energy < energyRange.first || energy > energyRange.second || angle < angleRange.first ||
                 angle > angleRange.second) {
                 content = 0;
@@ -330,9 +336,16 @@ void TRestGeant4ParticleSource::LoadJointDistribution() {
             fJointHistogram->SetBinContent(i, j, content);
         }
     }
-    fJointIntegral = fJointHistogram->Integral();
-    if (fJointIntegral <= 0) throw runtime_error(GetClassName() + ": the histogram is empty in 'range'");
+    const double integral = fJointHistogram->Integral();
+    if (integral <= 0) throw runtime_error(GetClassName() + ": the histogram is empty in 'range'");
     fJointHistogram->ComputeIntegral();
+    // Only a flux normalizes to a time (the exposure); otherwise it is not computed
+    fFlux = units.flux ? integral : 0;
+    if (!units.flux) {
+        RESTWarning << GetClassName() << ": the content of '" << fJointName << "' ('" << title
+                    << "', title of its z axis) is not a flux (counts / s / cm2, optionally per eV, keV, MeV "
+                    << "or GeV): its flux and the exposure of the simulation are not computed" << RESTendl;
+    }
 }
 
 vector<TRestGeant4ParticleState> TRestGeant4ParticleSource::Generate(TRandom& random, const XYZVector& origin,

@@ -932,9 +932,9 @@ double TRestDataSet::GetTotalTime() const {
     return total;
 }
 
-double TRestDataSet::GetTotalSimulatedTime() const {
+double TRestDataSet::GetTotalExposureTime() const {
     double total = 0;
-    for (const auto& run : fRuns) total += run.run->fSimulatedTime;
+    for (const auto& run : fRuns) total += run.run->fExposureTime;
     return total;
 }
 
@@ -1004,8 +1004,8 @@ void TRestDataSet::PrintDataSetInfo() const {
     RESTMetadata << " - Start time: " << TRestTools::GetTimeStampFromUnixTime(GetStartTime()) << RESTendl;
     RESTMetadata << " - End time: " << TRestTools::GetTimeStampFromUnixTime(GetEndTime()) << RESTendl;
     RESTMetadata << " - Total run time: " << GetTotalTime() / 3600. << " hours" << RESTendl;
-    if (GetTotalSimulatedTime() > 0) {
-        RESTMetadata << " - Simulated time: " << GetTotalSimulatedTime() / 3600. << " hours" << RESTendl;
+    if (GetTotalExposureTime() > 0) {
+        RESTMetadata << " - Exposure: " << GetTotalExposureTime() / 3600. << " hours" << RESTendl;
     }
     RESTMetadata << " - Entries: " << selectedEntries << " of " << entries << RESTendl;
     for (size_t i = 0; i < fRuns.size(); i++) {

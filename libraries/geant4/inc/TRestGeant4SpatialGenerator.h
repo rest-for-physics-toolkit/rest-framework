@@ -169,7 +169,7 @@ class TRestGeant4SpatialGeneratorSurface : public TRestGeant4SpatialGeneratorSha
 /// `radius` through the world center normal to the direction, moved back to the sphere of that radius.
 /// The radius is, if not given, the one of the sphere circumscribing the world (written to the YAML).
 /// `flux` (counts / s / cm2 through the disk) is written when the source is loaded, if it is a distribution
-/// of energy and angle (TRestGeant4ParticleSource::GetJointIntegral), to normalize to a time
+/// of energy and angle (TRestGeant4ParticleSource::GetFlux), to normalize to a time
 /// (TRestGeant4Metadata::GetCosmicExposureTime).
 class TRestGeant4SpatialGeneratorCosmic : public TRestGeant4SpatialGenerator {
    public:

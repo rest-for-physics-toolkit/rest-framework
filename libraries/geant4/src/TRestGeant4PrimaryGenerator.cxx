@@ -46,10 +46,17 @@
 /// distributions. `radius` is, if not given, the one of the sphere circumscribing the world box (written
 /// to the stored metadata); the generation surface, to normalize to a flux, is pi radius^2
 /// (TRestGeant4Metadata::GetCosmicGeneratorSurfaceCm2). It needs a single source, not a Decay0 one. With
-/// a distribution of energy and angle (formula2, TH2D, cosmic) its integral in `range` is the flux
-/// (counts / s / cm2), written to the generator section (`flux`), and the time the simulation represents
-/// is the events / (flux * surface) (TRestGeant4Metadata::GetEquivalentSimulatedTime, as the exposure of
-/// the cry generator).
+/// a distribution of energy and angle (formula2, TH2D, cosmic) whose content is a flux, its integral in
+/// `range` is the flux (counts / s / cm2), written to the generator section (`flux`), and the exposure,
+/// the real time the simulation represents, is the events / (flux * surface)
+/// (TRestGeant4Metadata::GetEquivalentExposureTime, as the exposure of the cry generator). The units of the
+/// content of a histogram are read from the title of its content axis (z of a TH2, y of a TH1;
+/// ParseHistogramContentUnits): counts / s / cm2 per bin, or per eV, keV, MeV or GeV (each bin weighted by
+/// its width, also to sample it); without a title (or units that are not a flux) the histogram is sampled
+/// per bin and the flux and the exposure are not computed (0, with a warning).
+///
+/// `activity` (any generator but cosmic and cry): the primaries per time of the source (e.g. 10 mBq, the
+/// decays of a contamination); the exposure is the events over the activity.
 ///
 /// * **cry** (TRestGeant4SpatialGeneratorCRY): the cosmic-ray showers of CRY, generated during the
 /// simulation (restG4 built with CRY), one per event, with all their particles (name, charge, energy,

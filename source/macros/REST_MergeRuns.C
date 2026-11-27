@@ -100,7 +100,7 @@ std::string Geant4Instance(const RunFile& runFile) {
 
 /// What changes from a simulation to another of the same configuration: the seed, the events simulated and
 /// requested and the showers and exposure of the cry generator
-const std::vector<std::string> kSimulationKeys = {"seed", "nEvents", "nRequestedEntries"};
+const std::vector<std::string> kSimulationKeys = {"seed", "nEvents", "nRequestedEntries", "computingTime"};
 const std::vector<std::string> kCRYKeys = {"showersUsed", "exposureTime"};
 
 /// The TRestGeant4Metadata without the keys that change from a simulation to another
@@ -162,7 +162,7 @@ void MergeSimulationTrees(const std::vector<RunFile>& runFiles, const std::vecto
 /// TRestManager (TFileMerger), in subrun order; the other objects (readouts, geometry) are copied from the
 /// first subrun. The TRestRun of the merged file is the one of the first subrun with subRunNumber the
 /// first one, mergedSubRuns all of them, startTime the earliest, endTime the latest, entriesSaved and
-/// simulatedTime the sums and outputFileName the merged file; its codeVersion, codeCommit and codeClean are
+/// exposureTime the sums and outputFileName the merged file; its codeVersion, codeCommit and codeClean are
 /// those of the first subrun (the code that wrote the data, not the one merging it).
 ///
 /// Simulations (files with a TRestGeant4Metadata, restG4 outputs or their analysis) of the same
@@ -206,13 +206,14 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
         const int runNumber = TRestYAMLUtils::GetParam<int>(first.run, "runNumber", -1);
         if (runNumber < 0 && !simulation) throw std::runtime_error(first.fileName + " has no run number");
         std::vector<int> subRuns;
-        double startTime = 0, endTime = 0, simulatedTime = 0;
+        double startTime = 0, endTime = 0, runExposureTime = 0;
         long long entries = 0;
         // Simulations: the seeds, the events simulated before each file and the sums of the counts
         std::set<long long> seeds;
         std::vector<long long> eventOffsets;
         long long events = 0, requestedEntries = 0, showersUsed = 0;
-        double exposureTime = 0;
+        double computingTime = 0;
+        double cryExposureTime = 0;
         for (size_t i = 0; i < runFiles.size(); i++) {
             const RunFile& runFile = runFiles[i];
             if (!simulation && TRestYAMLUtils::GetParam<int>(runFile.run, "runNumber", -1) != runNumber) {
@@ -258,9 +259,10 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
                 eventOffsets.push_back(events);
                 events += TRestYAMLUtils::GetParam<long long>(geant4, "nEvents", 0);
                 requestedEntries += TRestYAMLUtils::GetParam<long long>(geant4, "nRequestedEntries", 0);
+                computingTime += TRestYAMLUtils::GetParam<double>(geant4, "computingTime", 0);
                 if (geant4["generator"] && geant4["generator"].IsMap()) {
                     showersUsed += static_cast<long long>(NumberOf(geant4["generator"]["showersUsed"]));
-                    exposureTime += NumberOf(geant4["generator"]["exposureTime"]);
+                    cryExposureTime += NumberOf(geant4["generator"]["exposureTime"]);
                 }
             }
             subRuns.insert(subRuns.end(), runFile.subRuns.begin(), runFile.subRuns.end());
@@ -269,7 +271,7 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
             if (i == 0 || start < startTime) startTime = start;
             if (i == 0 || end > endTime) endTime = end;
             entries += TRestYAMLUtils::GetParam<long long>(runFile.run, "entriesSaved", 0);
-            simulatedTime += TRestYAMLUtils::GetParam<double>(runFile.run, "simulatedTime", 0);
+            runExposureTime += TRestYAMLUtils::GetParam<double>(runFile.run, "exposureTime", 0);
         }
 
         if (simulation) {
@@ -299,16 +301,17 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
         run["startTime"] = startTime;
         run["endTime"] = endTime;
         run["entriesSaved"] = entries;
-        run["simulatedTime"] = simulatedTime;
+        run["exposureTime"] = runExposureTime;
         run["outputFileName"] = outputPath;
         std::map<std::string, YAML::Node> metadata = first.metadata;
         if (simulation) {
             YAML::Node geant4 = YAML::Clone(metadata.at(geant4Instance));
             geant4["nEvents"] = events;
             if (geant4["nRequestedEntries"]) geant4["nRequestedEntries"] = requestedEntries;
+            if (geant4["computingTime"]) geant4["computingTime"] = computingTime;
             if (geant4["generator"] && geant4["generator"]["showersUsed"]) {
                 geant4["generator"]["showersUsed"] = showersUsed;
-                geant4["generator"]["exposureTime"] = exposureTime;
+                geant4["generator"]["exposureTime"] = cryExposureTime;
             }
             metadata[geant4Instance] = geant4;
         }

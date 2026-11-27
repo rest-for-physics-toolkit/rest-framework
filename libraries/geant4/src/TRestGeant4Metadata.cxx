@@ -6,6 +6,7 @@
 
 #include "TRestConstants.h"
 #include "TRestTools.h"
+#include "TRestYAMLUtils.h"
 
 using namespace TRestConstants;
 
@@ -37,6 +38,7 @@ static const bool TRestGeant4Metadata_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
 
     // Core parameters mapping
+    reg.RegisterField<TRestGeant4Metadata>("computingTime", &TRestGeant4Metadata::fComputingTime);
     reg.RegisterField<TRestGeant4Metadata>("geant4Version", &TRestGeant4Metadata::fGeant4Version);
     reg.RegisterField<TRestGeant4Metadata>("geometryPath", &TRestGeant4Metadata::fGeometryPath);
     reg.RegisterField<TRestGeant4Metadata>("gdmlFilename", &TRestGeant4Metadata::fGdmlFilename);
@@ -325,7 +327,7 @@ void TRestGeant4Metadata::Merge(const TRestGeant4Metadata& other) {
     fNEvents += other.fNEvents;  // Cumulative update on events count
     fNRequestedEntries += other.fNRequestedEntries;
     fSimulationMaxTimeSeconds = other.fSimulationMaxTimeSeconds;
-    fSimulationTime += other.fSimulationTime;
+    fComputingTime += other.fComputingTime;
     fSeed = other.fSeed;
     fSaveAllEvents = other.fSaveAllEvents;
     fStoreHadronicTargetInfo = other.fStoreHadronicTargetInfo;
@@ -482,12 +484,20 @@ double TRestGeant4Metadata::GetCosmicGeneratorSurfaceCm2() const {
     return fGeant4PrimaryGeneratorInfo.GetCosmicSurfaceCm2();
 }
 
+void TRestGeant4Metadata::SetComputingTime(double time) {
+    fComputingTime = time;
+    if (fNode) TRestYAMLUtils::SetParam(fNode, "computingTime", time);
+}
+
 double TRestGeant4Metadata::GetCosmicExposureTime() const {
     const double rate = fGeant4PrimaryGeneratorInfo.GetCosmicFlux() * GetCosmicGeneratorSurfaceCm2();
     return rate > 0 ? GetEquivalentNumberOfEvents() / rate * 1e6 : 0;
 }
 
-double TRestGeant4Metadata::GetEquivalentSimulatedTime() const {
+double TRestGeant4Metadata::GetEquivalentExposureTime() const {
     if (fGeant4PrimaryGeneratorInfo.IsCRY()) return GetEquivalentCRYExposureTime();
-    return GetCosmicExposureTime();
+    if (fGeant4PrimaryGeneratorInfo.IsCosmic()) return GetCosmicExposureTime();
+    // The primaries generated over the activity of the source (per us)
+    const double activity = fGeant4PrimaryGeneratorInfo.GetActivity();
+    return activity > 0 ? GetEquivalentNumberOfEvents() / activity : 0;
 }
