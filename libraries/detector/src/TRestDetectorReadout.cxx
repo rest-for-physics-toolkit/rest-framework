@@ -411,7 +411,10 @@ int TRestDetectorReadout::GetChannelFromPosition(double x, double y, double z) c
 
     TGeoNode* node = fGeoManager->FindNode(x, y, z);
     if (!node || node == fGeoManager->GetTopNode()) return -1;
+    return CurrentNodeChannel(node);
+}
 
+int TRestDetectorReadout::CurrentNodeChannel(const TGeoNode* node) const {
     int physicalID = -1;
 
     if (!fPathToPhysicalIDMap.empty()) {
@@ -425,6 +428,26 @@ int TRestDetectorReadout::GetChannelFromPosition(double x, double y, double z) c
     if (physicalID < 0) return -1;
     auto daqIt = fPhysicalToDAQMap.find(physicalID);
     return (daqIt != fPhysicalToDAQMap.end()) ? daqIt->second : -1;
+}
+
+bool TRestDetectorReadout::GetPixelPosition(const ROOT::Math::XYZVector& position,
+                                            PixelPosition& pixel) const {
+    pixel = PixelPosition();
+    if (!fGeoManager) return false;
+    TGeoNode* node = fGeoManager->FindNode(position.X(), position.Y(), position.Z());
+    if (!node || node == fGeoManager->GetTopNode()) return false;
+    const auto* box = dynamic_cast<const TGeoBBox*>(node->GetVolume()->GetShape());
+    const TGeoHMatrix* matrix = fGeoManager->GetCurrentMatrix();
+    if (!box || !matrix) return false;
+    const double master[3] = {position.X(), position.Y(), position.Z()};
+    double local[3];
+    matrix->MasterToLocal(master, local);
+    // Every shape is a TGeoBBox: its bounding box, centred at its origin
+    const double* origin = box->GetOrigin();
+    pixel.daqID = CurrentNodeChannel(node);
+    pixel.local = ROOT::Math::XYZVector(local[0] - origin[0], local[1] - origin[1], local[2] - origin[2]);
+    pixel.halfSize = ROOT::Math::XYZVector(box->GetDX(), box->GetDY(), box->GetDZ());
+    return true;
 }
 
 std::pair<int, int> TRestDetectorReadout::GetAdjacentChannels(int daqID) const {

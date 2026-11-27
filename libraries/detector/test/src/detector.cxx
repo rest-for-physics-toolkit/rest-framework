@@ -337,6 +337,35 @@ TEST(DetectorReadout, MicromegasPositionToChannel) {
     // Outside the plane, and in the drift volume (no channel)
     EXPECT_EQ(readout->GetChannelFromPosition(100, 100, 0), -1);
     EXPECT_EQ(readout->GetChannelFromPosition(0, 0, 10), -1);
+
+    // The position in the pixel (squares of pitch / sqrt(2) rotated 45 degrees): 0.1 mm from the centre
+    // along a side of the pixel, also with the plane rotated by 30 degrees about its normal
+    const double half = kPitch / std::sqrt(8.), d = 0.1;
+    YAML::Node rotatedNode = ReadoutNode();
+    rotatedNode["readoutParameters"]["globalRotation"] = "30 deg";
+    TRestMicromegasReadout rotated("mmTest", rotatedNode);
+    rotated.BuildGeometry();
+    const double angle = 30 * std::acos(-1.) / 180;
+    for (const bool rotate : {false, true}) {
+        const TRestDetectorReadout& plane = rotate ? static_cast<TRestDetectorReadout&>(rotated) : *readout;
+        const auto centre = YStripPixel(1, 2);
+        const XYZVector inPlane = centre + XYZVector(d, d, 0) / std::sqrt(2.);
+        const XYZVector point =
+            rotate ? XYZVector(inPlane.X() * std::cos(angle) - inPlane.Y() * std::sin(angle),
+                               inPlane.X() * std::sin(angle) + inPlane.Y() * std::cos(angle), 0)
+                   : inPlane;
+        TRestDetectorReadout::PixelPosition pixel;
+        ASSERT_TRUE(plane.GetPixelPosition(point, pixel)) << "rotated " << rotate;
+        EXPECT_EQ(pixel.daqID, YStrip(1));
+        EXPECT_NEAR(std::abs(pixel.local.X()) + std::abs(pixel.local.Y()), d, 1e-9);
+        EXPECT_NEAR(std::abs(pixel.local.X() * pixel.local.Y()), 0, 1e-9);
+        EXPECT_NEAR(std::abs(pixel.local.Z()), 0, 1e-9);
+        EXPECT_NEAR(pixel.halfSize.X(), half, 1e-9);
+        EXPECT_NEAR(pixel.halfSize.Y(), half, 1e-9);
+    }
+    TRestDetectorReadout::PixelPosition pixel;
+    EXPECT_FALSE(readout->GetPixelPosition(XYZVector(100, 100, 0), pixel));
+    EXPECT_EQ(pixel.daqID, -1);
 }
 
 TEST(DetectorReadout, MicromegasChannelPositionsAndDecoding) {
@@ -1632,7 +1661,11 @@ TEST(DetectorAvalancheProcess, GainFromTheAmplificationResponse) {
     response.fMedium = "ArIso";
     TRestDetectorAmplificationResponse::Losses losses;
     losses.fConductor = 1;  // the fourth primary, e.g. on the mesh
-    response.SetResult(4, {{100, 0.01}, {100, 0.01}, {200, 0.03}}, losses);
+    // Without the cell (fCellLow = fCellHigh): no map
+    response.SetResult({{0, 0, 100, 0.01, 0}, {0, 0, 100, 0.01, 0}, {0, 0, 200, 0.03, 0}, {0, 0, 0, 0, 0}},
+                       losses);
+    EXPECT_FALSE(response.HasCellMap());
+    EXPECT_DOUBLE_EQ(response.fAnodeElectrons, 400);
     EXPECT_DOUBLE_EQ(response.GetTransparency(), 0.75);
     EXPECT_NEAR(response.fMeanSize, 400. / 3, 1e-9);
     EXPECT_NEAR(response.fSizeVariance, 10000. / 3, 1e-6);
@@ -1707,7 +1740,7 @@ TEST(DetectorAvalancheProcess, GainFromTheAmplificationResponse) {
     EXPECT_ANY_THROW(initialize("{responseFile: none.root}"));
     const std::string emptyFile = std::string(TESTS_WORK_DIR) + "/AmplificationResponse_Empty.root";
     {
-        response.SetResult(4, {});
+        response.SetResult(std::vector<TRestDetectorAmplificationResponse::Avalanche>(4));
         std::unique_ptr<TFile> file(TFile::Open(emptyFile.c_str(), "RECREATE"));
         response.Write(file.get(), YAML::Load("{program: test}"));
     }
@@ -1724,6 +1757,123 @@ TEST(DetectorAvalancheProcess, GainFromTheAmplificationResponse) {
         std::runtime_error);
     EXPECT_THROW(TRestDetectorAmplificationResponse("a", YAML::Load("{responseFile: r.root, start: 1 mm}")),
                  std::runtime_error);
+    EXPECT_THROW(
+        TRestDetectorAmplificationResponse("a", YAML::Load("{" + base + ", start: 1 mm, cellBins: -1}")),
+        std::runtime_error);
+}
+
+TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
+    // A cell of the size of the pixels of the test readout (pitch / sqrt(2)), 2 x 2 bins: the primaries
+    // started in the half x < 0 are lost (e.g. on the solid mesh), those in x > 0 give 100 electrons in the
+    // bin y < 0 and 300 in y > 0 (mean 200); 1 electron of 400 on the pad of another cell
+    const double half = kPitch / std::sqrt(8.);
+    TRestDetectorAmplificationResponse response(
+        "amplification",
+        YAML::Load("{fieldMaps: [cell.txt], responseFile: r.root, start: 1 mm, anode: -55 um, "
+                   "sizeBins: 30, timeBins: 1, cellBins: 2}"));
+    response.fMedium = "ArIso";
+    response.fCellLow = {-half, -half};
+    response.fCellHigh = {half, half};
+    const double q = half / 2;
+    response.SetResult({{-q, -q, 0, 0, 0}, {-q, q, 0, 0, 0}, {q, -q, 100, 0.01, 1}, {q, q, 300, 0.01, 0}});
+    ASSERT_TRUE(response.HasCellMap());
+    EXPECT_DOUBLE_EQ(response.GetTransparency(), 0.5);
+    const int lostBin = response.GetCellBin(0.25, 0.75), lowBin = response.GetCellBin(0.75, 0.25),
+              highBin = response.GetCellBin(0.75, 0.75);
+    EXPECT_EQ(lostBin, 2);
+    EXPECT_EQ(lowBin, 1);
+    EXPECT_EQ(highBin, 3);
+    EXPECT_DOUBLE_EQ(response.GetCellTransparency(lostBin), 0);
+    EXPECT_DOUBLE_EQ(response.GetCellTransparency(highBin), 1);
+    EXPECT_DOUBLE_EQ(response.GetCellGainFactor(lowBin), 0.5);
+    EXPECT_DOUBLE_EQ(response.GetCellGainFactor(highBin), 1.5);
+    EXPECT_DOUBLE_EQ(response.GetCellGainFactor(lostBin), 1);  // no avalanche: the mean
+    EXPECT_DOUBLE_EQ(response.fSharedElectrons, 1);
+    EXPECT_DOUBLE_EQ(response.fAnodeElectrons, 400);
+
+    const std::string fileName = std::string(TESTS_WORK_DIR) + "/AmplificationResponse_Cell.root";
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        response.Write(file.get(), YAML::Load("{program: test}"));
+        EXPECT_NE(file->Get("AmplificationGainMap"), nullptr);
+    }
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "READ"));
+        const auto read = TRestDetectorAmplificationResponse::Read(file.get());
+        EXPECT_EQ(read.fCellBins, 2);
+        EXPECT_EQ(read.fCellPrimaries, response.fCellPrimaries);
+        EXPECT_EQ(read.fCellCollected, response.fCellCollected);
+        EXPECT_EQ(read.fCellSizeSum, response.fCellSizeSum);
+        EXPECT_DOUBLE_EQ(read.fCellHigh[0], half);
+    }
+
+    // The process: hits 0.1 mm from the centre of a pixel along its local x and 0.05 mm along its local y,
+    // on each side of x
+    auto detector = MakeDetector(kChargeNoDiffusion);
+    TRestDetectorAvalancheProcess avalanche("avalanche",
+                                            YAML::Load("{responseFile: \"" + fileName + "\", seed: 3}"));
+    avalanche.SetManager(detector.manager.get());
+    avalanche.Initialize();
+    EXPECT_EQ(avalanche.fReadoutName, "mmTest");
+    const auto centre = YStripPixel(1, 2);
+    const XYZVector offset = XYZVector(0.1, 0.1, 0) / std::sqrt(2.);
+    const XYZVector across = XYZVector(-0.05, 0.05, 0) / std::sqrt(2.);
+    TRestDetectorReadout::PixelPosition pixel;
+    ASSERT_TRUE(detector.readout->GetPixelPosition(centre + offset + across, pixel));
+    ASSERT_NEAR(std::abs(pixel.local.X()), 0.1, 1e-9);
+    ASSERT_NEAR(std::abs(pixel.local.Y()), 0.05, 1e-9);
+    // The side of the pixel with local x > 0 (amplified) and the other one (lost)
+    const bool positive = pixel.local.X() > 0;
+    const XYZVector amplifiedSide = centre + across + (positive ? offset : -offset);
+    const XYZVector lostSide = centre + across - (positive ? offset : -offset);
+    ASSERT_TRUE(detector.readout->GetPixelPosition(amplifiedSide, pixel));
+    const int amplifiedBin =
+        response.GetCellBin(0.5 + pixel.local.X() / (2 * half), 0.5 + pixel.local.Y() / (2 * half));
+    EXPECT_TRUE(amplifiedBin == lowBin || amplifiedBin == highBin);
+    const double wValue = 0.0262;
+    int amplified = 0, lost = 0;
+    double sum = 0;
+    const int n = 2000;
+    for (int i = 0; i < n; i++) {
+        TRestDetectorHitsEvent input, output;
+        input.SetID(i);
+        input.AddHit(amplifiedSide.X(), amplifiedSide.Y(), 0, wValue, 0.5);
+        input.AddHit(lostSide.X(), lostSide.Y(), 0, wValue, 0.5);
+        if (!avalanche.ProcessEvent(input, output)) continue;
+        ASSERT_EQ(output.GetNumberOfHits(), 1u);
+        // The positions of the hits are stored as float; the two sides are 0.14 mm apart along x
+        if (std::abs(output.GetX(0) - amplifiedSide.X()) < 1e-4) {
+            amplified++;
+            sum += output.GetEnergy(0) / wValue;
+        } else {
+            lost++;
+        }
+    }
+    EXPECT_EQ(amplified, n);
+    EXPECT_EQ(lost, 0);
+    // The sizes of the whole cell (105 or 295, bins of 10 over [0, 300]: mean 200) scaled by the mean of the
+    // bin of the hit over the mean of all
+    EXPECT_NEAR(sum / amplified, 200 * response.GetCellGainFactor(amplifiedBin), 15);
+
+    // Out of the pixels: the response averaged over the cell (transparency 0.5)
+    int outside = 0;
+    for (int i = 0; i < n; i++) {
+        TRestDetectorHitsEvent input, output;
+        input.SetID(n + i);
+        input.AddHit(100, 100, 0, wValue, 0.5);
+        if (avalanche.ProcessEvent(input, output)) outside++;
+    }
+    EXPECT_NEAR(static_cast<double>(outside) / n, 0.5, 0.05);
+
+    // A response with the map needs a readout
+    auto noReadout = std::make_unique<TRestManager>(
+        "manager", YAML::Load("class: TRestManager\ngas:\n  class: TRestDetectorMedium\n  name: ArIso\n"
+                              "  charge: " +
+                              kChargeNoDiffusion + "\n"));
+    TRestDetectorAvalancheProcess withoutReadout("avalanche",
+                                                 YAML::Load("{responseFile: \"" + fileName + "\"}"));
+    withoutReadout.SetManager(noReadout.get());
+    EXPECT_THROW(withoutReadout.Initialize(), std::runtime_error);
 }
 
 // ---------------------------------------------------------------------------

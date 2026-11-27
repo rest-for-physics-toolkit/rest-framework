@@ -28,8 +28,9 @@ depend on Garfield++: the tables are read by `TRestDetectorMedium` (detector lib
   in the field maps of a unit cell of the amplification structure (e.g. a microbulk Micromegas: a fine map
   of the mesh, the holes and the kapton, a coarse map of the drift field above it, the cell repeated along
   x and y), started at the plane where the drift response ends; the transparency (fraction of the electrons
-  amplified), the histogram of the avalanche size and of the time to the anode. Each response goes to its
-  own `responseFile`, read by `TRestDetectorAvalancheProcess` (`responseFile`) instead of the gain table.
+  amplified), the histogram of the avalanche size and of the time to the anode, and the map of the
+  transparency and mean size versus the start point in the cell. Each response goes to its own
+  `responseFile`, read by `TRestDetectorAvalancheProcess` (`responseFile`) instead of the gain table.
 
 Tables already in the medium file, and response files that exist, are skipped unless `overwrite: true`.
 
@@ -153,15 +154,21 @@ so that each process gets points at all the drift lengths; each process with its
 | `usePenning`, `penningRate` | false, 0 | Penning transfer of the gas. |
 | `sizeBins` | 100 | Bins of the avalanche size histogram (over [0, the largest size]). |
 | `timeBins` | 50 | Bins of the histogram of the time from the start plane to the anode (mean time of the electrons of an avalanche). |
+| `cellBins` | 10 | Bins along x and y of the cell of the map of the transparency and mean size versus the start point (0: no map). About 100 primaries per bin give its transparency to +-0.04: `electrons` ~ 100 `cellBins`^2. |
 | `responseFile` | (required) | Output file of the response. |
 | `overwrite` | false | Compute the response again if the file exists. |
 
 A primary electron whose avalanche brings no electron to the anode (stopped on the mesh, on a dielectric
 or attached) is lost: the transparency is the fraction of primaries with an avalanche at the anode. Where
 the lost ones ended is counted and printed (out of the cell, on a conductor, on a dielectric, attached,
-other: `losses` in the metadata of the response file). One
-response per operating point (the voltages of the CST model). `--jobs N` splits the avalanches in N
-processes. E.g. the pixel cell of a microbulk (mesh at z = 0, anode below -55 um):
+other: `losses` in the metadata of the response file). The map of the cell gives the transparency and the
+mean size of the avalanches by the start point (TH2D `AmplificationTransparencyMap` and
+`AmplificationGainMap` of the response file, e.g. the losses over the solid mesh around the holes);
+`TRestDetectorAvalancheProcess` applies it with the pixel of the readout containing each hit as the cell
+(the cell centred on a pixel, with its size). The fraction of the electrons at the anode on the pad of
+another cell (charge sharing, not applied) is printed. One response per operating point (the voltages of
+the CST model). `--jobs N` splits the avalanches in N processes. E.g. the pixel cell of a microbulk (mesh at
+z = 0, anode below -55 um):
 
 ```yaml
   amplification:
@@ -170,7 +177,8 @@ processes. E.g. the pixel cell of a microbulk (mesh at z = 0, anode below -55 um
     periodicity: "xy"
     start: 1 mm
     anode: -54 um
-    electrons: 2000
+    electrons: 10000                   # 100 per bin of the map of the cell
+    cellBins: 10
     usePenning: true
     penningRate: 0.3
     responseFile: "amplification_320V.root"

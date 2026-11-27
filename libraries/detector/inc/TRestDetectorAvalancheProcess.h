@@ -6,6 +6,7 @@
 
 #include "TRandom3.h"
 #include "TRestDetectorAmplificationResponse.h"
+#include "TRestDetectorReadout.h"
 #include "TRestEventProcess.h"
 
 class TRestDetectorChargeResponse;
@@ -25,7 +26,14 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
    private:
     const TRestDetectorChargeResponse* fCharge = nullptr;
     std::shared_ptr<const TRestDetectorAmplificationResponse> fResponse;  //!
-    TRandom3 fRandom;                                                     //!
+    /// Readout locating the hits in the pixels, with the map of the cell of the response
+    const TRestDetectorReadout* fReadout = nullptr;  //!
+    /// The size of the cell of the response and of the pixels has been compared (once)
+    bool fCellChecked = false;  //!
+    TRandom3 fRandom;           //!
+
+    /// \brief Warns once if the cell of the response and the pixel of the readout differ by more than 5 %
+    void CheckCell(const TRestDetectorReadout::PixelPosition& pixel);
 
    public:
     /// Voltage across the amplification gap
@@ -39,6 +47,9 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     /// `responseFile`: file of an amplification response in a field map (restGarfield, `amplification` key of
     /// TRestDetectorTransportManager), instead of amplificationVoltage and gap (the gain table)
     std::string fResponseFile = "";
+    /// `readout`: name of the readout (in TRestDetectorReadoutManager) locating the hits in its pixels, used
+    /// with a response with the map of the cell. It can be omitted if the manager contains a single readout.
+    std::string fReadoutName = "";
     /// Seed of the random generator (0: random seed). Otherwise the generator is re-seeded at each event
     /// with TRestEvent::EventSeed (seed, event and subevent IDs): independent of the threads.
     unsigned long fSeed = 0;
@@ -62,9 +73,11 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     /// \brief Reads the parameters from the YAML node.
     void LoadConfig() override;
     /// \brief Gets the charge response of the medium and either reads the amplification response of
-    /// responseFile or checks amplificationVoltage and gap and gets the gain and theta of its gain table at
-    /// the field amplificationVoltage / gap (written to the metadata). Throws if one of them is missing or
-    /// out of range, or if both responseFile and amplificationVoltage or gap are given.
+    /// responseFile (with the readout if it has the map of the cell) or checks amplificationVoltage and gap
+    /// and gets the gain and theta of its gain table at the field amplificationVoltage / gap (written to the
+    /// metadata). Throws if one of them is missing or out of range, if both responseFile and
+    /// amplificationVoltage or gap are given, or if the response has the map of the cell and there is no
+    /// readout.
     void InitProcess() override;
     /// \brief Multiplies the energy of each hit by its avalanche gain per electron (see the class
     /// description).

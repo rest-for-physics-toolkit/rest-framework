@@ -369,14 +369,21 @@ int CSTFieldMap::Locate(double x, double y, double z, std::array<double, 3>& cel
         mirrored[a] = false;
         cell[a] = Reduce(point[a], fLow[a], fHigh[a], m_periodic[a], m_mirrorPeriodic[a], mirrored[a]);
     }
+    // The first map containing the point; else, within the rounding of the point (e.g. 0.1 mm in cm is above
+    // a face at 0.01 cm), the first map with the point moved onto its face (ComponentGrid checks its limits
+    // exactly: a point just above them has no medium)
     constexpr double tolerance = 1e-9;  // cm
-    for (size_t map = 0; map < fMaps.size(); map++) {
-        const auto& limits = fLimits[map];
-        bool inside = true;
-        for (int a = 0; a < 3 && inside; a++) {
-            inside = cell[a] >= limits[2 * a] - tolerance && cell[a] <= limits[2 * a + 1] + tolerance;
+    for (const double margin : {0.0, tolerance}) {
+        for (size_t map = 0; map < fMaps.size(); map++) {
+            const auto& limits = fLimits[map];
+            bool inside = true;
+            for (int a = 0; a < 3 && inside; a++) {
+                inside = cell[a] >= limits[2 * a] - margin && cell[a] <= limits[2 * a + 1] + margin;
+            }
+            if (!inside) continue;
+            for (int a = 0; a < 3; a++) cell[a] = std::clamp(cell[a], limits[2 * a], limits[2 * a + 1]);
+            return static_cast<int>(map);
         }
-        if (inside) return static_cast<int>(map);
     }
     return -1;
 }

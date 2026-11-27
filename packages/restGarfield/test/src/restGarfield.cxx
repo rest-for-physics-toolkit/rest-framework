@@ -307,6 +307,15 @@ TEST(RestGarfield, CSTFieldMapsDielectricAndPeriodicity) {
     map->ElectricField(-0.05, -0.05, 0.3, ex, ey, ez, medium, status);
     EXPECT_EQ(status, 0);
     EXPECT_NEAR(ez, 2000, 1e-6);
+    // Rounded just above a face (e.g. 0.1 mm in cm): the map containing it (the coarse one above the fine
+    // one), or the map onto whose face it is moved (the top of the coarse one), with a medium
+    map->ElectricField(-0.05, -0.05, 0.2 + 1e-12, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ez, 2000, 1e-6);
+    map->ElectricField(-0.05, -0.05, 0.6 + 1e-12, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NE(medium, nullptr);
+    EXPECT_NEAR(ez, 2000, 1e-6);
     // Out of both maps
     map->ElectricField(0, 0, 0.7, ex, ey, ez, medium, status);
     EXPECT_EQ(status, -6);
@@ -412,7 +421,8 @@ TEST(RestGarfield, AmplificationResponseInAPeriodicCell) {
     const std::string responseFile = (fs::path(TESTS_WORK_DIR) / "AmplificationResponse.root").string();
     fs::remove(responseFile);
     const std::string config = "{fieldMaps: [\"" + cstFile.string() + "\"], responseFile: \"" + responseFile +
-                               "\", start: 150 um, anode: 60 um, electrons: 10, sizeBins: 5, timeBins: 5}";
+                               "\", start: 150 um, anode: 60 um, electrons: 10, sizeBins: 5, timeBins: 5, "
+                               "cellBins: 2}";
     TRestDetectorAmplificationResponse response("amplification", YAML::Load(config));
     RunAmplificationResponse(medium, response, false, 2);
     EXPECT_EQ(response.fMedium, "ArIso");
@@ -427,12 +437,31 @@ TEST(RestGarfield, AmplificationResponseInAPeriodicCell) {
     // About 0.1 mm at several cm/us
     EXPECT_GT(response.fTMin, 0);
     EXPECT_LT(response.fTMax, 0.1);
+    // The map of the cell (2 x 2 bins over x and y in [-0.1, 0.1] mm): every primary in a bin, the
+    // collected ones too
+    ASSERT_TRUE(response.HasCellMap());
+    EXPECT_NEAR(response.fCellLow[0], -0.1, 1e-9);
+    EXPECT_NEAR(response.fCellHigh[1], 0.1, 1e-9);
+    int cellPrimaries = 0, cellCollected = 0;
+    for (size_t bin = 0; bin < 4; bin++) {
+        cellPrimaries += response.fCellPrimaries[bin];
+        cellCollected += response.fCellCollected[bin];
+    }
+    EXPECT_EQ(cellPrimaries, 10);
+    EXPECT_EQ(cellCollected, response.fCollected);
+    // Electrons at the anode, some of them maybe in the neighbouring cells (diffusion over 0.1 mm)
+    EXPECT_GE(response.fAnodeElectrons, response.fCollected);
+    EXPECT_LE(response.fSharedElectrons, response.fAnodeElectrons);
 
     std::unique_ptr<TFile> file(TFile::Open(responseFile.c_str(), "READ"));
     ASSERT_TRUE(file && !file->IsZombie());
     const auto read = TRestDetectorAmplificationResponse::Read(file.get());
     EXPECT_EQ(read.fCollected, response.fCollected);
     EXPECT_EQ(read.fSizeCounts, response.fSizeCounts);
+    EXPECT_EQ(read.fCellPrimaries, response.fCellPrimaries);
+    EXPECT_EQ(read.fCellSizeSum, response.fCellSizeSum);
+    EXPECT_DOUBLE_EQ(read.fSharedElectrons, response.fSharedElectrons);
+    EXPECT_NE(file->Get("AmplificationTransparencyMap"), nullptr);
 
     // The start plane above the maps
     TRestDetectorAmplificationResponse above(

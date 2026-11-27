@@ -14,7 +14,8 @@ class TRestDetectorMedium;
 /// transfer if usePenning), and `electrons` avalanches (AvalancheMicroscopic) each started by one electron at
 /// a random position over the cell on the plane z = start. The size of an avalanche is its number of
 /// electrons ending below z = anode; one with electrons there is collected, with the mean time of those
-/// electrons. Fills the response (medium, conditions, counts and histograms); nothing is written.
+/// electrons. Fills the response (medium, conditions, counts, histograms, the map of the cell by the start
+/// point and the electrons at the anode out of the cell of their primary); nothing is written.
 ///
 /// \param medium Gas medium of the response (its components, pressure and temperature).
 /// \param response Configuration of the response, filled.

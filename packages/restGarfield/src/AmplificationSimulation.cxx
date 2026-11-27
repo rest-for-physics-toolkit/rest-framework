@@ -42,30 +42,31 @@ constexpr double kPeriodicCells = 10;
 constexpr double kMaxElectronEnergy = 100;
 
 using Losses = TRestDetectorAmplificationResponse::Losses;
+using Avalanche = TRestDetectorAmplificationResponse::Avalanche;
 
 /// The losses as an array, for the pipes
 std::array<int, 5> LossCounts(const Losses& losses) {
     return {losses.fOut, losses.fConductor, losses.fDielectric, losses.fAttached, losses.fOther};
 }
 
-/// Writes the result of a process to a pipe: primaries, losses, avalanches and their size and time
-bool WriteResult(FILE* pipe, int primaries, const Losses& losses,
-                 const std::vector<std::array<double, 2>>& avalanches) {
-    const int counts[2] = {primaries, static_cast<int>(avalanches.size())};
-    if (fwrite(counts, sizeof(int), 2, pipe) != 2) return false;
+/// Writes the result of a process to a pipe: the avalanches of its primaries and the losses
+bool WriteResult(FILE* pipe, const Losses& losses, const std::vector<Avalanche>& avalanches) {
+    const int count = avalanches.size();
+    if (fwrite(&count, sizeof(int), 1, pipe) != 1) return false;
     const auto lost = LossCounts(losses);
     if (fwrite(lost.data(), sizeof(int), lost.size(), pipe) != lost.size()) return false;
     for (const auto& avalanche : avalanches) {
-        if (fwrite(avalanche.data(), sizeof(double), 2, pipe) != 2) return false;
+        const double values[5] = {avalanche.fX, avalanche.fY, avalanche.fSize, avalanche.fTime,
+                                  avalanche.fShared};
+        if (fwrite(values, sizeof(double), 5, pipe) != 5) return false;
     }
     return true;
 }
 
 /// Reads the result written by WriteResult, adding it
-bool ReadResult(FILE* pipe, int& primaries, Losses& losses, std::vector<std::array<double, 2>>& avalanches) {
-    int counts[2];
-    if (fread(counts, sizeof(int), 2, pipe) != 2) return false;
-    primaries += counts[0];
+bool ReadResult(FILE* pipe, Losses& losses, std::vector<Avalanche>& avalanches) {
+    int count = 0;
+    if (fread(&count, sizeof(int), 1, pipe) != 1) return false;
     std::array<int, 5> lost;
     if (fread(lost.data(), sizeof(int), lost.size(), pipe) != lost.size()) return false;
     losses.fOut += lost[0];
@@ -73,10 +74,10 @@ bool ReadResult(FILE* pipe, int& primaries, Losses& losses, std::vector<std::arr
     losses.fDielectric += lost[2];
     losses.fAttached += lost[3];
     losses.fOther += lost[4];
-    for (int i = 0; i < counts[1]; i++) {
-        std::array<double, 2> avalanche;
-        if (fread(avalanche.data(), sizeof(double), 2, pipe) != 2) return false;
-        avalanches.push_back(avalanche);
+    for (int i = 0; i < count; i++) {
+        double values[5];
+        if (fread(values, sizeof(double), 5, pipe) != 5) return false;
+        avalanches.push_back({values[0], values[1], values[2], values[3], values[4]});
     }
     return true;
 }
@@ -133,20 +134,22 @@ void ComputeAmplificationResponse(const TRestDetectorMedium& medium,
     response.fPressure = medium.GetPressure();
     response.fTemperature = medium.GetTemperature();
     response.fPenning = penning;
+    // The cell of the map of the response, x and y in mm
+    response.fCellLow = {low[0] / kCmPerMm, low[1] / kCmPerMm};
+    response.fCellHigh = {high[0] / kCmPerMm, high[1] / kCmPerMm};
 
-    // The avalanches of a process (part of parts), with their progress: size and time of the collected ones,
-    // and where the others ended
-    auto computePart = [&](size_t part, size_t parts, int& primaries, Losses& losses,
-                           std::vector<std::array<double, 2>>& avalanches) {
+    // The avalanches of a process (part of parts), with their progress: start point, size, time and
+    // electrons in another cell of each primary, and where the lost ones ended
+    auto computePart = [&](size_t part, size_t parts, Losses& losses, std::vector<Avalanche>& avalanches) {
         const int electrons = response.fElectrons;
         const int partElectrons = (electrons - static_cast<int>(part) + static_cast<int>(parts) - 1) / parts;
-        int reported = 0;
+        int reported = 0, primaries = 0;
         for (int e = static_cast<int>(part); e < electrons; e += parts) {
             const double x = low[0] + Garfield::RndmUniform() * (high[0] - low[0]);
             const double y = low[1] + Garfield::RndmUniform() * (high[1] - low[1]);
             avalanche.AvalancheElectron(x, y, start, 0, kInitialEnergy);
             primaries++;
-            int size = 0;
+            int size = 0, shared = 0;
             double time = 0;
             for (unsigned int i = 0; i < avalanche.GetNumberOfElectronEndpoints(); i++) {
                 double x0, y0, z0, t0, e0, x1, y1, z1, t1, e1;
@@ -155,9 +158,13 @@ void ComputeAmplificationResponse(const TRestDetectorMedium& medium,
                 if (z1 > anode) continue;
                 size++;
                 time += t1;
+                // On the pad of another cell (periodic copies)
+                if (x1 < low[0] || x1 > high[0] || y1 < low[1] || y1 > high[1]) shared++;
             }
+            avalanches.push_back({x / kCmPerMm, y / kCmPerMm, static_cast<double>(size),
+                                  size > 0 ? time / size * kUsPerNs : 0, static_cast<double>(shared)});
             if (size > 0) {
-                avalanches.push_back({static_cast<double>(size), time / size * kUsPerNs});
+                // Collected: nothing else
             } else if (avalanche.GetNumberOfElectronEndpoints() > 0) {
                 // Lost: where its first electron that stopped ended
                 double x0, y0, z0, t0, e0, x1, y1, z1, t1, e1;
@@ -187,13 +194,12 @@ void ComputeAmplificationResponse(const TRestDetectorMedium& medium,
         }
     };
 
-    int primaries = 0;
     Losses losses;
-    std::vector<std::array<double, 2>> avalanches;
+    std::vector<Avalanche> avalanches;
     const size_t parts = std::max<size_t>(1, std::min<size_t>(std::max(jobs, 1), response.fElectrons));
     if (parts == 1) {
-        computePart(0, 1, primaries, losses, avalanches);
-        response.SetResult(primaries, avalanches, losses);
+        computePart(0, 1, losses, avalanches);
+        response.SetResult(avalanches, losses);
         return;
     }
     // In parallel (Garfield++ is not thread safe): forked processes, each with its own random seed (from the
@@ -216,13 +222,11 @@ void ComputeAmplificationResponse(const TRestDetectorMedium& medium,
             int status = 1;
             try {
                 Garfield::randomEngine.Seed(seed + part);
-                int partPrimaries = 0;
                 Losses partLosses;
-                std::vector<std::array<double, 2>> partAvalanches;
-                computePart(part, parts, partPrimaries, partLosses, partAvalanches);
+                std::vector<Avalanche> partAvalanches;
+                computePart(part, parts, partLosses, partAvalanches);
                 FILE* output = fdopen(fd[1], "wb");
-                const bool ok =
-                    output != nullptr && WriteResult(output, partPrimaries, partLosses, partAvalanches);
+                const bool ok = output != nullptr && WriteResult(output, partLosses, partAvalanches);
                 if (output && fclose(output) == 0 && ok) status = 0;
             } catch (const std::exception& exception) {
                 std::cerr << "restGarfield: " << exception.what() << std::endl;
@@ -238,14 +242,14 @@ void ComputeAmplificationResponse(const TRestDetectorMedium& medium,
              << parts << " processes" << RESTendl;
     bool ok = true;
     for (auto& child : children) {
-        ok = ok && child.pipe && ReadResult(child.pipe, primaries, losses, avalanches);
+        ok = ok && child.pipe && ReadResult(child.pipe, losses, avalanches);
         if (child.pipe) fclose(child.pipe);
         int status = 0;
         waitpid(child.pid, &status, 0);
         ok &= WIFEXITED(status) && WEXITSTATUS(status) == 0;
     }
     if (!ok) throw std::runtime_error(error + "a process computing the avalanches failed");
-    response.SetResult(primaries, avalanches, losses);
+    response.SetResult(avalanches, losses);
 }
 
 void RunAmplificationResponse(const TRestDetectorMedium& medium, TRestDetectorAmplificationResponse& response,
@@ -271,6 +275,23 @@ void RunAmplificationResponse(const TRestDetectorMedium& medium, TRestDetectorAm
              << ": out of the cell " << lost.fOut << ", on a conductor " << lost.fConductor
              << ", on a dielectric " << lost.fDielectric << ", attached " << lost.fAttached << ", other "
              << lost.fOther << RESTendl;
+    if (response.fAnodeElectrons > 0) {
+        RESTInfo
+            << "restGarfield: electrons at the anode out of the cell of their primary (charge sharing, not "
+               "applied): "
+            << response.fSharedElectrons / response.fAnodeElectrons << RESTendl;
+    }
+    if (response.HasCellMap()) {
+        double minimum = 1, maximum = 0;
+        for (size_t bin = 0; bin < response.fCellPrimaries.size(); bin++) {
+            if (response.fCellPrimaries[bin] <= 0) continue;
+            minimum = std::min(minimum, response.GetCellTransparency(bin));
+            maximum = std::max(maximum, response.GetCellTransparency(bin));
+        }
+        RESTInfo << "restGarfield: map of the cell, " << response.fCellBins << " x " << response.fCellBins
+                 << " bins, " << static_cast<double>(response.fPrimaries) / response.fCellPrimaries.size()
+                 << " primaries per bin, transparency from " << minimum << " to " << maximum << RESTendl;
+    }
 
     YAML::Node generator;
     generator["program"] = "Garfield++ AvalancheMicroscopic (field maps of a unit cell)";

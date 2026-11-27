@@ -24,15 +24,25 @@
 /// Response: the number of primaries and of collected avalanches, the histogram of the size of the
 /// collected avalanches (electrons at the anode, sizeBins over [0, the largest size]) with its mean and
 /// variance, and the histogram of the time from the start plane to the anode (the mean time of the electrons
-/// of the avalanche at the anode, timeBins over the range of the times).
+/// of the avalanche at the anode, timeBins over the range of the times). The map of the cell (cellBins x
+/// cellBins bins over x and y of the cell, by the start point of the primaries): the transparency and the
+/// mean size of each bin, e.g. the losses over the solid mesh around the holes. The electrons at the anode
+/// out of the cell where their primary started (on the pad of another cell) are counted, to check that the
+/// charge stays on the pad of its cell.
 /// TRestDetectorAvalancheProcess with `responseFile` uses it for each drifted electron: it passes with the
 /// transparency, its gain is sampled from the size histogram and its time is delayed by a time sampled from
-/// the time histogram.
+/// the time histogram. With the map, the transparency is that of the bin of the electron in the cell and the
+/// gain is scaled by the mean size of the bin over the mean of all; the cell is the volume of the readout
+/// containing the electron (a pixel, TRestDetectorReadout::GetPixelPosition): its x and y from the lower
+/// corner, as fractions of its size, are those of the cell (so the cell must be centred on the pixel, with
+/// its size).
 ///
 /// Parameters (`amplification` key): fieldMaps (required), dielectricMaps ([]: none; one per field map in
 /// the same order, "" for a map without), fieldMapOffset ([0, 0, 0] mm), periodicity ("xy"), mirror (false),
 /// start and anode (z in mm, start > anode), electrons (1000), usePenning (false), penningRate (0), sizeBins
-/// (100), timeBins (50), responseFile and overwrite (false: an existing responseFile is not computed again).
+/// (100), timeBins (50), cellBins (10; 0: no map), responseFile and overwrite (false: an existing
+/// responseFile is not computed again). About 100 primaries per bin of the map give its transparency to
+/// +-0.04: electrons ~ 100 cellBins^2.
 /// One response per operating point (the voltages of the CST model: mesh voltage and drift field).
 ///
 ///    amplification:
@@ -46,9 +56,11 @@
 ///
 /// Response file: the metadata `AmplificationResponse` in RESTMetadataStore (YAML: `configuration`, the
 /// `amplification` keys; medium, pressure, temperature, penning, primaries, collected, losses (out,
-/// conductor, dielectric, attached, other), meanSize,
-/// sizeVariance, sizeMax, sizeCounts, tMin, tMax, timeCounts and `generator`, the program, date and code that
-/// computed it) and the histograms TH1D `AmplificationSize` and `AmplificationTime` (us) to draw them.
+/// conductor, dielectric, attached, other), meanSize, sizeVariance, sizeMax, sizeCounts, tMin, tMax,
+/// timeCounts, cellLow, cellHigh, cellPrimaries, cellCollected, cellSizeSum, anodeElectrons,
+/// sharedElectrons and `generator`, the program, date and code that computed it), the histograms TH1D
+/// `AmplificationSize` and `AmplificationTime` (us) and the map of the cell, TH2D
+/// `AmplificationTransparencyMap` and `AmplificationGainMap` (mean size), to draw them.
 ///
 /// \author JuanAn García <juanangp@unizar.es>
 
@@ -61,6 +73,7 @@
 
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TRandom.h"
 
 static const bool TRestDetectorAmplificationResponse_FieldsRegistered = []() {
@@ -78,6 +91,7 @@ static const bool TRestDetectorAmplificationResponse_FieldsRegistered = []() {
     reg.RegisterField<A>("penningRate", &A::fPenningRate);
     reg.RegisterField<A>("sizeBins", &A::fSizeBins);
     reg.RegisterField<A>("timeBins", &A::fTimeBins);
+    reg.RegisterField<A>("cellBins", &A::fCellBins);
     reg.RegisterField<A>("responseFile", &A::fResponseFile);
     reg.RegisterField<A>("overwrite", &A::fOverwrite);
     return true;
@@ -142,36 +156,55 @@ void TRestDetectorAmplificationResponse::LoadConfig() {
     if (fElectrons <= 0) throw std::runtime_error(prefix + "electrons must be > 0");
     if (fSizeBins <= 0 || fTimeBins <= 0)
         throw std::runtime_error(prefix + "sizeBins and timeBins must be > 0");
+    if (fCellBins < 0) throw std::runtime_error(prefix + "cellBins must be >= 0");
     if (fPenningRate < 0 || fPenningRate > 1)
         throw std::runtime_error(prefix + "penningRate must be in [0, 1]");
     UpdateYAMLFromParams<TRestDetectorAmplificationResponse>(fNode);
 }
 
-void TRestDetectorAmplificationResponse::SetResult(int primaries,
-                                                   const std::vector<std::array<double, 2>>& avalanches,
+void TRestDetectorAmplificationResponse::SetResult(const std::vector<Avalanche>& avalanches,
                                                    const Losses& losses) {
-    fPrimaries = primaries;
-    fCollected = avalanches.size();
+    fPrimaries = static_cast<int>(avalanches.size());
+    fCollected = 0;
     fLosses = losses;
     fSizeCounts.assign(fSizeBins, 0);
     fTimeCounts.assign(fTimeBins, 0);
     fMeanSize = fSizeVariance = fSizeMax = fTMin = fTMax = 0;
-    if (avalanches.empty()) return;
+    fAnodeElectrons = fSharedElectrons = 0;
+    const bool map = fCellBins > 0 && fCellHigh[0] > fCellLow[0] && fCellHigh[1] > fCellLow[1];
+    const size_t cells = map ? static_cast<size_t>(fCellBins) * fCellBins : 0;
+    fCellPrimaries.assign(cells, 0);
+    fCellCollected.assign(cells, 0);
+    fCellSizeSum.assign(cells, 0);
+
     double sum = 0, sum2 = 0;
-    fTMin = fTMax = avalanches[0][1];
-    for (const auto& [size, time] : avalanches) {
-        sum += size;
-        sum2 += size * size;
-        fSizeMax = std::max(fSizeMax, size);
-        fTMin = std::min(fTMin, time);
-        fTMax = std::max(fTMax, time);
+    for (const auto& avalanche : avalanches) {
+        const int cell = map ? GetCellBin((avalanche.fX - fCellLow[0]) / (fCellHigh[0] - fCellLow[0]),
+                                          (avalanche.fY - fCellLow[1]) / (fCellHigh[1] - fCellLow[1]))
+                             : -1;
+        if (map) fCellPrimaries[cell]++;
+        if (!(avalanche.fSize > 0)) continue;
+        if (map) {
+            fCellCollected[cell]++;
+            fCellSizeSum[cell] += avalanche.fSize;
+        }
+        fTMin = fCollected == 0 ? avalanche.fTime : std::min(fTMin, avalanche.fTime);
+        fTMax = fCollected == 0 ? avalanche.fTime : std::max(fTMax, avalanche.fTime);
+        fCollected++;
+        sum += avalanche.fSize;
+        sum2 += avalanche.fSize * avalanche.fSize;
+        fAnodeElectrons += avalanche.fSize;
+        fSharedElectrons += avalanche.fShared;
+        fSizeMax = std::max(fSizeMax, avalanche.fSize);
     }
-    const double n = avalanches.size();
+    if (fCollected == 0) return;
+    const double n = fCollected;
     fMeanSize = sum / n;
     fSizeVariance = n > 1 ? std::max(0.0, (sum2 - n * fMeanSize * fMeanSize) / (n - 1)) : 0;
-    for (const auto& [size, time] : avalanches) {
-        fSizeCounts[Bin(size, 0, fSizeMax, fSizeBins)]++;
-        fTimeCounts[Bin(time, fTMin, fTMax, fTimeBins)]++;
+    for (const auto& avalanche : avalanches) {
+        if (!(avalanche.fSize > 0)) continue;
+        fSizeCounts[Bin(avalanche.fSize, 0, fSizeMax, fSizeBins)]++;
+        fTimeCounts[Bin(avalanche.fTime, fTMin, fTMax, fTimeBins)]++;
     }
 }
 
@@ -189,6 +222,26 @@ double TRestDetectorAmplificationResponse::SampleSize(TRandom& random) const {
 
 double TRestDetectorAmplificationResponse::SampleTime(TRandom& random) const {
     return Sample(fTimeCounts, fTMin, fTMax, random);
+}
+
+int TRestDetectorAmplificationResponse::GetCellBin(double fractionX, double fractionY) const {
+    if (fCellBins <= 0) return 0;
+    return Bin(fractionX, 0, 1, fCellBins) + fCellBins * Bin(fractionY, 0, 1, fCellBins);
+}
+
+double TRestDetectorAmplificationResponse::GetCellTransparency(int bin) const {
+    if (bin < 0 || static_cast<size_t>(bin) >= fCellPrimaries.size() || fCellPrimaries[bin] <= 0) {
+        return GetTransparency();
+    }
+    return static_cast<double>(fCellCollected[bin]) / fCellPrimaries[bin];
+}
+
+double TRestDetectorAmplificationResponse::GetCellGainFactor(int bin) const {
+    if (bin < 0 || static_cast<size_t>(bin) >= fCellCollected.size() || fCellCollected[bin] <= 0 ||
+        !(fMeanSize > 0)) {
+        return 1;
+    }
+    return fCellSizeSum[bin] / fCellCollected[bin] / fMeanSize;
 }
 
 void TRestDetectorAmplificationResponse::Write(TFile* file, const YAML::Node& generator) const {
@@ -217,6 +270,13 @@ void TRestDetectorAmplificationResponse::Write(TFile* file, const YAML::Node& ge
     metadata["tMin"] = fTMin;
     metadata["tMax"] = fTMax;
     metadata["timeCounts"] = fTimeCounts;
+    metadata["cellLow"] = std::vector<double>(fCellLow.begin(), fCellLow.end());
+    metadata["cellHigh"] = std::vector<double>(fCellHigh.begin(), fCellHigh.end());
+    metadata["cellPrimaries"] = fCellPrimaries;
+    metadata["cellCollected"] = fCellCollected;
+    metadata["cellSizeSum"] = fCellSizeSum;
+    metadata["anodeElectrons"] = fAnodeElectrons;
+    metadata["sharedElectrons"] = fSharedElectrons;
     metadata["generator"] = YAML::Clone(generator);
     TRestMetadata::WriteMetadata(file, kName, metadata);
 
@@ -225,6 +285,25 @@ void TRestDetectorAmplificationResponse::Write(TFile* file, const YAML::Node& ge
                    fSizeMax);
     WriteHistogram("AmplificationTime", "Time to the anode;time (#mus);avalanches", fTimeCounts, fTMin,
                    fTMax);
+    if (!HasCellMap()) return;
+    TH2D transparency("AmplificationTransparencyMap", "Transparency by start point;x (mm);y (mm)", fCellBins,
+                      fCellLow[0], fCellHigh[0], fCellBins, fCellLow[1], fCellHigh[1]);
+    TH2D gain("AmplificationGainMap", "Mean avalanche size by start point;x (mm);y (mm)", fCellBins,
+              fCellLow[0], fCellHigh[0], fCellBins, fCellLow[1], fCellHigh[1]);
+    for (auto* histogram : {&transparency, &gain}) histogram->SetDirectory(nullptr);
+    for (int binY = 0; binY < fCellBins; binY++) {
+        for (int binX = 0; binX < fCellBins; binX++) {
+            const int bin = binX + fCellBins * binY;
+            if (fCellPrimaries[bin] > 0) {
+                transparency.SetBinContent(binX + 1, binY + 1, GetCellTransparency(bin));
+            }
+            if (fCellCollected[bin] > 0) {
+                gain.SetBinContent(binX + 1, binY + 1, GetCellGainFactor(bin) * fMeanSize);
+            }
+        }
+    }
+    transparency.Write(transparency.GetName(), TObject::kOverwrite);
+    gain.Write(gain.GetName(), TObject::kOverwrite);
 }
 
 TRestDetectorAmplificationResponse TRestDetectorAmplificationResponse::Read(TFile* file) {
@@ -255,9 +334,24 @@ TRestDetectorAmplificationResponse TRestDetectorAmplificationResponse::Read(TFil
     response.fTMin = metadata["tMin"].as<double>(0);
     response.fTMax = metadata["tMax"].as<double>(0);
     response.fTimeCounts = metadata["timeCounts"].as<std::vector<int>>(std::vector<int>());
+    // The map of the cell (none in the responses computed before it)
+    const auto low = metadata["cellLow"].as<std::vector<double>>(std::vector<double>());
+    const auto high = metadata["cellHigh"].as<std::vector<double>>(std::vector<double>());
+    if (low.size() == 2 && high.size() == 2) {
+        response.fCellLow = {low[0], low[1]};
+        response.fCellHigh = {high[0], high[1]};
+    }
+    response.fCellPrimaries = metadata["cellPrimaries"].as<std::vector<int>>(std::vector<int>());
+    response.fCellCollected = metadata["cellCollected"].as<std::vector<int>>(std::vector<int>());
+    response.fCellSizeSum = metadata["cellSizeSum"].as<std::vector<double>>(std::vector<double>());
+    response.fAnodeElectrons = metadata["anodeElectrons"].as<double>(0);
+    response.fSharedElectrons = metadata["sharedElectrons"].as<double>(0);
+    const size_t cells =
+        response.fCellPrimaries.empty() ? 0 : static_cast<size_t>(response.fCellBins) * response.fCellBins;
     if (response.fSizeCounts.size() != static_cast<size_t>(response.fSizeBins) ||
         response.fTimeCounts.size() != static_cast<size_t>(response.fTimeBins) ||
-        response.fCollected > response.fPrimaries) {
+        response.fCollected > response.fPrimaries || response.fCellPrimaries.size() != cells ||
+        response.fCellCollected.size() != cells || response.fCellSizeSum.size() != cells) {
         throw std::runtime_error(error + "the response is not consistent (bins or counts)");
     }
     return response;

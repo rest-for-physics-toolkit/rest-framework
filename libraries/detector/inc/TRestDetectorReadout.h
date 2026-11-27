@@ -19,6 +19,7 @@
 class TFile;
 class TGeoManager;
 class TGeoMedium;
+class TGeoNode;
 class TGeoShape;
 
 /// \class TRestDetectorReadout
@@ -210,6 +211,19 @@ class TRestDetectorReadout : public TRestMetadata {
     /// \return DAQ channel, or `-1` when no channel is found.
     virtual int GetChannelFromPosition(double x, double y, double z) const;
 
+    /// \brief A position in the frame of the volume of the geometry containing it (GetPixelPosition).
+    struct PixelPosition {
+        int daqID = -1;                  ///< DAQ channel of the volume (-1: none)
+        ROOT::Math::XYZVector local;     ///< Position from the centre of the volume, in its axes
+        ROOT::Math::XYZVector halfSize;  ///< Half sizes of the volume (its bounding box) along its axes
+    };
+    /// \brief The volume of the geometry containing a position (a pixel of a TRestMicromegasReadout, local z
+    /// along the normal of the plane) and the position in its frame, whatever the rotations of the readout
+    /// and of the volume, e.g. for a response of the amplification depending on the position in the pixel
+    /// (TRestDetectorAvalancheProcess). The geometry only: no override of GetChannelFromPosition.
+    /// \return false if no volume of the readout contains the position.
+    bool GetPixelPosition(const ROOT::Math::XYZVector& position, PixelPosition& pixel) const;
+
     /// \brief A channel near a position (GetChannelsInRange).
     struct ChannelInRange {
         int daqID = -1;                  ///< DAQ channel
@@ -362,6 +376,9 @@ class TRestDetectorReadout : public TRestMetadata {
     TGeoManager* GetGeoManager() const { return fGeoManager; }
 
    protected:
+    /// \brief DAQ channel of a node found by fGeoManager->FindNode (its path or unique ID), -1 if none.
+    int CurrentNodeChannel(const TGeoNode* node) const;
+
     /// \brief Deletes fGeoManager (TRestTools::DeleteGeometry), unless a view was drawn: the view uses its
     /// shapes and may still be displayed, so both are then left to ROOT. Resets both pointers.
     void ReleaseGeometry();

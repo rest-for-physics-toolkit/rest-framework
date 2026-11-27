@@ -1010,8 +1010,9 @@ The conversions between libraries (Geant4 → hits, hits → tracks, raw ↔ det
   field map exported by CST (its own `responseFile`), used by `TRestDetectorHitsDriftProcess` (its
   `responseFile`) instead of the drift field of the medium in special simulations with a non-uniform field,
   and with an `amplification` section the amplification response in the field maps of a unit cell of the
-  amplification structure (transparency, avalanche size and time), used by `TRestDetectorAvalancheProcess`
-  (its `responseFile`) instead of the gain table.
+  amplification structure (transparency, avalanche size and time, and their dependence on the position in
+  the cell, applied in the pixel of the readout containing each hit), used by
+  `TRestDetectorAvalancheProcess` (its `responseFile`) instead of the gain table.
 - The simulated events are analysed with the [geant4 library](../libraries/geant4/README.md)
   (`TRestGeant4AnalysisProcess`, `TRestGeant4QuenchingProcess`) and converted to detector hits by
   `TRestGeant4ToDetectorHitsProcess`.

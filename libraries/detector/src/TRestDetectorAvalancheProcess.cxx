@@ -18,6 +18,16 @@
 /// total gain over n, and its time is delayed by a time sampled from the response (the time from the start
 /// plane of the response, the end of the drift, to the anode). A hit with no electron amplified is
 /// removed. The mean gain, theta and transparency of the response are written to the metadata.
+/// With the map of the cell in the response (cellBins), the transparency and the gain depend on where the
+/// hit is in the cell: the cell is the pixel of the readout containing the hit
+/// (TRestDetectorReadout::GetPixelPosition, whatever the rotations of the readout and of its pixels), its
+/// position in the pixel, as fractions of the pixel size along the local x and y of the pixel, gives the bin
+/// of the cell, and the electrons of the hit pass with the transparency of the bin and their gains are
+/// scaled by the mean size of the bin over the mean of all. The cell must be centred on the pixel with its
+/// size (a warning if they differ by more than 5 %). A hit out of the pixels (e.g. between two readout
+/// planes) gets the response averaged over the cell. The hits keep their position: the charge stays on the
+/// pad of the cell (the electrons at the anode on the pad of another cell are counted by restGarfield, and
+/// not applied). With maxHits in hitsDrift, the electrons of a hit share its position.
 ///
 /// Differences with legacy: the gain comes from the avalanche simulations of restGarfield at the voltage,
 /// with Polya fluctuations, instead of a fixed detectorGain with a gaussian resolution
@@ -25,7 +35,7 @@
 /// this process).
 ///
 /// Parameters: amplificationVoltage and gap, or responseFile; medium (empty: the only one with `charge`),
-/// table (""), seed (0:
+/// table (""), readout (with a response with the map of the cell; empty: the data readout), seed (0:
 /// random seed; otherwise the generator is re-seeded at each event from the seed and the event and subevent
 /// IDs, TRestEvent::EventSeed, so the result does not depend on the number of threads).
 ///
@@ -51,6 +61,7 @@
 #include "TFile.h"
 #include "TRestDetectorHitsEvent.h"
 #include "TRestDetectorMedium.h"
+#include "TRestDetectorReadoutManager.h"
 #include "TRestDetectorTransportManager.h"
 #include "TRestManager.h"
 
@@ -87,6 +98,7 @@ static const bool TRestDetectorAvalancheProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("medium", &P::fMediumName);
     reg.RegisterField<P>("table", &P::fTable);
     reg.RegisterField<P>("responseFile", &P::fResponseFile);
+    reg.RegisterField<P>("readout", &P::fReadoutName);
     reg.RegisterField<P>("seed", &P::fSeed);
     reg.RegisterField<P>("gain", &P::fGain);
     reg.RegisterField<P>("theta", &P::fTheta);
@@ -169,10 +181,23 @@ void TRestDetectorAvalancheProcess::InitProcess() {
         fGain = fResponse->fMeanSize;
         fTheta = fResponse->GetTheta();
         fTransparency = fResponse->GetTransparency();
+        fReadout = nullptr;
+        fCellChecked = false;
+        if (fResponse->HasCellMap()) {
+            // The hits located in the pixels of the readout
+            auto* readouts = dynamic_cast<TRestDetectorReadoutManager*>(
+                fManager->GetMetadataClass("TRestDetectorReadoutManager"));
+            if (!readouts) {
+                throw std::runtime_error(user + ": the amplification response of " + fResponseFile +
+                                         " has the map of the cell: a TRestDetectorReadoutManager is needed");
+            }
+            fReadout = readouts->SelectReadout(fReadoutName, user);
+        }
         UpdateYAMLFromParams<TRestDetectorAvalancheProcess>(fNode);
         return;
     }
     fResponse.reset();
+    fReadout = nullptr;
     fTransparency = 1;
 
     const auto& table = fCharge->GetGainTable(fGap, fTable);
@@ -187,6 +212,21 @@ void TRestDetectorAvalancheProcess::InitProcess() {
     fTable = table.GetKey();
     // The stored metadata keeps the medium, the table and the gain used
     UpdateYAMLFromParams<TRestDetectorAvalancheProcess>(fNode);
+}
+
+void TRestDetectorAvalancheProcess::CheckCell(const TRestDetectorReadout::PixelPosition& pixel) {
+    if (fCellChecked) return;
+    fCellChecked = true;
+    const double cellX = fResponse->fCellHigh[0] - fResponse->fCellLow[0];
+    const double cellY = fResponse->fCellHigh[1] - fResponse->fCellLow[1];
+    const double pixelX = 2 * pixel.halfSize.X(), pixelY = 2 * pixel.halfSize.Y();
+    if (std::abs(cellX / pixelX - 1) > 0.05 || std::abs(cellY / pixelY - 1) > 0.05) {
+        RESTWarning << "TRestDetectorAvalancheProcess: the cell of the amplification response of "
+                    << fResponseFile << " (" << cellX << " x " << cellY
+                    << " mm) is not the size of the pixel "
+                    << "of the readout (" << pixelX << " x " << pixelY << " mm): the map of the cell is "
+                    << "stretched to the pixel" << RESTendl;
+    }
 }
 
 bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -208,11 +248,21 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
         const double electrons = energy / wValue;
         if (fResponse) {
             // Each electron amplified with the transparency, its gain and the time of the hit from the
-            // response
+            // response; with the map, those of the bin of the hit in the cell, its pixel
+            double transparency = fTransparency, factor = 1;
+            TRestDetectorReadout::PixelPosition pixel;
+            if (fReadout && fReadout->GetPixelPosition(inputEvent->GetPosition(n), pixel) &&
+                pixel.halfSize.X() > 0 && pixel.halfSize.Y() > 0) {
+                CheckCell(pixel);
+                const int bin = fResponse->GetCellBin(0.5 + pixel.local.X() / (2 * pixel.halfSize.X()),
+                                                      0.5 + pixel.local.Y() / (2 * pixel.halfSize.Y()));
+                transparency = fResponse->GetCellTransparency(bin);
+                factor = fResponse->GetCellGainFactor(bin);
+            }
             const long count = std::max(1L, std::lround(electrons));
             double gain = 0;
             for (long e = 0; e < count; e++) {
-                if (fRandom.Uniform() < fTransparency) gain += fResponse->SampleSize(fRandom);
+                if (fRandom.Uniform() < transparency) gain += factor * fResponse->SampleSize(fRandom);
             }
             if (!(gain > 0)) continue;
             const double time = inputEvent->GetTime(n) + fResponse->SampleTime(fRandom);

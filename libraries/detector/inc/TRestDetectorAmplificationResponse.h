@@ -54,6 +54,9 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     int fSizeBins = 100;
     /// `timeBins`: bins of the histogram of the time from the start plane to the anode
     int fTimeBins = 50;
+    /// `cellBins`: bins along x and y of the cell for the transparency and gain versus the start point (0:
+    /// no map, the response averaged over the cell)
+    int fCellBins = 10;
     /// `responseFile`: file of the response
     std::string fResponseFile = "";
     /// `overwrite`: compute the response again if the file exists
@@ -93,6 +96,32 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     double fTMin = 0, fTMax = 0;
     /// Counts of the time, timeBins
     std::vector<int> fTimeCounts;  //!
+    /// Cell (mm, x and y in the frame of the response): its lower and upper corners, set before SetResult
+    std::array<double, 2> fCellLow = {0, 0};
+    /// Upper corner of the cell (mm)
+    std::array<double, 2> fCellHigh = {0, 0};
+    /// Primaries started in each bin of the cell (cellBins x cellBins, bin = binX + cellBins binY); empty:
+    /// no map
+    std::vector<int> fCellPrimaries;  //!
+    /// Primaries of each bin whose avalanche reached the anode
+    std::vector<int> fCellCollected;  //!
+    /// Sum of the sizes of the collected avalanches of each bin
+    std::vector<double> fCellSizeSum;  //!
+    /// Electrons at the anode of all the collected avalanches, and those of them out of the cell where their
+    /// primary started (on the pad of a neighbouring cell: charge sharing, not applied by the process)
+    double fAnodeElectrons = 0;
+    /// Electrons at the anode out of the cell of their primary
+    double fSharedElectrons = 0;
+
+    /// \brief A primary electron: where it started (mm, in the cell), the size of its avalanche (electrons
+    /// at the anode, 0: lost), its time to the anode (us) and its electrons at the anode out of the cell
+    struct Avalanche {
+        double fX = 0;       ///< Start x (mm)
+        double fY = 0;       ///< Start y (mm)
+        double fSize = 0;    ///< Electrons at the anode (0: lost)
+        double fTime = 0;    ///< Mean time of its electrons at the anode (us)
+        double fShared = 0;  ///< Electrons at the anode out of the start cell
+    };
 
     /// \brief Builds an empty response.
     TRestDetectorAmplificationResponse();
@@ -108,13 +137,12 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     /// \brief Nothing to initialise.
     void Initialize() override {}
 
-    /// \brief Sets the response from the avalanches of `primaries` electrons: the size (electrons at the
-    /// anode, > 0) and time (us) of each one that reached the anode, and where the others ended.
-    void SetResult(int primaries, const std::vector<std::array<double, 2>>& avalanches, const Losses& losses);
+    /// \brief Sets the response from the avalanches of the primary electrons (one each, lost ones with size
+    /// 0) and where the lost ones ended; the map of the cell (cellBins > 0 and fCellLow, fCellHigh set) from
+    /// their start points.
+    void SetResult(const std::vector<Avalanche>& avalanches, const Losses& losses);
     /// \brief SetResult without losses
-    void SetResult(int primaries, const std::vector<std::array<double, 2>>& avalanches) {
-        SetResult(primaries, avalanches, Losses{});
-    }
+    void SetResult(const std::vector<Avalanche>& avalanches) { SetResult(avalanches, Losses{}); }
 
     /// \brief Fraction of the primary electrons whose avalanche reaches the anode (0 without primaries)
     double GetTransparency() const;
@@ -126,9 +154,20 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     /// \brief Time (us) from the start plane to the anode sampled from its histogram (uniform within the bin)
     double SampleTime(TRandom& random) const;
 
+    /// \brief Whether the response has the map of the cell (transparency and gain versus the start point)
+    bool HasCellMap() const { return fCellBins > 0 && !fCellPrimaries.empty(); }
+    /// \brief Bin of the map of a point of the cell given by its fractions along x and y ([0, 1] from the
+    /// lower corner; clamped)
+    int GetCellBin(double fractionX, double fractionY) const;
+    /// \brief Transparency of the primaries started in a bin of the map (the whole cell without primaries)
+    double GetCellTransparency(int bin) const;
+    /// \brief Mean size of the avalanches of a bin over the mean size of all (1 without avalanches)
+    double GetCellGainFactor(int bin) const;
+
     /// \brief Writes the response to a file (opened with RECREATE or UPDATE): its metadata (configuration,
-    /// medium, conditions, counts, histograms and generator) in RESTMetadataStore, and the histograms as TH1D
-    /// `AmplificationSize` and `AmplificationTime` to draw them.
+    /// medium, conditions, counts, histograms, map of the cell and generator) in RESTMetadataStore, and the
+    /// histograms as TH1D `AmplificationSize` and `AmplificationTime` and the map of the cell as TH2D
+    /// `AmplificationTransparencyMap` and `AmplificationGainMap` to draw them.
     void Write(TFile* file, const YAML::Node& generator) const;
     /// \brief Reads the response of a file. Throws if it has none or it is not consistent.
     static TRestDetectorAmplificationResponse Read(TFile* file);
