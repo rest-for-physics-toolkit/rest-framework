@@ -33,6 +33,9 @@ static const bool TRestGeant4SpatialGenerator_FieldsRegistered = []() {
     reg.RegisterField<Shape>("rotationAxis", &Shape::fRotationAxis);
     reg.RegisterField<Shape>("rotationValue", &Shape::fRotationValue);
 
+    using Surface = TRestGeant4SpatialGeneratorSurface;
+    reg.RegisterField<Surface>("flux", &Surface::fFlux);
+
     using Cosmic = TRestGeant4SpatialGeneratorCosmic;
     reg.RegisterField<Cosmic>("radius", &Cosmic::fRadius);
     reg.RegisterField<Cosmic>("flux", &Cosmic::fFlux);
@@ -165,7 +168,25 @@ TRestGeant4SpatialGeneratorSurface::TRestGeant4SpatialGeneratorSurface(const str
 void TRestGeant4SpatialGeneratorSurface::LoadConfig() {
     UpdateParamsFromYAML<TRestGeant4SpatialGeneratorSurface>(fNode);
     CheckShape({{"sphere", 1}, {"cylinder", 2}, {"circle", 1}, {"wall", 2}});
+    if (fFlux < 0) throw runtime_error(GetClassName() + ": 'flux' must be positive");
+    if (fFlux > 0 && IsGdml()) {
+        throw runtime_error(GetClassName() +
+                            ": 'flux' needs a shape, not a GDML surface (its area is unknown)");
+    }
     UpdateYAMLFromParams<TRestGeant4SpatialGeneratorSurface>(fNode);
+}
+
+double TRestGeant4SpatialGeneratorSurface::GetFluxSurfaceCm2() const {
+    if (IsGdml()) return 0;
+    double mm2 = 0;
+    if (fShape == "sphere" || fShape == "circle") {
+        mm2 = M_PI * fSize[0] * fSize[0];
+    } else if (fShape == "cylinder") {
+        mm2 = 2 * M_PI * fSize[0] * fSize[1];
+    } else {
+        mm2 = fSize[0] * fSize[1];
+    }
+    return mm2 * 0.01;
 }
 
 XYZVector TRestGeant4SpatialGeneratorSurface::Sample(TRandom& random) {

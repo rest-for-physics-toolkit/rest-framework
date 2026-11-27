@@ -198,7 +198,10 @@ the output represents `biasingTotalFactor` times the statistics of the primaries
 - `GetEquivalentExposureTime()`: the exposure, the real time the output represents (not the computing time,
   `computingTime`): that of CRY (`cry`), the events / (flux x surface) of the `cosmic` generator (the flux of
   its source, from the units of its histogram, the title of its z axis: counts / s / cm2 per bin or per eV,
-  keV, MeV or GeV; not computed without them), or the events / `activity` of the other generators (e.g.
+  keV, MeV or GeV; not computed without them), the events / (`flux` x surface) of a `surface` generator
+  with a shape (`flux` in counts / s / cm2: through the surface of a wall, circle or cylinder; for a sphere
+  the omnidirectional flux of an isotropic field, times its cross section pi r^2, with the angular
+  distribution `Sin2theta`, e.g. environmental gammas), or the events / `activity` of the other generators (e.g.
   `activity: 10 mBq`, the decays of a contamination); 0 if it cannot be computed. restG4 writes it in the run
   (`exposureTime`, seconds), used by the datasets and `TRestAnalysisPlot` for the rates.
 

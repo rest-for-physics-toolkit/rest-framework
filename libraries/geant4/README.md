@@ -58,7 +58,7 @@ The `generator` section of `TRestGeant4Metadata`; the options and examples are d
 | `TRestGeant4SpatialGeneratorPoint` | `type: point`: a fixed position. |
 | `TRestGeant4SpatialGeneratorShape` | Base of the volume and surface generators: a GDML volume or a shape, positioned and rotated. |
 | `TRestGeant4SpatialGeneratorVolume` | `type: volume`: uniform in a GDML volume, box, sphere or cylinder. |
-| `TRestGeant4SpatialGeneratorSurface` | `type: surface`: on the surface of a GDML volume, sphere, cylinder, circle or wall. |
+| `TRestGeant4SpatialGeneratorSurface` | `type: surface`: on the surface of a GDML volume, sphere, cylinder, circle or wall; `flux` (counts / s / cm2) of a shape for the exposure. |
 | `TRestGeant4SpatialGeneratorCosmic` | `type: cosmic`: origin on a sphere around the world from the direction, for a flux. |
 | `TRestGeant4SpatialGeneratorCRY` | `type: cry`: the cosmic-ray showers of CRY (called by restG4 built with CRY), one per event, with the options of the `TRestGeant4CRY` section. |
 | `TRestGeant4ParticleSource` | A `source`: particle with energy and angular distributions, or a Decay0 file. |

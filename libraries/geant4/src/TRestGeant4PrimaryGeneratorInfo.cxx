@@ -72,6 +72,10 @@ void TRestGeant4PrimaryGeneratorInfo::LoadConfig() {
                             ": 'activity' is not used by the cosmic and cry generators (their exposure is "
                             "computed from their flux)");
     }
+    if (fActivity > 0 && GetSurfaceRate() > 0) {
+        throw runtime_error(GetClassName() +
+                            ": 'activity' and 'flux' given, only one of them can set the rate");
+    }
     if (IsCosmic() && (fSources.size() != 1 || fSources[0].IsDecay0())) {
         throw runtime_error(GetClassName() +
                             ": the cosmic generator needs a single source, not a Decay0 one");
@@ -183,6 +187,11 @@ double TRestGeant4PrimaryGeneratorInfo::GetCosmicFlux() const {
     return cosmic ? cosmic->fFlux : 0;
 }
 
+double TRestGeant4PrimaryGeneratorInfo::GetSurfaceRate() const {
+    const auto* surface = dynamic_cast<const TRestGeant4SpatialGeneratorSurface*>(fSpatialGenerator.get());
+    return surface ? surface->fFlux * surface->GetFluxSurfaceCm2() : 0;
+}
+
 void TRestGeant4PrimaryGeneratorInfo::Print() const {
     if (!fSpatialGenerator) return;
     RESTMetadata << "Generator: " << fSpatialGenerator->GetClassName() << RESTendl;
@@ -190,6 +199,9 @@ void TRestGeant4PrimaryGeneratorInfo::Print() const {
     if (IsCosmic()) {
         RESTMetadata << "Cosmic generation surface: " << GetCosmicSurfaceCm2() << " cm2, flux "
                      << GetCosmicFlux() << " counts/s/cm2" << RESTendl;
+    }
+    if (GetSurfaceRate() > 0) {
+        RESTMetadata << "Surface flux: " << GetSurfaceRate() << " primaries/s" << RESTendl;
     }
     if (IsCRY()) {
         const auto* cry = dynamic_cast<const TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get());

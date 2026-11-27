@@ -528,9 +528,10 @@ class TRestGeant4Metadata : public TRestMetadata {
     double GetCosmicExposureTime() const;
     /// \brief The exposure (us): the real time the output represents, to normalize to a rate (not the
     /// computing time, GetComputingTime): GetEquivalentCRYExposureTime (cry generator), GetCosmicExposureTime
-    /// (cosmic generator) or, for the other generators, GetEquivalentNumberOfEvents over the `activity` of
-    /// the generator (e.g. the decays of a contamination); 0 if it cannot be computed (no activity, or a
-    /// cosmic source that is not a flux)
+    /// (cosmic generator) or, for the other generators, GetEquivalentNumberOfEvents over the primaries per
+    /// second of the `flux` of a surface generator (TRestGeant4PrimaryGeneratorInfo::GetSurfaceRate, e.g.
+    /// environmental gammas) or over the `activity` of the generator (e.g. the decays of a contamination);
+    /// 0 if it cannot be computed (no flux nor activity, or a cosmic source that is not a flux)
     double GetEquivalentExposureTime() const;
     /// \brief Computing time of the simulation (s, wall clock of restG4)
     inline double GetComputingTime() const { return fComputingTime; }

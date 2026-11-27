@@ -497,6 +497,9 @@ double TRestGeant4Metadata::GetCosmicExposureTime() const {
 double TRestGeant4Metadata::GetEquivalentExposureTime() const {
     if (fGeant4PrimaryGeneratorInfo.IsCRY()) return GetEquivalentCRYExposureTime();
     if (fGeant4PrimaryGeneratorInfo.IsCosmic()) return GetCosmicExposureTime();
+    // The primaries generated over the rate of the flux of a surface generator (per s)
+    const double surfaceRate = fGeant4PrimaryGeneratorInfo.GetSurfaceRate();
+    if (surfaceRate > 0) return GetEquivalentNumberOfEvents() / surfaceRate * 1e6;
     // The primaries generated over the activity of the source (per us)
     const double activity = fGeant4PrimaryGeneratorInfo.GetActivity();
     return activity > 0 ? GetEquivalentNumberOfEvents() / activity : 0;

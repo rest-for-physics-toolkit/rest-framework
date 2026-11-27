@@ -19,7 +19,7 @@
 /// cry generator, which gives the particles) and the optional `activity` of the source (primaries per
 /// time, e.g. 10 mBq: the decays of a contamination), to normalize the simulation to a time (the exposure,
 /// TRestGeant4Metadata::GetEquivalentExposureTime; not for the cosmic and cry generators, which compute it
-/// from their flux). Each part is
+/// from their flux, nor with the `flux` of a surface generator, the other way to give it). Each part is
 /// configured with UpdateParamsFromYAML and written back with UpdateYAMLFromParams, so the stored YAML
 /// has the values used (e.g. the cosmic radius). The options are documented in
 /// TRestGeant4PrimaryGenerator, which samples the primaries.
@@ -116,6 +116,9 @@ class TRestGeant4PrimaryGeneratorInfo : public TRestMetadata {
     double GetCosmicFlux() const;
     /// \brief `activity` (primaries per us), 0 if not given
     double GetActivity() const { return fActivity; }
+    /// \brief Primaries per second of the `flux` of a surface generator (flux x its surface, see
+    /// TRestGeant4SpatialGeneratorSurface); 0 if not a surface generator or without `flux`
+    double GetSurfaceRate() const;
 
     /// \brief Prints the generator class, the GDML volume, the cosmic surface, the cry file, the density and
     /// the sources.

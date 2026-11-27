@@ -10,7 +10,9 @@ releases); the notes of the GitHub release list its pull requests.
   TH2, y of a TH1): counts / s / cm2 per bin or per eV, keV, MeV or GeV (each bin weighted by its width, also
   to sample it); the flux and the exposure of the `cosmic` generator are not computed without them.
   `activity` of the generator (e.g. `10 mBq`, units `uBq` to `MBq`): the exposure of the other generators
-  (events / activity, e.g. a contamination).
+  (events / activity, e.g. a contamination). `flux` of the `surface` generator with a shape (counts / s /
+  cm2; for a sphere the omnidirectional flux, times its cross section): the exposure of e.g. the
+  environmental gammas from a sphere, also with volume biasing.
 - `exposureTime` of the runs (`TRestRunInfo`): the real time a simulation represents (not its computing
   time), written by restG4 (cosmic and cry generators), kept by the runs processed from it and summed by
   `REST_MergeRuns`; datasets (`GetTotalExposureTime`) and `TRestAnalysisPlot` (`exposureTime`, hours, as

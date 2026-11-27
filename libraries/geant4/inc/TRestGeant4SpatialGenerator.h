@@ -146,8 +146,16 @@ class TRestGeant4SpatialGeneratorVolume : public TRestGeant4SpatialGeneratorShap
 /// \brief `type: "surface"`: on the surface of a GDML volume (`from`) or a shape: `sphere` (size:
 /// radius), `cylinder` (size: radius, length; lateral surface, axis Z), `circle` (size: radius; XY plane)
 /// or `wall` (size: x, y; XY plane). On a sphere the direction reference points to its center.
+/// `flux` (counts / s / cm2, optional, not for a GDML surface), to normalize to a time
+/// (TRestGeant4Metadata::GetEquivalentExposureTime): the primaries per second are flux x GetFluxSurfaceCm2,
+/// the area of the shape (cylinder: its lateral surface; circle and wall: one side, the flux through them)
+/// except for a sphere, its cross section pi r^2: there `flux` is the omnidirectional flux of an isotropic
+/// field (the particles crossing a small sphere per cm2 of its cross section), whose particles enter the
+/// sphere with the angular distribution Sin2theta (the cosine law) around the direction to its center.
 class TRestGeant4SpatialGeneratorSurface : public TRestGeant4SpatialGeneratorShape {
    public:
+    double fFlux = 0;  ///< `flux` (counts / s / cm2), 0 if not given
+
     TRestGeant4SpatialGeneratorSurface() = default;
     /// \brief Configured from the `generator` section.
     TRestGeant4SpatialGeneratorSurface(const std::string& name, const YAML::Node& node);
@@ -162,6 +170,9 @@ class TRestGeant4SpatialGeneratorSurface : public TRestGeant4SpatialGeneratorSha
     ROOT::Math::XYZVector Sample(TRandom& random) override;
     /// \brief True for a sphere.
     bool IsInward() const override { return fShape == "sphere"; }
+    /// \brief The surface (cm2) that multiplied by `flux` gives the primaries per second: pi r^2 for a
+    /// sphere, the area of the other shapes; 0 for a GDML surface
+    double GetFluxSurfaceCm2() const;
 };
 
 /// \class TRestGeant4SpatialGeneratorCosmic

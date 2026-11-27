@@ -1046,3 +1046,31 @@ TEST(Geant4Metadata, ActivityExposure) {
                                      YAML::Load("generator:\n  type: cosmic\n  activity: 1 Bq\n" + source)),
                  std::runtime_error);
 }
+
+TEST(Geant4Metadata, SurfaceFluxExposure) {
+    const std::string source =
+        "  source: {particle: gamma, angular: {type: formula, formula: Sin2theta}, energy: {type: mono, "
+        "energy: 1 MeV}}\n";
+    const auto generator = [&source](const std::string& fields) {
+        return YAML::Load("generator:\n  type: surface\n" + fields + source);
+    };
+    // Sphere of 1 m: the flux times its cross section, 2 / s / cm2 x pi 1e4 cm2
+    TRestGeant4Metadata sphere("geant4Metadata",
+                               generator("  shape: sphere\n  size: [1 m, 0, 0]\n  flux: 2\n"));
+    sphere.SetNumberOfEvents(1000000);
+    EXPECT_NEAR(sphere.GetEquivalentExposureTime() / 1e6, 1e6 / (2 * M_PI * 1e4), 1e-9);
+    // Wall of 10 x 20 cm2: the flux through it
+    TRestGeant4Metadata wall("geant4Metadata",
+                             generator("  shape: wall\n  size: [10 cm, 20 cm, 0]\n  flux: 0.5\n"));
+    wall.SetNumberOfEvents(1000);
+    EXPECT_NEAR(wall.GetEquivalentExposureTime() / 1e6, 1000 / (0.5 * 200), 1e-9);
+    // Not with the activity, nor on a GDML surface, nor negative
+    const std::string wallShape = "  shape: wall\n  size: [1 m, 1 m, 0]\n";
+    EXPECT_THROW(
+        TRestGeant4Metadata("geant4Metadata", generator(wallShape + "  flux: 1\n  activity: 1 Bq\n")),
+        std::runtime_error);
+    EXPECT_THROW(TRestGeant4Metadata("geant4Metadata", generator("  from: gas\n  flux: 1\n")),
+                 std::runtime_error);
+    EXPECT_THROW(TRestGeant4Metadata("geant4Metadata", generator(wallShape + "  flux: -1\n")),
+                 std::runtime_error);
+}
