@@ -134,6 +134,14 @@ TEST(RawToDetectorSignal, RejectsEventWithoutPoints) {
     TRestDetectorSignalEvent output;
     EXPECT_FALSE(process->ProcessEvent(input, output));
     EXPECT_EQ(output.GetNumberOfSignals(), 0);
+
+    // keepEmptyEvents: the event is kept, without signals
+    auto keep =
+        MakeProcess<TRestRawToDetectorSignalProcess>("rawToSignal", "threshold: 100\nkeepEmptyEvents: true");
+    keep->Initialize();
+    TRestDetectorSignalEvent kept;
+    EXPECT_TRUE(keep->ProcessEvent(input, kept));
+    EXPECT_EQ(kept.GetNumberOfSignals(), 0);
 }
 
 TEST(RawToDetectorSignal, PhysicalIDNeedsReadout) {

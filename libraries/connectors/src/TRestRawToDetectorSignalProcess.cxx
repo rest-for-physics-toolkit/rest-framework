@@ -7,7 +7,9 @@
 /// (baselineRange, baselineOption, integralRange, pointsThreshold, signalThreshold,
 /// pointsOverThreshold, nPointsFlat) are transferred, with the baseline subtracted.
 ///
-/// Signals without points are not added to the output. Events without signals are rejected.
+/// Signals without points are not added to the output. Events without signals are rejected, unless
+/// keepEmptyEvents is true: then they are kept without signals, e.g. the vetoes of an event without veto
+/// pulses, whose observables are combined event by event with those of another detector.
 ///
 /// Observables:
 /// * NSignalsRejected: number of signals without points.
@@ -79,6 +81,7 @@ static const bool TRestRawToDetectorSignalProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("pointsOverThreshold", &P::fPointsOverThreshold);
     reg.RegisterField<P>("nPointsFlat", &P::fNPointsFlat);
     reg.RegisterField<P>("readout", &P::fReadoutName);
+    reg.RegisterField<P>("keepEmptyEvents", &P::fKeepEmptyEvents);
     return true;
 }();
 
@@ -195,5 +198,5 @@ bool TRestRawToDetectorSignalProcess::ProcessEvent(const TRestEvent& input, TRes
         if (fReadout) fSignalsPhysicalID.push_back(fReadout->GetPhysicalID(rawSignal.GetSignalID()));
     }
 
-    return signalEvent->GetNumberOfSignals() > 0;
+    return fKeepEmptyEvents || signalEvent->GetNumberOfSignals() > 0;
 }
