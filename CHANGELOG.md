@@ -6,6 +6,10 @@ releases); the notes of the GitHub release list its pull requests.
 
 ## Unreleased
 
+- `examples/DataSetLogOdds.yaml`: ranges of `MaxTrackSigmaZ2` ([0, 0.3] mm2, 60 bins) and
+  `trackAnalysis_MaxTrackEnergyRatio` ([0, 1], 20 bins); with the legacy ranges ([0, 20] and [0, 0.1])
+  their probability densities did not discriminate (all in the first bin, or out of range). References of
+  the IAXO dataset chain test regenerated.
 - restG4: the units of the content of the histograms of the sources from the title of its axis (z of a
   TH2, y of a TH1): counts / s / cm2 per bin or per eV, keV, MeV or GeV (each bin weighted by its width, also
   to sample it); the flux and the exposure of the `cosmic` generator are not computed without them.
@@ -74,6 +78,12 @@ releases); the notes of the GitHub release list its pull requests.
 - `TRestDetectorHitsDriftResponseProcess` removed: the drift response is the `responseFile` of
   `TRestDetectorHitsDriftProcess` (instead of the drift field of the medium); the amplification response the
   `responseFile` of `TRestDetectorAvalancheProcess` (instead of `amplificationVoltage` and `gap`).
+- Amplification response depending on the position in the cell: restGarfield maps the transparency and the
+  mean avalanche size by the start point (`cellBins`, TH2D maps in the response file) and counts the
+  electrons at the anode on the pad of another cell; `TRestDetectorAvalancheProcess` applies the bin of each
+  hit in its pixel of the readout (`readout`; `TRestDetectorReadout::GetPixelPosition`: the position in the
+  frame of the volume containing it, whatever the rotations). Responses computed before have no map (the
+  cell average).
 
 ## 3.0.0 (2026-11-24)
 

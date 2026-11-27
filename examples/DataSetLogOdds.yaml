@@ -35,11 +35,14 @@ manager:
       observables:
         # Those of the legacy IAXO analysis (legacy name in the comment; MaxTrackEnergyBalanceXY and
         # MaxTrackxySigmaBalance are the balances)
-        - {observable: "MaxTrackSigmaZ2", range: [0, 20], nBins: 100}  # MaxTrack_XYZ_SigmaZ2
+        # The ranges of the observables, not those of the legacy for SigmaZ2 ([0, 20], mm2 here: all in the
+        # first bin) and the energy ratio ([0, 0.1]: ~99 % are 0, the others mostly above 0.1); the 55Fe of
+        # the run 229 in 4-8 keV: SigmaZ2 below 0.28 mm2 for 99 %
+        - {observable: "MaxTrackSigmaZ2", range: [0, 0.3], nBins: 60}  # MaxTrack_XYZ_SigmaZ2
         - {observable: "trackAnalysis_EnergyBalance_XZ_YZ", range: [-1, 1], nBins: 100}
         - {observable: "trackAnalysis_MaxTrack_XZ_NHits", range: [0, 20], nBins: 20}  # MaxTrack_XZ_nHits
         - {observable: "trackAnalysis_MaxTrack_YZ_NHits", range: [0, 20], nBins: 20}  # MaxTrack_YZ_nHits
-        - {observable: "trackAnalysis_MaxTrackEnergyRatio", range: [0, 0.1], nBins: 100}
+        - {observable: "trackAnalysis_MaxTrackEnergyRatio", range: [0, 1], nBins: 20}
         - {observable: "trackAnalysis_MaxTrack_XZ_SigmaX", range: [0, 10], nBins: 100}
         - {observable: "trackAnalysis_MaxTrack_YZ_SigmaY", range: [0, 10], nBins: 100}
         - {observable: "trackAnalysis_SigmaBalance_XZ_YZ", range: [-1, 1], nBins: 25}
