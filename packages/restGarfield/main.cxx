@@ -6,7 +6,8 @@
 ///
 /// `--set` sets a parameter of the section `parameters` of the configuration for this execution
 /// (repeatable; the file is not changed). `--jobs N` splits the field nodes of each gas transport table and
-/// the start points of each drift response in up to N processes (Garfield++ is not thread safe; default 1).
+/// the start points of each drift response and the avalanches of each amplification response in up to N
+/// processes (Garfield++ is not thread safe; default 1).
 /// Any other argument is an error.
 ///
 ///    transportManager:
@@ -23,7 +24,9 @@
 ///        reducedFieldRange: [25 kV/cm/bar, 35 kV/cm/bar]
 ///
 /// The tables go to the mediumFile of the medium (by default <name>.root): first the transport tables,
-/// then the gain tables; then the drift responses in field maps (`drift`, each one in its responseFile).
+/// then the gain tables; then the drift responses in field maps (`drift`, each one in its responseFile) and
+/// the amplification responses in the field maps of a unit cell (`amplification`, each one in its
+/// responseFile).
 /// The classes are in the detector library (they do not depend on Garfield++); this package only computes
 /// the tables and responses.
 
@@ -34,6 +37,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "AmplificationSimulation.h"
 #include "DriftSimulation.h"
 #include "GainSimulation.h"
 #include "TRestDetectorTransportManager.h"
@@ -42,8 +46,8 @@
 #include "TransportSimulation.h"
 
 /// \brief Reads the TRestDetectorTransportManager section of the configuration (argv[1]) and computes its
-/// transport tables (RunTransportSimulation), its gain tables (RunGainSimulation) and its drift responses
-/// (RunDriftResponse).
+/// transport tables (RunTransportSimulation), its gain tables (RunGainSimulation), its drift responses
+/// (RunDriftResponse) and its amplification responses (RunAmplificationResponse).
 /// \return 0 on success, 1 on a usage error or an exception (the reason is printed).
 int main(int argc, char* argv[]) {
     if (argc == 2 && std::string(argv[1]) == "--version") {
@@ -95,6 +99,9 @@ int main(int argc, char* argv[]) {
         for (const auto& table : manager.fGain) RunGainSimulation(*manager.fMedium, *table, verbose);
         for (const auto& response : manager.fDrift) {
             RunDriftResponse(*manager.fMedium, *response, verbose, jobs);
+        }
+        for (const auto& response : manager.fAmplification) {
+            RunAmplificationResponse(*manager.fMedium, *response, verbose, jobs);
         }
     } catch (const std::exception& error) {
         std::cerr << "restGarfield: " << error.what() << std::endl;

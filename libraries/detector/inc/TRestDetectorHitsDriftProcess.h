@@ -1,10 +1,12 @@
 #ifndef TRESTDETECTORHITSDRIFTPROCESS_H
 #define TRESTDETECTORHITSDRIFTPROCESS_H
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "TRandom3.h"
+#include "TRestDetectorDriftResponse.h"
 #include "TRestEventProcess.h"
 
 class TRestDetectorChargeResponse;
@@ -13,8 +15,9 @@ class TRestDetectorReadout;
 /// \class TRestDetectorHitsDriftProcess
 /// \brief Converts the energy deposits of a TRestDetectorHitsEvent into ionization electrons and drifts
 /// them to the readout (position on the readout, arrival time) through a TRestDetectorMedium at its drift
-/// field (replaces the legacy
-/// TRestDetectorElectronDiffusionProcess and TRestDetectorGarfieldDriftProcess).
+/// field, or with a drift response computed by restGarfield in a field map (TRestDetectorDriftResponse,
+/// `responseFile`; replaces the legacy TRestDetectorElectronDiffusionProcess and
+/// TRestDetectorGarfieldDriftProcess).
 ///
 /// The parameters (YAML keys), the observables and an example are described in the class documentation
 /// (TRestDetectorHitsDriftProcess.cxx).
@@ -26,7 +29,8 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
    private:
     const TRestDetectorReadout* fReadout = nullptr;
     const TRestDetectorChargeResponse* fCharge = nullptr;
-    TRandom3 fRandom;  //!
+    std::shared_ptr<const TRestDetectorDriftResponse> fResponse;  //!
+    TRandom3 fRandom;                                             //!
 
    public:
     /// Values accepted by fFluctuations
@@ -45,6 +49,10 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
     /// Maximum number of electrons per event (0: no limit). Above it, each electron carries the energy of
     /// several (as legacy, an effective W-value), to limit the processing time.
     int fMaxHits = 1000;
+
+    /// `responseFile`: file of a drift response in a field map (restGarfield, `drift` key of
+    /// TRestDetectorTransportManager). Empty: the uniform drift field of the medium
+    std::string fResponseFile = "";
 
     /// Diffusion of the electrons (default). False: each hit is projected whole on the readout at its drift
     /// time (no electrons nor diffusion; the fluctuation of its charge and the mean attachment are kept)
@@ -73,9 +81,10 @@ class TRestDetectorHitsDriftProcess : public TRestEventProcess {
 
     /// \brief Reads the parameters from the YAML node.
     void LoadConfig() override;
-    /// \brief Gets the readout and the charge response of the medium (wValue > 0 and a drift velocity
-    /// needed, and fanoFactor > 0 with fano fluctuations) and writes the transport used to the metadata.
-    /// Throws if one of them is missing.
+    /// \brief Gets the readout and the charge response of the medium (wValue > 0, and fanoFactor > 0 with
+    /// fano fluctuations) and either reads the drift response of responseFile or needs a drift velocity of
+    /// the medium and writes the transport used to the metadata. Throws if one of them is missing, or with
+    /// responseFile and diffusion false.
     void InitProcess() override;
     /// \brief Converts the hits into drifted electrons (see the class description).
     /// \return false if no electron survives.

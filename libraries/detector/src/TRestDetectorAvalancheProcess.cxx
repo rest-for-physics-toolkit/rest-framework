@@ -9,12 +9,23 @@
 /// + 1)). The energy of the hit is multiplied by its gain per electron (total gain / n), as legacy multiplied
 /// it by the gain. G and theta used are written to the metadata of the process.
 ///
+/// In a field map (special simulations, after TRestDetectorHitsDriftProcess with a drift response),
+/// `responseFile` is an amplification response computed by restGarfield in the field map of a unit cell
+/// (TRestDetectorAmplificationResponse, the `amplification` key of a TRestDetectorTransportManager) instead
+/// of amplificationVoltage and gap: of the n = E_hit / W electrons of a hit (rounded, at least 1), each one
+/// is amplified with the transparency of the response (the others are lost on the mesh or a dielectric) and
+/// its gain is sampled from the histogram of the avalanche size; the energy of the hit is multiplied by the
+/// total gain over n, and its time is delayed by a time sampled from the response (the time from the start
+/// plane of the response, the end of the drift, to the anode). A hit with no electron amplified is
+/// removed. The mean gain, theta and transparency of the response are written to the metadata.
+///
 /// Differences with legacy: the gain comes from the avalanche simulations of restGarfield at the voltage,
 /// with Polya fluctuations, instead of a fixed detectorGain with a gaussian resolution
 /// (energyReference, resolutionReference: that is TRestDetectorHitsSmearingProcess, not to be used with
 /// this process).
 ///
-/// Parameters: amplificationVoltage, gap, medium (empty: the only one with `charge`), table (""), seed (0:
+/// Parameters: amplificationVoltage and gap, or responseFile; medium (empty: the only one with `charge`),
+/// table (""), seed (0:
 /// random seed; otherwise the generator is re-seeded at each event from the seed and the event and subevent
 /// IDs, TRestEvent::EventSeed, so the result does not depend on the number of threads).
 ///
@@ -24,12 +35,20 @@
 ///      class: "TRestDetectorAvalancheProcess"
 ///      amplificationVoltage: 330 V
 ///      gap: 128 um
+///
+/// In a field map:
+///
+///    avalanche:
+///      class: "TRestDetectorAvalancheProcess"
+///      responseFile: "amplification_320V.root"
 
 #include "TRestDetectorAvalancheProcess.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
+#include "TFile.h"
 #include "TRestDetectorHitsEvent.h"
 #include "TRestDetectorMedium.h"
 #include "TRestDetectorTransportManager.h"
@@ -67,9 +86,11 @@ static const bool TRestDetectorAvalancheProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("gap", &P::fGap);
     reg.RegisterField<P>("medium", &P::fMediumName);
     reg.RegisterField<P>("table", &P::fTable);
+    reg.RegisterField<P>("responseFile", &P::fResponseFile);
     reg.RegisterField<P>("seed", &P::fSeed);
     reg.RegisterField<P>("gain", &P::fGain);
     reg.RegisterField<P>("theta", &P::fTheta);
+    reg.RegisterField<P>("transparency", &P::fTransparency);
     return true;
 }();
 
@@ -111,8 +132,11 @@ void TRestDetectorAvalancheProcess::LoadConfig() {
 
 void TRestDetectorAvalancheProcess::InitProcess() {
     const std::string user = "TRestDetectorAvalancheProcess";
-    if (fAmplificationVoltage <= 0 || fGap <= 0) {
-        throw std::runtime_error(user + ": amplificationVoltage and gap must be > 0");
+    if (!fResponseFile.empty() && (fAmplificationVoltage != 0 || fGap != 0)) {
+        throw std::runtime_error(user + ": responseFile or amplificationVoltage and gap, not both");
+    }
+    if (fResponseFile.empty() && (fAmplificationVoltage <= 0 || fGap <= 0)) {
+        throw std::runtime_error(user + ": amplificationVoltage and gap must be > 0 (or responseFile)");
     }
     if (!fManager) throw std::runtime_error(user + ": no TRestManager");
     const auto* medium = TRestDetectorMedium::Find(*fManager, fMediumName, "charge", user);
@@ -123,6 +147,34 @@ void TRestDetectorAvalancheProcess::InitProcess() {
                                  "' needs wValue > 0");
     }
 
+    // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
+    fRandom.SetSeed(fSeed);
+    fMediumName = medium->GetName();
+
+    if (!fResponseFile.empty()) {
+        // The amplification in a field map: the response instead of the gain table
+        std::unique_ptr<TFile> file(TFile::Open(fResponseFile.c_str(), "READ"));
+        if (!file || file->IsZombie()) throw std::runtime_error(user + ": cannot open " + fResponseFile);
+        fResponse = std::make_shared<const TRestDetectorAmplificationResponse>(
+            TRestDetectorAmplificationResponse::Read(file.get()));
+        if (fResponse->fCollected <= 0) {
+            throw std::runtime_error(user + ": the amplification response of " + fResponseFile +
+                                     " has no avalanche at the anode");
+        }
+        if (!fResponse->fMedium.empty() && fResponse->fMedium != fMediumName) {
+            RESTWarning << user << ": the amplification response of " << fResponseFile
+                        << " is for the medium '" << fResponse->fMedium << "', not '" << fMediumName << "'"
+                        << RESTendl;
+        }
+        fGain = fResponse->fMeanSize;
+        fTheta = fResponse->GetTheta();
+        fTransparency = fResponse->GetTransparency();
+        UpdateYAMLFromParams<TRestDetectorAvalancheProcess>(fNode);
+        return;
+    }
+    fResponse.reset();
+    fTransparency = 1;
+
     const auto& table = fCharge->GetGainTable(fGap, fTable);
     const double field = fAmplificationVoltage / fGap;  // V/mm
     fGain = table.GetGain(field);
@@ -132,13 +184,9 @@ void TRestDetectorAvalancheProcess::InitProcess() {
                                  " and theta " + std::to_string(fTheta) +
                                  " (gain > 0 and theta > -1 needed)");
     }
-    fMediumName = medium->GetName();
     fTable = table.GetKey();
     // The stored metadata keeps the medium, the table and the gain used
     UpdateYAMLFromParams<TRestDetectorAvalancheProcess>(fNode);
-
-    // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
-    fRandom.SetSeed(fSeed);
 }
 
 bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -157,8 +205,22 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
     for (size_t n = 0; n < inputEvent->GetNumberOfHits(); n++) {
         const double energy = inputEvent->GetEnergy(n);
         if (energy <= 0) continue;
-        // Sum of the Polya gains of the electrons of the hit
         const double electrons = energy / wValue;
+        if (fResponse) {
+            // Each electron amplified with the transparency, its gain and the time of the hit from the
+            // response
+            const long count = std::max(1L, std::lround(electrons));
+            double gain = 0;
+            for (long e = 0; e < count; e++) {
+                if (fRandom.Uniform() < fTransparency) gain += fResponse->SampleSize(fRandom);
+            }
+            if (!(gain > 0)) continue;
+            const double time = inputEvent->GetTime(n) + fResponse->SampleTime(fRandom);
+            outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain / count, time,
+                                inputEvent->GetType(n), inputEvent->GetParticleID(n));
+            continue;
+        }
+        // Sum of the Polya gains of the electrons of the hit
         const double gain = Gamma(fRandom, electrons * (fTheta + 1), fGain / (fTheta + 1));
         outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain / electrons, inputEvent->GetTime(n),
                             inputEvent->GetType(n), inputEvent->GetParticleID(n));

@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "TRestDetectorAmplificationResponse.h"
 #include "TRestDetectorDriftResponse.h"
 #include "TRestDetectorMedium.h"
 #include "TRestMetadata.h"
@@ -307,7 +308,9 @@ class TRestDetectorGainTable : public TRestMetadata {
 /// `transport` (TRestDetectorTransportTable) and `gain` (TRestDetectorGainTable), keys without class, each
 /// one a table configuration or a list of them. restGarfield computes the transport tables first, then the
 /// gain tables, then the drift responses in field maps (`drift`, TRestDetectorDriftResponse, each one in its
-/// own file, with the transport table of the medium file). The classes do not depend on Garfield++.
+/// own file, with the transport table of the medium file), then the amplification responses in the field
+/// maps of a unit cell (`amplification`, TRestDetectorAmplificationResponse, each one in its own file). The
+/// classes do not depend on Garfield++.
 ///
 ///    transportManager:
 ///      class: "TRestDetectorTransportManager"
@@ -333,6 +336,8 @@ class TRestDetectorTransportManager : public TRestMetadata {
     YAML::Node fGainNode;
     /// `drift`: a drift response configuration (field map) or a list of them
     YAML::Node fDriftNode;
+    /// `amplification`: an amplification response configuration (field maps of a unit cell) or a list of them
+    YAML::Node fAmplificationNode;
 
     /// Medium created from fMediumNode
     std::unique_ptr<TRestDetectorMedium> fMedium;  //!
@@ -342,6 +347,8 @@ class TRestDetectorTransportManager : public TRestMetadata {
     std::vector<std::unique_ptr<TRestDetectorGainTable>> fGain;  //!
     /// Drift response configurations created from fDriftNode
     std::vector<std::unique_ptr<TRestDetectorDriftResponse>> fDrift;  //!
+    /// Amplification response configurations created from fAmplificationNode
+    std::vector<std::unique_ptr<TRestDetectorAmplificationResponse>> fAmplification;  //!
 
     /// \brief Builds the manager from an in-memory YAML section (LoadConfig).
     TRestDetectorTransportManager(const std::string& instanceName, const YAML::Node& node);

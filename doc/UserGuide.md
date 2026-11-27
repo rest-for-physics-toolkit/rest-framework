@@ -1007,8 +1007,11 @@ The conversions between libraries (Geant4 → hits, hits → tracks, raw ↔ det
 - **restGarfield** ([README](../packages/restGarfield/README.md)): `restGarfield ArIso.yaml` computes the
   transport and gain tables of a medium with Garfield++ and stores them in its medium file, read by the
   detector library without Garfield++. With a `drift` section it also computes the drift response in a
-  field map exported by CST (its own `responseFile`), used by `TRestDetectorHitsDriftResponseProcess`
-  instead of `TRestDetectorHitsDriftProcess` in special simulations with a non-uniform drift field.
+  field map exported by CST (its own `responseFile`), used by `TRestDetectorHitsDriftProcess` (its
+  `responseFile`) instead of the drift field of the medium in special simulations with a non-uniform field,
+  and with an `amplification` section the amplification response in the field maps of a unit cell of the
+  amplification structure (transparency, avalanche size and time), used by `TRestDetectorAvalancheProcess`
+  (its `responseFile`) instead of the gain table.
 - The simulated events are analysed with the [geant4 library](../libraries/geant4/README.md)
   (`TRestGeant4AnalysisProcess`, `TRestGeant4QuenchingProcess`) and converted to detector hits by
   `TRestGeant4ToDetectorHitsProcess`.

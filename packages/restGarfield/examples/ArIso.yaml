@@ -6,8 +6,10 @@
 #   restRoot -> REST_Garfield_DrawMedium("ArIso.root")
 # Magboltz is slow: about some minutes per field node of the transport table, and the microscopic avalanches
 # of the gain table take seconds each at gains of ~1e4. The `drift` section (commented) computes the drift
-# response in a CST field map (ArIso_drift.root, for TRestDetectorHitsDriftResponseProcess) with the transport
-# table of the medium file.
+# response in a CST field map (ArIso_drift.root, the responseFile of TRestDetectorHitsDriftProcess) with the
+# transport table of the medium file, and the `amplification` section (commented) the amplification response
+# in the CST field maps of a unit cell of the Micromegas (ArIso_amplification.root, the responseFile of
+# TRestDetectorAvalancheProcess), starting where the drift response ends.
 
 transportManager:
   class: "TRestDetectorTransportManager"
@@ -50,3 +52,13 @@ transportManager:
 #    electrons: 500
 #    stepSize: 0.5 mm
 #    responseFile: "ArIso_drift.root"
+#  amplification:               # avalanches in the field maps of a unit cell of CST (special simulations)
+#    fieldMaps: ["cell_E_fine.txt", "cell_E_coarse.txt"]   # fine map of the mesh first, drift field above
+#    dielectricMaps: ["cell_D_fine.txt"]   # D on the nodes of the fine map: the kapton stops the electrons
+#    periodicity: "xy"          # the cell repeated along x and y
+#    start: 1 mm                # the boundary of the drift response, above the mesh (z = 0 in the maps)
+#    anode: -45 um              # electrons below it are collected (just above the anode surface)
+#    electrons: 1000
+#    usePenning: true
+#    penningRate: 0.3
+#    responseFile: "ArIso_amplification.root"

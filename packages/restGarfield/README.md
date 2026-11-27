@@ -21,8 +21,15 @@ depend on Garfield++: the tables are read by `TRestDetectorMedium` (detector lib
   exported by CST Studio Suite, to a plane above the readout (the start of the amplification), with the
   gas of a transport table of the medium file; per node the arrived fraction and the histograms of the
   displacement on the readout plane and of the drift time. Each response goes to its own `responseFile`,
-  read by `TRestDetectorHitsDriftResponseProcess` (detector library) instead of
-  `TRestDetectorHitsDriftProcess`.
+  read by `TRestDetectorHitsDriftProcess` (detector library, `responseFile`) instead of the uniform drift
+  field of the medium.
+- **Amplification responses in field maps** (`TRestDetectorAmplificationResponse`, gases only, special
+  simulations): microscopic avalanches (`AvalancheMicroscopic`, Magboltz with the composition of the medium)
+  in the field maps of a unit cell of the amplification structure (e.g. a microbulk Micromegas: a fine map
+  of the mesh, the holes and the kapton, a coarse map of the drift field above it, the cell repeated along
+  x and y), started at the plane where the drift response ends; the transparency (fraction of the electrons
+  amplified), the histogram of the avalanche size and of the time to the anode. Each response goes to its
+  own `responseFile`, read by `TRestDetectorAvalancheProcess` (`responseFile`) instead of the gain table.
 
 Tables already in the medium file, and response files that exist, are skipped unless `overwrite: true`.
 
@@ -74,9 +81,10 @@ transportManager:
 
 ## Configuration keys
 
-`TRestDetectorTransportManager`: `medium` (a `TRestDetectorMedium`), `transport`, `gain` and `drift` (each a
-map or a list of maps, one per set of tables or response). The drift responses are computed after the
-tables, so the transport table they use can be computed in the same run.
+`TRestDetectorTransportManager`: `medium` (a `TRestDetectorMedium`), `transport`, `gain`, `drift` and
+`amplification` (each a map or a list of maps, one per set of tables or response). The drift responses are
+computed after the tables, so the transport table they use can be computed in the same run; the
+amplification responses last.
 
 `transport`:
 
@@ -130,8 +138,46 @@ tables, so the transport table they use can be computed in the same run.
 `--jobs N` also splits the start points of the drift response in N processes (every N-th point each,
 so that each process gets points at all the drift lengths; each process with its own random seed).
 
-See the TRestDetectorTransportManager, TRestDetectorMedium and TRestDetectorDriftResponse documentation for the validation of these
-keys.
+`amplification` (lengths in mm unless a unit is given; z along the drift, the electrons moving to -z):
+
+| Key | Default | Description |
+|---|---|---|
+| `fieldMaps` | (required) | ASCII exports of the electric field by CST, as `fieldMap` of `drift` (nodes with the field 0, the conductors, stop the electrons). Where they overlap, the first one wins: the fine map of the amplification structure first, then the coarse map of the drift field above it (different steps, not one regular grid). |
+| `dielectricMaps` | none | Exports of the displacement field D (header `... Dx [C/m^2] ...`) on nodes of each field map, in the same order (`""` for a map without): a node with D > 1.5 eps0 E (a dielectric, e.g. kapton; 1 in the gas) stops the electrons. It may cover part of its field map (e.g. only the layers with kapton). |
+| `fieldMapOffset` | [0, 0, 0] | Position of the origin of the CST frame in the frame of the response. |
+| `periodicity` | "xy" | Axes along which the cell repeats; the period is the extent of the maps. |
+| `mirror` | false | Mirror periodicity (the cell reflected) instead of a translation. |
+| `start` | (required) | z of the plane where the primary electrons start, at random over the cell: the `boundary` of the drift response, measured from the mesh. |
+| `anode` | (required) | z below which an electron of the avalanche is collected by the anode (a little above the anode surface: the electrons stop in the last cell before the conductor). |
+| `electrons` | 1000 | Avalanches, one primary electron each. |
+| `usePenning`, `penningRate` | false, 0 | Penning transfer of the gas. |
+| `sizeBins` | 100 | Bins of the avalanche size histogram (over [0, the largest size]). |
+| `timeBins` | 50 | Bins of the histogram of the time from the start plane to the anode (mean time of the electrons of an avalanche). |
+| `responseFile` | (required) | Output file of the response. |
+| `overwrite` | false | Compute the response again if the file exists. |
+
+A primary electron whose avalanche brings no electron to the anode (stopped on the mesh, on a dielectric
+or attached) is lost: the transparency is the fraction of primaries with an avalanche at the anode. Where
+the lost ones ended is counted and printed (out of the cell, on a conductor, on a dielectric, attached,
+other: `losses` in the metadata of the response file). One
+response per operating point (the voltages of the CST model). `--jobs N` splits the avalanches in N
+processes. E.g. the pixel cell of a microbulk (mesh at z = 0, anode below -55 um):
+
+```yaml
+  amplification:
+    fieldMaps: ["pixel_mesh320_E_fine.txt", "pixel_mesh320_E_coarse.txt"]
+    dielectricMaps: ["pixel_mesh320_D_fine.txt"]
+    periodicity: "xy"
+    start: 1 mm
+    anode: -54 um
+    electrons: 2000
+    usePenning: true
+    penningRate: 0.3
+    responseFile: "amplification_320V.root"
+```
+
+See the TRestDetectorTransportManager, TRestDetectorMedium, TRestDetectorDriftResponse and
+TRestDetectorAmplificationResponse documentation for the validation of these keys.
 
 ## Macros
 
@@ -161,5 +207,6 @@ and gain tables computed with small grids (a silicon table, a gas table with one
 processes, a gain table of a few avalanches at a low field), written to medium files of the build directory
 and read back; a small CST field map (with a node out of the gas), the Garfield++ gas of a transport table
 and the drift response in a uniform field map (straight drift to the boundary plane at the drift velocity of
-the table). The suites `*Long` (the transport table in two processes) are skipped with
-`ctest -L restGarfield -E Long`.
+the table); two field maps combined, with a dielectric map and periodicity; the amplification response of
+a few avalanches in a periodic cell at a low field, in two processes. The suites `*Long` (the transport
+table in two processes) are skipped with `ctest -L restGarfield -E Long`.

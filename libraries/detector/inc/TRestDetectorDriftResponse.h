@@ -16,7 +16,7 @@ class TRandom;
 /// \brief Drift of the electrons in a non-uniform field (e.g. a CST field map) as a response per start
 /// point: the configuration of its computation (the `drift` key of a TRestDetectorTransportManager, computed
 /// by restGarfield with Garfield++) and the response, written to and read from its own file without
-/// Garfield++, used by TRestDetectorHitsDriftResponseProcess.
+/// Garfield++, used by TRestDetectorHitsDriftProcess (`responseFile`).
 ///
 /// The parameters (YAML keys), the file format and the use of the response are described in the class
 /// documentation (TRestDetectorDriftResponse.cxx).

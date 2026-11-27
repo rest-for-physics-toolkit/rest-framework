@@ -80,17 +80,13 @@ manager:
       fluctuations: "fano"
       maxHits: 1000
       seed: 1
-#    driftResponse:        # instead of hitsDrift: drift in a CST field map (restGarfield `drift` section)
-#      class: "TRestDetectorHitsDriftResponseProcess"
-#      responseFile: "ArIso_drift.root"
-#      fluctuations: "fano"
-#      maxHits: 1000
-#      seed: 1
+#      responseFile: "ArIso_drift.root"   # drift in a CST field map (restGarfield `drift` section)
 #    avalanche:            # gain of the 50 um gap at 300 V (6 kV/mm), from the gain table of the medium
 #      class: "TRestDetectorAvalancheProcess"
 #      amplificationVoltage: 300 V
 #      gap: 50 um
 #      seed: 1
+#      responseFile: "ArIso_amplification.root"   # in CST field maps: instead of amplificationVoltage and gap
     timeProjection:
       class: "TRestDetectorHitsTimeProjectionProcess"
     hitsAnalysis:

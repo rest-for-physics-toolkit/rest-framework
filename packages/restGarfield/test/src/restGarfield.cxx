@@ -1,10 +1,13 @@
 /// Unit tests of restGarfield (GoogleTest, BUILD_TESTING): the Garfield++ gas of a medium (CreateGas), and
 /// the transport and gain tables computed with small grids (a few field nodes, one Magboltz collision, few
 /// avalanches at a low field), written to a medium file of the work directory and read back with the
-/// detector library; a CST field map (LoadCSTFieldMap), the Garfield gas of a transport table
-/// (CreateGasFromTable) and the drift response in a uniform field map (ComputeDriftResponse).
+/// detector library; a CST field map (LoadCSTFieldMap) and several with a dielectric and periodicity
+/// (LoadCSTFieldMaps), the Garfield gas of a transport table (CreateGasFromTable), the drift response in a
+/// uniform field map (ComputeDriftResponse) and the amplification response in a periodic cell
+/// (RunAmplificationResponse).
 
 #include <TFile.h>
+#include <TRestDetectorAmplificationResponse.h>
 #include <TRestDetectorDriftResponse.h>
 #include <TRestDetectorMedium.h>
 #include <TRestDetectorTransportManager.h>
@@ -12,13 +15,16 @@
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
+#include "AmplificationSimulation.h"
 #include "DriftSimulation.h"
 #include "FieldMap.h"
 #include "GainSimulation.h"
@@ -253,6 +259,97 @@ TEST(RestGarfield, CSTFieldMap) {
     EXPECT_THROW(LoadCSTFieldMap(write(bad, missing)), std::runtime_error);
 }
 
+TEST(RestGarfield, CSTFieldMapsDielectricAndPeriodicity) {
+    // A fine map (x, y in [-1, 1] mm, z in [0, 2] mm, steps of 1 mm; Ex = 1e4 V/m per mm of x, Ez = 1e5 V/m)
+    // with the displacement field D of its layers z = 0 and 1 mm (eps0 E in the gas, 3.5 eps0 E at the node
+    // x = y = 1 mm, z = 0: a dielectric), and a coarse map above it (z in [2, 6] mm, Ez = 2e5 V/m)
+    const double eps0 = 8.8541878128e-12;
+    auto write = [](const std::string& name, const std::string& unit, const std::vector<double>& zs,
+                    auto value) {
+        const fs::path path = fs::path(TESTS_WORK_DIR) / ("CSTFieldMaps_" + name + ".txt");
+        std::ofstream file(path);
+        file << "x [mm] y [mm] z [mm] X [" << unit << "] Y [" << unit << "] Z [" << unit << "]\n";
+        file << std::string(102, '-') << "\n";
+        for (const double z : zs) {
+            for (const double y : {-1., 0., 1.}) {
+                for (const double x : {-1., 0., 1.}) {
+                    const auto [vx, vy, vz] = value(x, y, z);
+                    file << x << " " << y << " " << z << " " << vx << " " << vy << " " << vz << "\n";
+                }
+            }
+        }
+        return path.string();
+    };
+    auto fineField = [](double x, double, double) { return std::array<double, 3>{1e4 * x, 0, 1e5}; };
+    const std::string fine = write("fine", "V/m", {0, 1, 2}, fineField);
+    const std::string dielectric = write("D", "C/m^2", {0, 1}, [&](double x, double y, double z) {
+        const double permittivity = x == 1 && y == 1 && z == 0 ? 3.5 : 1;
+        const auto e = fineField(x, y, z);
+        return std::array<double, 3>{permittivity * eps0 * e[0], 0, permittivity * eps0 * e[2]};
+    });
+    const std::string coarse = write("coarse", "V/m", {2, 4, 6},
+                                     [](double, double, double) { return std::array<double, 3>{0, 0, 2e5}; });
+
+    const auto map = LoadCSTFieldMaps({{fine, dielectric}, {coarse, ""}});
+    EXPECT_EQ(map->GetNumberOfMaps(), 2u);
+    Garfield::MediumGas gas;
+    map->SetMedium(&gas);
+    double ex = 0, ey = 0, ez = 0;
+    Garfield::Medium* medium = nullptr;
+    int status = 0;
+    // The fine map below z = 2 mm and on it (it takes precedence), the coarse one above (cm, V/cm)
+    map->ElectricField(-0.05, -0.05, 0.15, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ex, -50, 1e-6);
+    EXPECT_NEAR(ez, 1000, 1e-6);
+    map->ElectricField(-0.05, -0.05, 0.2, ex, ey, ez, medium, status);
+    EXPECT_NEAR(ez, 1000, 1e-6);
+    map->ElectricField(-0.05, -0.05, 0.3, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ez, 2000, 1e-6);
+    // Out of both maps
+    map->ElectricField(0, 0, 0.7, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, -6);
+    EXPECT_EQ(medium, nullptr);
+    // The cell with the dielectric node has no medium; not periodic, x = 1.5 mm is out of the maps
+    map->ElectricField(0.05, 0.05, 0.05, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, -5);
+    EXPECT_EQ(map->GetMedium(0.05, 0.05, 0.05), nullptr);
+    EXPECT_NE(map->GetMedium(-0.05, 0.05, 0.05), nullptr);
+    EXPECT_EQ(map->GetMedium(0.15, -0.05, 0.05), nullptr);
+
+    // The region around a point: the dielectric node within a cell, the gas of the coarse map, out of both
+    EXPECT_EQ(map->GetRegionNear(0.095, 0.095, 0.005), CSTRegion::kDielectric);
+    EXPECT_EQ(map->GetRegionNear(0, 0, 0.4), CSTRegion::kGas);
+    EXPECT_EQ(map->GetRegionNear(0, 0, 0.7), CSTRegion::kOutside);
+
+    // Periodic in x and y (period 2 mm): x = 2.5 mm is x = 0.5 mm
+    map->EnablePeriodicityX();
+    map->EnablePeriodicityY();
+    map->ElectricField(0.25, -0.05, 0.05, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ex, 50, 1e-6);
+    map->ElectricField(0.25, 0.25, 0.05, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, -5);
+    // Mirror periodic in x: x = 1.5 mm is x = 0.5 mm mirrored, Ex changes sign
+    map->EnablePeriodicityX(false);
+    map->EnableMirrorPeriodicityX();
+    map->ElectricField(0.15, -0.05, 0.05, ex, ey, ez, medium, status);
+    EXPECT_EQ(status, 0);
+    EXPECT_NEAR(ex, -50, 1e-6);
+    EXPECT_NEAR(ez, 1000, 1e-6);
+
+    // Errors: a node of D out of the field map, D not in C/m^2, no maps
+    const std::string outside = write("D_outside", "C/m^2", {0.5}, [](double, double, double) {
+        return std::array<double, 3>{0, 0, 1e-6};
+    });
+    EXPECT_THROW(LoadCSTFieldMap(fine, {0, 0, 0}, outside), std::runtime_error);
+    const std::string units =
+        write("D_units", "V/m", {0}, [](double, double, double) { return std::array<double, 3>{0, 0, 1}; });
+    EXPECT_THROW(LoadCSTFieldMap(fine, {0, 0, 0}, units), std::runtime_error);
+    EXPECT_THROW(LoadCSTFieldMaps({}), std::runtime_error);
+}
+
 TEST(RestGarfield, GasFromTransportTable) {
     const auto medium = MakeMedium(kArIso, MediumFile("ArIso"));
     // A table at 1 bar (no Magboltz): fields 10, 50, 100 V/mm
@@ -292,6 +389,56 @@ TEST(RestGarfield, GasFromTransportTable) {
     EXPECT_THROW(CreateGasFromTable(medium, noElectrons, 1), std::runtime_error);
     const auto solid = MakeMedium("{name: Si, state: solid, components: {Si: 1}}", MediumFile("Si"));
     EXPECT_THROW(CreateGasFromTable(solid, table, 1), std::runtime_error);
+}
+
+TEST(RestGarfield, AmplificationResponseInAPeriodicCell) {
+    const auto medium = MakeMedium(kArIso, MediumFile("ArIso"));
+    Garfield::randomEngine.Seed(1);
+    // A cell of 0.2 x 0.2 mm, periodic in x and y, with a uniform field of 10 kV/cm along +z (a small gain:
+    // fast avalanches) above an anode at z = 0 (nodes with the field 0: the cells below z = 0.05 mm stop the
+    // electrons)
+    const fs::path cstFile = fs::path(TESTS_WORK_DIR) / "AmplificationResponse_efield.txt";
+    {
+        std::ofstream file(cstFile);
+        file << "x [um] y [um] z [um] Ex [V/m] Ey [V/m] Ez [V/m]\n" << std::string(60, '-') << "\n";
+        for (const double z : {0., 50., 100., 150., 200.}) {
+            for (const double y : {-100., 0., 100.}) {
+                for (const double x : {-100., 0., 100.}) {
+                    file << x << " " << y << " " << z << " 0 0 " << (z == 0 ? 0 : 1e6) << "\n";
+                }
+            }
+        }
+    }
+    const std::string responseFile = (fs::path(TESTS_WORK_DIR) / "AmplificationResponse.root").string();
+    fs::remove(responseFile);
+    const std::string config = "{fieldMaps: [\"" + cstFile.string() + "\"], responseFile: \"" + responseFile +
+                               "\", start: 150 um, anode: 60 um, electrons: 10, sizeBins: 5, timeBins: 5}";
+    TRestDetectorAmplificationResponse response("amplification", YAML::Load(config));
+    RunAmplificationResponse(medium, response, false, 2);
+    EXPECT_EQ(response.fMedium, "ArIso");
+    EXPECT_EQ(response.fPrimaries, 10);
+    // The primaries reach the anode (no mesh, no attachment) unless they diffuse out of the top of the map
+    EXPECT_GE(response.fCollected, 5);
+    EXPECT_GE(response.fMeanSize, 1);
+    // Every lost primary counted somewhere
+    const auto& lost = response.fLosses;
+    EXPECT_EQ(lost.fOut + lost.fConductor + lost.fDielectric + lost.fAttached + lost.fOther,
+              response.fPrimaries - response.fCollected);
+    // About 0.1 mm at several cm/us
+    EXPECT_GT(response.fTMin, 0);
+    EXPECT_LT(response.fTMax, 0.1);
+
+    std::unique_ptr<TFile> file(TFile::Open(responseFile.c_str(), "READ"));
+    ASSERT_TRUE(file && !file->IsZombie());
+    const auto read = TRestDetectorAmplificationResponse::Read(file.get());
+    EXPECT_EQ(read.fCollected, response.fCollected);
+    EXPECT_EQ(read.fSizeCounts, response.fSizeCounts);
+
+    // The start plane above the maps
+    TRestDetectorAmplificationResponse above(
+        "amplification", YAML::Load("{fieldMaps: [\"" + cstFile.string() +
+                                    "\"], responseFile: r.root, start: 1 mm, anode: 60 um, electrons: 1}"));
+    EXPECT_THROW(ComputeAmplificationResponse(medium, above, false), std::runtime_error);
 }
 
 TEST(RestGarfield, DriftResponseInAUniformField) {

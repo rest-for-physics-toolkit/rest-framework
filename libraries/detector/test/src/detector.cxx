@@ -13,11 +13,11 @@
 #include <TRestDataSet.h>
 #include <TRestDataSetGainMap.h>
 #include <TRestDataSetTardis.h>
+#include <TRestDetectorAmplificationResponse.h>
 #include <TRestDetectorAvalancheProcess.h>
 #include <TRestDetectorDriftResponse.h>
 #include <TRestDetectorHitsAnalysisProcess.h>
 #include <TRestDetectorHitsDriftProcess.h>
-#include <TRestDetectorHitsDriftResponseProcess.h>
 #include <TRestDetectorHitsEvent.h>
 #include <TRestDetectorHitsSmearingProcess.h>
 #include <TRestDetectorHitsTimeProjectionProcess.h>
@@ -991,7 +991,7 @@ TEST(DetectorDriftResponse, WriteReadAndSample) {
     EXPECT_THROW(onReadout.SetRange(0, 1, 1), std::runtime_error);
 }
 
-TEST(DetectorHitsDriftResponseProcess, ElectronsFromTheResponse) {
+TEST(DetectorHitsDriftProcess, ElectronsFromTheResponse) {
     auto detector = MakeDetector(kChargeNoDiffusion);
     const std::string fileName = std::string(TESTS_WORK_DIR) + "/DriftResponse_Process.root";
     {
@@ -1002,7 +1002,7 @@ TEST(DetectorHitsDriftResponseProcess, ElectronsFromTheResponse) {
         std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
         response.Write(file.get(), YAML::Load("{program: test}"));
     }
-    TRestDetectorHitsDriftResponseProcess drift(
+    TRestDetectorHitsDriftProcess drift(
         "drift", YAML::Load("{responseFile: \"" + fileName + "\", fluctuations: none, seed: 3}"));
     drift.SetManager(detector.manager.get());
     drift.Initialize();
@@ -1029,13 +1029,14 @@ TEST(DetectorHitsDriftResponseProcess, ElectronsFromTheResponse) {
     outside.AddHit(0, 0, 60, 5);
     EXPECT_FALSE(drift.ProcessEvent(outside, outsideOutput));
 
-    // Errors: no response file, an unknown key
-    TRestDetectorHitsDriftResponseProcess noFile("drift", YAML::Load("{responseFile: none.root}"));
+    // Errors: no response file, diffusion false with a response
+    TRestDetectorHitsDriftProcess noFile("drift", YAML::Load("{responseFile: none.root}"));
     noFile.SetManager(detector.manager.get());
     EXPECT_ANY_THROW(noFile.Initialize());
-    EXPECT_ANY_THROW(
-        MetadataClassRegistry::Instance().Create("TRestDetectorHitsDriftResponseProcess", "d",
-                                                 YAML::Load("{responseFile: r.root, driftVelocity: 4}")));
+    TRestDetectorHitsDriftProcess whole("drift",
+                                        YAML::Load("{responseFile: \"" + fileName + "\", diffusion: false}"));
+    whole.SetManager(detector.manager.get());
+    EXPECT_ANY_THROW(whole.Initialize());
 }
 
 TEST(DetectorHitsSmearingProcess, OneGainPerEvent) {
@@ -1617,6 +1618,112 @@ TEST(DetectorAvalancheProcess, PolyaGainFromTheTable) {
     TRestDetectorAvalancheProcess noManager("avalanche",
                                             YAML::Load("{amplificationVoltage: 384 V, gap: 128 um}"));
     EXPECT_THROW(noManager.Initialize(), std::runtime_error);
+}
+
+TEST(DetectorAvalancheProcess, GainFromTheAmplificationResponse) {
+    // 4 primaries, 3 avalanches at the anode: sizes 100, 100 and 200 at 10, 10 and 30 ns
+    const std::string config =
+        "{fieldMaps: [cell.txt], responseFile: r.root, start: 1 mm, anode: -55 um, sizeBins: 10, "
+        "timeBins: 4}";
+    TRestDetectorAmplificationResponse response("amplification", YAML::Load(config));
+    EXPECT_DOUBLE_EQ(response.fStart, 1);
+    EXPECT_DOUBLE_EQ(response.fAnode, -0.055);
+    EXPECT_EQ(response.fPeriodicity, "xy");
+    response.fMedium = "ArIso";
+    TRestDetectorAmplificationResponse::Losses losses;
+    losses.fConductor = 1;  // the fourth primary, e.g. on the mesh
+    response.SetResult(4, {{100, 0.01}, {100, 0.01}, {200, 0.03}}, losses);
+    EXPECT_DOUBLE_EQ(response.GetTransparency(), 0.75);
+    EXPECT_NEAR(response.fMeanSize, 400. / 3, 1e-9);
+    EXPECT_NEAR(response.fSizeVariance, 10000. / 3, 1e-6);
+    EXPECT_NEAR(response.GetTheta(), (400. / 3) * (400. / 3) / (10000. / 3) - 1, 1e-9);
+    // Bins of 20 over [0, 200]: 100 in [100, 120), 200 in the last one; times in [10, 30] ns, 4 bins
+    EXPECT_EQ(response.fSizeCounts[5], 2);
+    EXPECT_EQ(response.fSizeCounts[9], 1);
+    EXPECT_EQ(response.fTimeCounts[0], 2);
+    EXPECT_EQ(response.fTimeCounts[3], 1);
+
+    const std::string fileName = std::string(TESTS_WORK_DIR) + "/AmplificationResponse.root";
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "RECREATE"));
+        response.Write(file.get(), YAML::Load("{program: test}"));
+        EXPECT_NE(file->Get("AmplificationSize"), nullptr);
+    }
+    {
+        std::unique_ptr<TFile> file(TFile::Open(fileName.c_str(), "READ"));
+        const auto read = TRestDetectorAmplificationResponse::Read(file.get());
+        EXPECT_EQ(read.fMedium, "ArIso");
+        EXPECT_EQ(read.fPrimaries, 4);
+        EXPECT_EQ(read.fCollected, 3);
+        EXPECT_EQ(read.fLosses.fConductor, 1);
+        EXPECT_EQ(read.fLosses.fDielectric, 0);
+        EXPECT_EQ(read.fSizeCounts, response.fSizeCounts);
+        EXPECT_EQ(read.fTimeCounts, response.fTimeCounts);
+        EXPECT_DOUBLE_EQ(read.fSizeMax, 200);
+        TRandom3 random(2);
+        for (int i = 0; i < 100; i++) {
+            const double size = read.SampleSize(random);
+            EXPECT_TRUE((size >= 100 && size < 120) || (size >= 180 && size <= 200)) << size;
+            const double time = read.SampleTime(random);
+            EXPECT_TRUE((time >= 0.01 && time < 0.015) || (time >= 0.025 && time <= 0.03)) << time;
+        }
+    }
+
+    // The process: one electron per hit, amplified with the transparency 0.75, its gain and time sampled
+    auto detector = MakeDetector(kChargeNoDiffusion);
+    TRestDetectorAvalancheProcess avalanche("avalanche",
+                                            YAML::Load("{responseFile: \"" + fileName + "\", seed: 7}"));
+    avalanche.SetManager(detector.manager.get());
+    avalanche.Initialize();
+    EXPECT_NEAR(avalanche.fGain, 400. / 3, 1e-9);
+    EXPECT_DOUBLE_EQ(avalanche.fTransparency, 0.75);
+    const double wValue = 0.0262;
+    const int n = 4000;
+    int amplified = 0;
+    double sum = 0;
+    for (int i = 0; i < n; i++) {
+        TRestDetectorHitsEvent input, output;
+        input.SetID(i);
+        input.AddHit(1, 2, 0, wValue, 0.5);
+        if (!avalanche.ProcessEvent(input, output)) continue;
+        ASSERT_EQ(output.GetNumberOfHits(), 1u);
+        amplified++;
+        sum += output.GetEnergy(0) / wValue;
+        EXPECT_NEAR(output.GetX(0), 1, 1e-6);
+        EXPECT_GE(output.GetTime(0), 0.51 - 1e-9);
+        EXPECT_LE(output.GetTime(0), 0.53 + 1e-9);
+    }
+    EXPECT_NEAR(static_cast<double>(amplified) / n, 0.75, 0.03);
+    // The bin centres of the sampled sizes: (2 x 110 + 190) / 3
+    EXPECT_NEAR(sum / amplified, 410. / 3, 3);
+
+    // Errors: responseFile and a gap, no response file, a response without avalanches, the configuration
+    auto initialize = [&detector](const std::string& node) {
+        TRestDetectorAvalancheProcess process("avalanche", YAML::Load(node));
+        process.SetManager(detector.manager.get());
+        process.Initialize();
+    };
+    EXPECT_THROW(initialize("{responseFile: \"" + fileName + "\", gap: 128 um}"), std::runtime_error);
+    EXPECT_ANY_THROW(initialize("{responseFile: none.root}"));
+    const std::string emptyFile = std::string(TESTS_WORK_DIR) + "/AmplificationResponse_Empty.root";
+    {
+        response.SetResult(4, {});
+        std::unique_ptr<TFile> file(TFile::Open(emptyFile.c_str(), "RECREATE"));
+        response.Write(file.get(), YAML::Load("{program: test}"));
+    }
+    EXPECT_THROW(initialize("{responseFile: \"" + emptyFile + "\"}"), std::runtime_error);
+    const std::string base = "fieldMaps: [cell.txt], responseFile: r.root";
+    EXPECT_THROW(
+        TRestDetectorAmplificationResponse("a", YAML::Load("{" + base + ", start: 0 mm, anode: 0 mm}")),
+        std::runtime_error);
+    EXPECT_THROW(TRestDetectorAmplificationResponse(
+                     "a", YAML::Load("{" + base + ", start: 1 mm, dielectricMaps: [a.txt, b.txt]}")),
+                 std::runtime_error);
+    EXPECT_THROW(
+        TRestDetectorAmplificationResponse("a", YAML::Load("{" + base + ", start: 1 mm, periodicity: xw}")),
+        std::runtime_error);
+    EXPECT_THROW(TRestDetectorAmplificationResponse("a", YAML::Load("{responseFile: r.root, start: 1 mm}")),
+                 std::runtime_error);
 }
 
 // ---------------------------------------------------------------------------

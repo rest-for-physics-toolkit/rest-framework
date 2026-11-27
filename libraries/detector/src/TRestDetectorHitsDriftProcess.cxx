@@ -23,6 +23,20 @@
 /// kept between the readout plane and the cathode, as legacy. A readout without maximum distance (NaN, e.g.
 /// a Micromegas readout without gasThickness) has no cathode: no upper cut.
 ///
+/// In a non-uniform field (special simulations), `responseFile` is a drift response computed by restGarfield
+/// in a field map (TRestDetectorDriftResponse, the `drift` key of a TRestDetectorTransportManager) and
+/// replaces the drift field of the medium (its transport is not used, only wValue and fanoFactor): each
+/// electron survives with the fraction of the electrons that reach the boundary plane from the position of
+/// its hit (TRestDetectorDriftResponse::GetSurvival, interpolated between the nodes of the grid); a surviving
+/// electron becomes a hit on the readout (the hit projected on the readout plane plus the displacement
+/// sampled from the response along the axes of the readout plane, TRestDetectorDriftResponse::PlaneAxes of
+/// the readout normal) at the time of the hit plus the drift time sampled from the response
+/// (SampleArrival). The arrival is on the readout plane at the time of the boundary plane: the drift from
+/// the boundary to the readout (through the mesh) belongs to the amplification (TRestDetectorAvalancheProcess
+/// with an amplification response). Hits outside the grid of the response are removed; the cuts of the drift
+/// volume are those of the response (its grid and its field map). `diffusion: false` is not available with a
+/// response.
+///
 /// Differences with legacy: the attachment is exp(-attachment * distance) with attachment in 1/cm (as
 /// Garfield), the gas parameters come from the medium instead of the process, there are no veto planes
 /// (veto hits are split beforehand) and there is no microscopic Garfield drift: in a uniform field it uses
@@ -30,14 +44,21 @@
 ///
 /// Parameters: readout (empty: the data readout of the TRestDetectorReadoutManager), medium (empty:
 /// the only one with `charge`), fluctuations ("fano", "poisson" or "none"), maxHits (1000, 0: no
-/// limit), diffusion (true), seed (0: random seed; otherwise the generator is re-seeded at each event from
-/// the seed and the event and subevent IDs, TRestEvent::EventSeed, so the result does not
-/// depend on the number of threads).
+/// limit), diffusion (true), responseFile (empty: the uniform drift field of the medium), seed (0: random
+/// seed; otherwise the generator is re-seeded at each event from the seed and the event and subevent IDs,
+/// TRestEvent::EventSeed, so the result does not depend on the number of threads).
 ///
 /// Example:
 ///
 ///    hitsDrift:
 ///      class: "TRestDetectorHitsDriftProcess"
+///      maxHits: 1000
+///
+/// In a field map:
+///
+///    hitsDrift:
+///      class: "TRestDetectorHitsDriftProcess"
+///      responseFile: "drift_response.root"
 ///      maxHits: 1000
 
 #include "TRestDetectorHitsDriftProcess.h"
@@ -46,6 +67,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "TFile.h"
 #include "TRestDetectorHitsEvent.h"
 #include "TRestDetectorMedium.h"
 #include "TRestDetectorReadout.h"
@@ -62,6 +84,7 @@ static const bool TRestDetectorHitsDriftProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("medium", &P::fMediumName);
     reg.RegisterField<P>("fluctuations", &P::fFluctuations);
     reg.RegisterField<P>("maxHits", &P::fMaxHits);
+    reg.RegisterField<P>("responseFile", &P::fResponseFile);
     reg.RegisterField<P>("diffusion", &P::fDiffusion);
     reg.RegisterField<P>("seed", &P::fSeed);
     reg.RegisterField<P>("longDiff", &P::fLongitudinalDiffusion);
@@ -131,6 +154,25 @@ void TRestDetectorHitsDriftProcess::InitProcess() {
                                  medium->GetName() + "'");
     }
     fMediumName = medium->GetName();
+    // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
+    fRandom.SetSeed(fSeed);
+
+    if (!fResponseFile.empty()) {
+        // The drift in a field map: the response replaces the transport of the medium
+        if (!fDiffusion)
+            throw std::runtime_error(user + ": diffusion false is not available with responseFile");
+        std::unique_ptr<TFile> file(TFile::Open(fResponseFile.c_str(), "READ"));
+        if (!file || file->IsZombie()) throw std::runtime_error(user + ": cannot open " + fResponseFile);
+        fResponse =
+            std::make_shared<const TRestDetectorDriftResponse>(TRestDetectorDriftResponse::Read(file.get()));
+        if (!fResponse->fMedium.empty() && fResponse->fMedium != fMediumName) {
+            RESTWarning << user << ": the drift response of " << fResponseFile << " is for the medium '"
+                        << fResponse->fMedium << "', not '" << fMediumName << "'" << RESTendl;
+        }
+        UpdateYAMLFromParams<TRestDetectorHitsDriftProcess>(fNode);
+        return;
+    }
+    fResponse.reset();
     fLongitudinalDiffusion = fCharge->GetLongitudinalDiffusion();
     fTransversalDiffusion = fCharge->GetTransversalDiffusion();
     fAttachment = fCharge->GetAttachment();
@@ -141,9 +183,6 @@ void TRestDetectorHitsDriftProcess::InitProcess() {
     }
     // The stored metadata keeps the medium and the transport used
     UpdateYAMLFromParams<TRestDetectorHitsDriftProcess>(fNode);
-
-    // Seed 0: random seed. Otherwise re-seeded at each event in ProcessEvent
-    fRandom.SetSeed(fSeed);
 }
 
 bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -172,12 +211,18 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
         if (energy <= 0) continue;
 
         const XYZVector position = inputEvent->GetPosition(n);
+        // With a drift response: the hits in its grid, the readout plane at the position of the hit
+        if (fResponse && !fResponse->Contains(position)) continue;
         const double distance = fReadout->GetDistanceToReadout(position);
         // NaN maximum distance: no cathode, no upper cut
         const double maxDistance = fReadout->GetMaxDistanceToReadout(position);
         const bool hasCathode = !std::isnan(maxDistance);
-        if (std::isnan(distance) || distance < 0 || (hasCathode && distance > maxDistance)) continue;
+        if (!fResponse && (std::isnan(distance) || distance < 0 || (hasCathode && distance > maxDistance))) {
+            continue;
+        }
         const XYZVector normal = fReadout->GetReadoutNormal(position);
+        // A readout without distance (no normal) cannot place the arrivals of the response
+        if (fResponse && normal.R() == 0) continue;
 
         double electrons = energy / wValue;
         if (fFluctuations == "fano") {
@@ -198,6 +243,21 @@ bool TRestDetectorHitsDriftProcess::ProcessEvent(const TRestEvent& input, TRestE
         const long nElectrons = std::max(1L, std::lround(electrons * wValue / effectiveW));
         const double electronEnergy = electrons * wValue / nElectrons;
 
+        if (fResponse) {
+            // Survival and arrival (displacement on the readout plane and drift time) from the response
+            const double survival = fResponse->GetSurvival(position);
+            const XYZVector projected = fReadout->ProjectToReadout(position);
+            const auto [u, v] = TRestDetectorDriftResponse::PlaneAxes(normal);
+            for (long e = 0; e < nElectrons; e++) {
+                if (fRandom.Uniform() >= survival) continue;
+                double du = 0, dv = 0, time = 0;
+                if (!fResponse->SampleArrival(position, fRandom, du, dv, time)) continue;
+                outputEvent->AddHit(projected + du * u + dv * v, electronEnergy,
+                                    inputEvent->GetTime(n) + time, inputEvent->GetType(n),
+                                    inputEvent->GetParticleID(n));
+            }
+            continue;
+        }
         for (long e = 0; e < nElectrons; e++) {
             XYZVector electron = position;
             if (!TRestDetectorChargeResponse::DiffuseElectron(electron, normal, distance,

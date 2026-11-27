@@ -58,6 +58,14 @@ releases); the notes of the GitHub release list its pull requests.
   of the calibration does not restrict the background).
 - TRestRawToDetectorSignalProcess: `keepEmptyEvents` keeps the events without signals (e.g. vetoes without
   any pulse), so the output has an entry per input event.
+- restGarfield: amplification responses in the CST field maps of a unit cell of the amplification
+  structure (`amplification` section, `TRestDetectorAmplificationResponse`): microscopic avalanches from the
+  plane where the drift response ends; transparency, avalanche size and time histograms, and where the lost
+  electrons end (conductor, dielectric, out of the cell). Several field maps combined (a fine map of the
+  mesh and a coarse one above it), dielectrics from an export of the displacement field D, periodic cells.
+- `TRestDetectorHitsDriftResponseProcess` removed: the drift response is the `responseFile` of
+  `TRestDetectorHitsDriftProcess` (instead of the drift field of the medium); the amplification response the
+  `responseFile` of `TRestDetectorAvalancheProcess` (instead of `amplificationVoltage` and `gap`).
 
 ## 3.0.0 (2026-11-24)
 

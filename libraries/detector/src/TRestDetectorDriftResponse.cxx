@@ -1,7 +1,7 @@
 /// \class TRestDetectorDriftResponse
 /// Drift of the electrons in a non-uniform electric field (a field map exported from CST Studio Suite) as a
-/// response per start point, for special simulations; the drift in a uniform field (the driftField of the
-/// medium) is TRestDetectorHitsDriftProcess.
+/// response per start point, for special simulations: TRestDetectorHitsDriftProcess with `responseFile`,
+/// instead of the uniform drift field of the medium.
 ///
 /// restGarfield computes it (the `drift` key of a TRestDetectorTransportManager, after the transport and gain
 /// tables): it loads the field map in Garfield++ (ComponentGrid), builds the Garfield gas from a transport
@@ -19,7 +19,7 @@
 /// Response of each node: the number of primary electrons and of those that arrive, and the histograms of the
 /// arrival position, the displacement (u, v) from the node projected on the boundary plane along the axes of
 /// the readout plane (PlaneAxes; e.g. normal +z: u = x, v = y), positionBins x positionBins over the range of
-/// the arrivals of the node, and of the drift time (timeBins). TRestDetectorHitsDriftResponseProcess uses it
+/// the arrivals of the node, and of the drift time (timeBins). TRestDetectorHitsDriftProcess uses it
 /// for each electron of a hit: it survives with the fraction arrived / primaries interpolated between the 8
 /// neighbouring nodes (GetSurvival), and its displacement and time are sampled from one of those nodes,
 /// chosen with its interpolation weight times its survival (SampleArrival); the displacement is added to the
