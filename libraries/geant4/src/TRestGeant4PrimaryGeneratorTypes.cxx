@@ -225,6 +225,8 @@ TF2 EnergyAndAngularDistributionFormulasToRootFormula(EnergyAndAngularDistributi
         // Source document: arXiv:1509.06176 (Chinese Physics C Vol. 39, No. 6)
         // Input parameter x: muon kinetic energy (processed inside simulation in units of keV)
         // Input parameter y: zenith angle theta (in radians)
+        // The formula is differential in solid angle: the last factor integrates over the azimuth (dOmega =
+        // 2 pi sin(theta) dtheta), without another 2 pi (legacy geant4lib#151): counts / s / cm2 / keV / rad
         const char* title = "Cosmic Muons Energy and Angular";
 
         // Compiled (not a formula string): no interpreter needed, e.g. in the generator of each thread
@@ -235,11 +237,11 @@ TF2 EnergyAndAngularDistributionFormulasToRootFormula(EnergyAndAngularDistributi
             const double cosStar = std::sqrt(
                 (c * c + 0.0105212 - 0.068287 * std::pow(c, 0.958633) + 0.0407253 * std::pow(c, 0.817285)) /
                 0.982960);
-            return 2.0 * TMath::Pi() * 1.0E-6 * 0.14 *
-                   std::pow(energy * (1.0 + 3.64 / (energy * std::pow(cosStar, 1.29))), -2.7) *
-                   (1.0 / (1.0 + 1.1 * energy * cosStar / 115.0) +
-                    0.054 / (1.0 + 1.1 * energy * cosStar / 850.0)) *
-                   (2.0 * std::sin(xs[1]) * TMath::Pi());
+            const double spectrum =
+                0.14 * std::pow(energy * (1.0 + 3.64 / (energy * std::pow(cosStar, 1.29))), -2.7);
+            const double pions = 1.0 / (1.0 + 1.1 * energy * cosStar / 115.0);
+            const double kaons = 0.054 / (1.0 + 1.1 * energy * cosStar / 850.0);
+            return 1.0E-6 * spectrum * (pions + kaons) * 2.0 * TMath::Pi() * std::sin(xs[1]);
         };
         auto f = TF2(title, guan, 2.0E5, 5.0E9, 0.0, TMath::Pi() / 2.0, 0);
 
