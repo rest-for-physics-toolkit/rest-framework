@@ -23,6 +23,9 @@ class TRestDataSetSignalSelection : public TRestDataSetProcess {
     std::string fObservable = "";
     /// Quantile interval [lower, upper] of the reference kept (0 and 1: no limit on that side)
     std::pair<double, double> fQuantiles = {0, 1};
+    /// The cuts of the reference also applied to the dataset processed (always when the reference is the
+    /// dataset processed)
+    bool fApplyCuts = false;
 
     /// Result: range of the observable [min, max] between the quantiles (-inf, inf: no limit)
     std::pair<double, double> fRange = {0, 0};
@@ -37,8 +40,8 @@ class TRestDataSetSignalSelection : public TRestDataSetProcess {
     /// \brief Reads the fields; throws without observable or with quantiles out of 0 <= lower < upper <= 1
     void LoadConfig() override;
 
-    /// \brief Keeps the entries of the dataset that pass the cuts and have the observable in the range
-    /// (filters)
+    /// \brief Keeps the entries of the dataset with the observable in the range and, with applyCuts or when
+    /// the reference is the dataset itself, that pass the cuts (filters)
     void Apply(TRestDataSet& dataSet) const override;
 };
 

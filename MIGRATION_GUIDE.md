@@ -491,7 +491,7 @@ are not migrated.
 | TRestRawFemDAQToSignalProcess, TRestRawMultiFEMINOSToSignalProcess, TRestRawFeminosRootToSignalProcess | Same names |
 | TRestRawToSignalProcess (base of decoders) | Not migrated (decoders derive from TRestEventProcess) |
 | TRestRawAFTERToSignalProcess, TRestRawMultiCoBoAsAdToSignalProcess, TRestRawFEUDreamToSignalProcess, TRestRawTDSToSignalProcess, TRestRawUSTCToSignalProcess, TRestRawBiPoToSignalProcess, TRestRawMemoryBufferToSignalProcess | Not migrated |
-| TRestRawPeaksFinderProcess | TRestRawSignalPeaksFinderProcess (raw signals: threshold in sigmas of the baseline of each signal, also for the vetoes instead of ADC) and TRestDetectorSignalPeaksFinderProcess (detector signals, threshold in signal units) |
+| TRestRawPeaksFinderProcess | TRestDetectorSignalPeaksFinderProcess (detector) |
 | TRestRawVetoAnalysisProcess | Not migrated: TRestRawSignalChannelSelectionProcess + TRestRawSignalAnalysisProcess (`examples/VetoAnalysis.yaml`) |
 | TRestRawSignalFittingProcess, TRestRawSignalConvolutionFittingProcess, TRestRawSignalGeneralFitProcess, TRestRawFindResponseSignalProcess, TRestRawSignalChannelActivityProcess, TRestRawSignalIdTaggingProcess, TRestRawSignalRangeReductionProcess, TRestRawBiPoAnalysisProcess, TRestRawReadoutMetadata, TRestRawDAQMetadata, TRestRawFFT | Not migrated (TRestRawDAQMetadata of restv2 is a new class of restDAQ; FFT in TRestFFTAnalysis) |
 | TRestRawSignalViewerProcess | Not migrated (DrawEvent, TRestBrowser) |

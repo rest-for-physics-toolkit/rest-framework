@@ -1,7 +1,6 @@
 /// \class TRestDetectorSignalPeaksFinderProcess
 /// Finds all the peaks of each signal with TRestPulseShapeAnalysis::GetPeaks and groups the peaks of the
-/// event in time coincidence windows. It replaces, with TRestRawSignalPeaksFinderProcess (raw signals,
-/// threshold in sigmas of the baseline of each signal), the legacy TRestRawPeaksFinderProcess: it works on
+/// event in time coincidence windows. It replaces the legacy TRestRawPeaksFinderProcess: it works on
 /// detector signals, whose baseline is already subtracted and whose times are physical, so there is no
 /// baseline, time conversion or calibration; and channels are not selected by type, the signals of each
 /// detector (e.g. vetoes and Micromegas) are split beforehand with TRestRawSignalChannelSelectionProcess

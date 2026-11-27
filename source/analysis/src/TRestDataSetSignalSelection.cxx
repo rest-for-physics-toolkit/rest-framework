@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -28,8 +29,12 @@
 /// * observable: column of the datasets.
 /// * quantiles: [lower, upper] quantiles of the reference kept, 0 <= lower < upper <= 1 (0 and 1: no limit
 ///   on that side). The efficiency is upper - lower (up to ties of the values).
-/// * referenceFileName, cuts: the signal, see TRestDataSetProcess. The cuts are also applied to the dataset
-///   processed.
+/// * referenceFileName, cuts: the signal, see TRestDataSetProcess.
+/// * applyCuts (false): the cuts of the reference also select the entries of the dataset processed. By
+///   default the dataset processed is selected by the observable alone, e.g. a background in the whole
+///   readout and at any energy, while the efficiency is that of the calibration in its fiducial region and
+///   energy window. When the reference is the dataset processed itself (referenceFileName empty or the same
+///   file) the cuts are always applied: the efficiency is then that of the entries kept.
 ///
 /// ### Results
 /// * range: [min, max] of the observable kept (-.inf and .inf: no limit on that side).
@@ -49,6 +54,7 @@ static const bool TRestDataSetSignalSelection_FieldsRegistered = []() {
     auto& reg = TRestMetadataFieldRegistry::Instance();
     reg.RegisterField<TRestDataSetSignalSelection>("observable", &TRestDataSetSignalSelection::fObservable);
     reg.RegisterField<TRestDataSetSignalSelection>("quantiles", &TRestDataSetSignalSelection::fQuantiles);
+    reg.RegisterField<TRestDataSetSignalSelection>("applyCuts", &TRestDataSetSignalSelection::fApplyCuts);
     reg.RegisterField<TRestDataSetSignalSelection>("range", &TRestDataSetSignalSelection::fRange);
     reg.RegisterField<TRestDataSetSignalSelection>("efficiency", &TRestDataSetSignalSelection::fEfficiency);
     return true;
@@ -112,8 +118,13 @@ void TRestDataSetSignalSelection::ComputeParameters(const TRestDataSet&, ROOT::R
 
 void TRestDataSetSignalSelection::Apply(TRestDataSet& dataSet) const {
     ROOT::RDF::RNode frame = dataSet.GetDataFrame();
-    // The cuts of the reference, so that the efficiency applies to the entries kept
-    const std::string cuts = GetCutExpression(fCutNames);
+    // The cuts of the reference, so that the efficiency applies to the entries kept: with applyCuts, or when
+    // the reference is the dataset processed
+    std::error_code error;
+    const bool ownReference = fReferenceFileName.empty() ||
+                              (!dataSet.fInputFileName.empty() &&
+                               std::filesystem::equivalent(dataSet.fInputFileName, fReferenceUsed, error));
+    const std::string cuts = fApplyCuts || ownReference ? GetCutExpression(fCutNames) : "";
     if (!cuts.empty()) frame = frame.Filter(cuts, fName + "_cuts");
     const std::string input = AsDouble(frame, fObservable);
     const auto range = fRange;

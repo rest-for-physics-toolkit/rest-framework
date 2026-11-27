@@ -37,7 +37,9 @@ use them, and the dataset processes built on them. It depends on `RestCore` and 
 - `TRestDataSetSignalSelection`: keeps the entries with an observable (e.g. `logOdds_total`, `bdt_score`)
   in the range holding a quantile interval of the reference (`quantiles`, e.g. [0, 0.8] or [0.2, 1]):
   fixes a signal efficiency on a calibration and applies it to a background (filter); its `cuts` (e.g.
-  energy window and fiducial region) are applied to both.
+  energy window and fiducial region) select the reference, and the dataset processed too with
+  `applyCuts: true` or when it is the reference itself (by default a background is selected in the whole
+  readout and at any energy).
 - `TRestDataSetCombine`: adds the columns of another dataset of the same events (`combineFileName`, e.g.
   the vetoes analysed apart, to the dataset of the Micromegas), matched by run, eventID and subEventID; the
   entries without match are kept with default values and `<name>_matched` 0 (`keepUnmatched`, true by

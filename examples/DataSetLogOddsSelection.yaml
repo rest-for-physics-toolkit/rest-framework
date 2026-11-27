@@ -1,7 +1,7 @@
 # Signal selection (TRestDataSetSignalSelection) of datasets processed with DataSetLogOdds.yaml: the range of
 # the total log odds holding the 80% of the calibration with the lowest values (quantiles [0, 0.8], with the
 # cuts on the calibrated energy and the fiducial region) is computed, and only the entries of the dataset
-# processed that pass the same cuts and are in that range are kept:
+# processed that pass the same cuts (applyCuts) and are in that range are kept:
 #   restManager --c examples/DataSetLogOddsSelection.yaml --i Dataset_Background_LogOdds.root
 # (output Dataset_Background_LogOddsSelected.root, from the tag of inputFormat; the entries kept in each run
 # are its selectedEntries). The reference is the calibration processed by DataSetLogOdds.yaml
@@ -34,5 +34,8 @@ manager:
       class: "TRestDataSetSignalSelection"
       referenceFileName: "Dataset_Calibration_LogOdds.root"
       cuts: ["energy", "fiducial"]
+      # The background in the energy window and the fiducial region too, as the legacy IAXO analysis (by
+      # default the cuts select only the reference, the background in the whole readout and at any energy)
+      applyCuts: true
       observable: "logOdds_total"
       quantiles: [0, 0.8]

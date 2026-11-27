@@ -395,7 +395,8 @@ TEST(DataSetSignalSelection, CutsAppliedToReferenceAndDataSet) {
         x.push_back(i);
         odd.push_back(i % 2);
     }
-    const std::string path = WriteDataSet(TestDirectory() / "Dataset.root", {{"x", x}, {"odd", odd}});
+    const fs::path directory = TestDirectory();
+    const std::string path = WriteDataSet(directory / "Dataset.root", {{"x", x}, {"odd", odd}});
     TRestDataSet dataSet(path);
     const std::string cut = "odd: {class: TRestCut, conditions: {o: \"odd > 0.5\"}}";
     TRestManager manager("manager", YAML::Load("{class: TRestManager, " + cut + "}"));
@@ -410,6 +411,21 @@ TEST(DataSetSignalSelection, CutsAppliedToReferenceAndDataSet) {
     selection.Apply(dataSet);
     EXPECT_EQ(*dataSet.GetDataFrame().Count(), 25u);
     for (double value : Values(dataSet, "odd")) EXPECT_EQ(value, 1);
+
+    // Another dataset with the same reference: selected by the range alone (1 to 49), or with the cuts too
+    // with applyCuts (the odd values up to 49)
+    const std::string other = WriteDataSet(directory / "Other.root", {{"x", x}, {"odd", odd}});
+    for (const bool applyCuts : {false, true}) {
+        TRestDataSet dataSetOther(other);
+        YAML::Node config = YAML::Load("{verbose: warning, observable: x, quantiles: [0, 0.5], cuts: [odd]}");
+        config["referenceFileName"] = path;
+        config["applyCuts"] = applyCuts;
+        TRestDataSetSignalSelection withReference("selection", config);
+        withReference.ObtainParameters(dataSetOther, &manager);
+        EXPECT_DOUBLE_EQ(withReference.fRange.second, 49);
+        withReference.Apply(dataSetOther);
+        EXPECT_EQ(*dataSetOther.GetDataFrame().Count(), applyCuts ? 25u : 49u);
+    }
 }
 
 TEST(DataSetSignalSelection, QuantileIntervalOfAnIntegerColumn) {

@@ -16,7 +16,6 @@
 #include <TRestRawSignalAnalysisProcess.h>
 #include <TRestRawSignalChannelSelectionProcess.h>
 #include <TRestRawSignalEvent.h>
-#include <TRestRawSignalPeaksFinderProcess.h>
 #include <TRestRawSignalRecoverSaturationProcess.h>
 #include <TRestRawSignalShapingProcess.h>
 #include <TRestRawZeroSupressionToRawProcess.h>
@@ -731,97 +730,6 @@ TEST(RawSignalAnalysis, InvalidConfigurationThrows) {
     // An observable the process does not offer
     auto process = MakeProcess<TRestRawSignalAnalysisProcess>("rawAna", "observables: [NSignalz]");
     EXPECT_THROW(process->Initialize(), std::runtime_error);
-}
-
-// ---------------------------------------------------------------------------------------------------------
-// TRestRawSignalPeaksFinderProcess
-// ---------------------------------------------------------------------------------------------------------
-
-namespace {
-/// Adds a triangular pulse of `height` at bin `centre` (half width 20 bins) to a signal
-void AddTriangle(std::vector<short>& s, int centre, double height) {
-    for (int b = centre - 19; b <= centre + 19; b++) {
-        s[b] = static_cast<short>(s[b] + std::lround(height - height / 20 * std::abs(b - centre)));
-    }
-}
-}  // namespace
-
-// Thresholds relative to the noise of each signal: a small pulse (60 ADC, 40 sigmas of its baseline) and a
-// large one (3000 ADC) of channels with different gains are both found, a pulse under 5 sigmas of a noisier
-// channel is not; peaks in coincidence share a window
-TEST(RawSignalPeaksFinder, ThresholdInSigmasAndWindows) {
-    auto process = MakeProcess<TRestRawSignalPeaksFinderProcess>(
-        "peaks", "baselineRange: [5, 55]\nsigmaThreshold: 5\ndistance: 10\nwindow: 20\nobservables: [all]");
-    ObservableRun obs;
-    obs.Init(*process);
-
-    TRestRawSignalEvent input, output;
-    auto lowGain = Alternating(512, 250);  // robust sigma: IQR 2 / 1.349
-    AddTriangle(lowGain, 200, 60);
-    AddTriangle(lowGain, 400, 60);  // a later peak, out of the coincidence
-    auto highGain = Alternating(512, 300);
-    AddTriangle(highGain, 202, 3000);
-    auto noisy = CommonNoiseSignal(512, 250);  // robust sigma ~4.4: threshold ~22
-    AddTriangle(noisy, 200, 15);
-    input.AddSignal(1, lowGain);
-    input.AddSignal(2, highGain);
-    input.AddSignal(3, noisy);
-
-    ASSERT_TRUE(process->ProcessEvent(input, output));
-    EXPECT_EQ(output.GetNumberOfSignals(), 3);  // the event passes unchanged
-
-    EXPECT_EQ(obs.Get<int>("peaks_NPeaks"), 3);
-    EXPECT_EQ(obs.Get<int>("peaks_NPeaksSignals"), 2);
-    EXPECT_EQ(obs.Get<int>("peaks_NWindows"), 2);
-    EXPECT_EQ(obs.Get<std::vector<int>>("peaks_PeaksSignalID"), (std::vector<int>{1, 2, 1}));
-    const auto& times = obs.Get<std::vector<double>>("peaks_PeaksTime");
-    const auto& amplitudes = obs.Get<std::vector<double>>("peaks_PeaksAmplitude");
-    const auto& sigmas = obs.Get<std::vector<double>>("peaks_PeaksBaselineSigma");
-    ASSERT_EQ(times.size(), 3u);
-    ASSERT_EQ(amplitudes.size(), 3u);
-    ASSERT_EQ(sigmas.size(), 3u);
-    // Average of the three points around the top: height * (1 - 1 / 30), +-1/3 of the noise
-    const double expected[3][2] = {{200, 58}, {202, 2900}, {400, 58}};
-    for (int p = 0; p < 3; p++) {
-        EXPECT_NEAR(times[p], expected[p][0], 1);
-        EXPECT_NEAR(amplitudes[p], expected[p][1], 1.5);
-        EXPECT_NEAR(sigmas[p], 2 / 1.349, 1e-9);
-    }
-    EXPECT_EQ(obs.Get<std::vector<int>>("peaks_PeaksWindowIndex"), (std::vector<int>{0, 0, 1}));
-    EXPECT_EQ(obs.Get<std::vector<int>>("peaks_WindowMultiplicity"), (std::vector<int>{2, 1}));
-    const auto& windowTimes = obs.Get<std::vector<double>>("peaks_WindowTime");
-    ASSERT_EQ(windowTimes.size(), 2u);
-    EXPECT_NEAR(windowTimes[0], 200, 1);
-    EXPECT_NEAR(obs.Get<double>("peaks_PeaksAmplitudeSum"), 3016, 3);
-}
-
-// Signals without noise (e.g. simulated) have a null sigma: minThreshold is the threshold
-TEST(RawSignalPeaksFinder, MinimumThresholdWithoutNoise) {
-    auto process =
-        MakeProcess<TRestRawSignalPeaksFinderProcess>("peaks", "minThreshold: 10\nobservables: [all]");
-    ObservableRun obs;
-    obs.Init(*process);
-
-    TRestRawSignalEvent input, output;
-    auto small = Flat(512, 250);
-    AddTriangle(small, 200, 5);
-    auto large = Flat(512, 250);
-    AddTriangle(large, 300, 50);
-    input.AddSignal(1, small);
-    input.AddSignal(2, large);
-    ASSERT_TRUE(process->ProcessEvent(input, output));
-    EXPECT_EQ(obs.Get<std::vector<int>>("peaks_PeaksSignalID"), (std::vector<int>{2}));
-    EXPECT_EQ(obs.Get<std::vector<double>>("peaks_PeaksBaselineSigma"), (std::vector<double>{0}));
-}
-
-TEST(RawSignalPeaksFinder, InvalidConfigurationThrows) {
-    EXPECT_ANY_THROW(MakeProcess<TRestRawSignalPeaksFinderProcess>("peaks", "baselineOption: median"));
-    EXPECT_ANY_THROW(MetadataClassRegistry::Instance().Create(
-        "peaks", YAML::Load("class: TRestRawSignalPeaksFinderProcess\nsigmaTreshold: 5")));
-    auto negative = MakeProcess<TRestRawSignalPeaksFinderProcess>("peaks", "sigmaThreshold: -1");
-    EXPECT_THROW(negative->Initialize(), std::runtime_error);
-    auto range = MakeProcess<TRestRawSignalPeaksFinderProcess>("peaks", "baselineRange: [50, 50]");
-    EXPECT_THROW(range->Initialize(), std::runtime_error);
 }
 
 // A copied event (copy constructor and assignment) has its own storage: changing the original after the

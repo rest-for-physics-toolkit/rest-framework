@@ -52,7 +52,6 @@ Analysis (observables in the analysis tree):
 | Class | Description |
 | --- | --- |
 | `TRestRawSignalAnalysisProcess` | Baseline, amplitude, integral, peak time, rise time, width and saturation of each signal, and event-level sums, extrema and averages over the good signals. |
-| `TRestRawSignalPeaksFinderProcess` | All the peaks of each signal over a threshold in sigmas of its own baseline (channels with different gains alike, e.g. vetoes), grouped in time coincidence windows. |
 
 The configuration keys, the observables and a YAML example of each process are given in its class
 documentation.
@@ -81,7 +80,7 @@ The examples are in `examples/`; the paths are relative to the repository root.
 | `MultiFEMINOSToRaw.yaml` | Decodes a `.aqs` file of the Feminos cards into `TRestRawSignalEvent` (`RawSignals.root`). |
 | `FeminosRootToRaw.yaml` | Reads a ROOT file of feminos-daq of TREX-DM and runs the chain of one Micromegas plane (`--set plane=0` or `1`) to tracks: the DAQ channels of the plane, raw signal analysis, raw to detector signals, hits and track analysis (processes of the detector, connectors and track libraries), as `examples/TREXDMToTracks.yaml` for the FEMDAQ files. It loads the readout `TREXDM.root` and the transport tables `NeIso.root` (medium `Ne98_iC4H10_2`) of [rest-common-readouts](https://github.com/rest-for-physics-toolkit/rest-common-readouts) and [rest-common-transport](https://github.com/rest-for-physics-toolkit/rest-common-transport) by URL. |
 | `RawSignalAnalysis.yaml` | Raw signal analysis (`TRestRawSignalAnalysisProcess`, all its observables) of a file with `TRestRawSignalEvent`, keeping its run; optional (commented) zero suppression offset removal and shaping before it. |
-| `VetoAnalysis.yaml` | Veto analysis (legacy `TRestRawVetoAnalysisProcess`) with the existing processes: keeps the veto channels, corrects their baseline and computes their amplitude and peak time, and all their peaks over the noise of each channel with their coincidence windows; the comments give the legacy observables as expressions. |
+| `VetoAnalysis.yaml` | Veto analysis (legacy `TRestRawVetoAnalysisProcess`) with the existing processes: keeps the veto channels, corrects their baseline and computes their amplitude and peak time; the comments give the legacy observables as expressions. |
 
 ```
 restManager --c libraries/raw/examples/MultiFEMINOSToRaw.yaml --i R01234_..._-000.aqs
@@ -104,7 +103,6 @@ The example configurations using each process of this component (paths from the 
 | `TRestRawMultiFEMINOSToSignalProcess` | `libraries/raw/examples/MultiFEMINOSToRaw.yaml` |
 | `TRestRawSignalAddNoiseProcess` | `libraries/connectors/examples/Geant4ToRaw.yaml` |
 | `TRestRawSignalAnalysisProcess` | `examples/FemDAQToTracks.yaml`, `examples/TREXDMToTracks.yaml`, `libraries/connectors/examples/DAQViewer.yaml`, `libraries/connectors/examples/Geant4ToRaw.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/raw/examples/RawSignalAnalysis.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
-| `TRestRawSignalPeaksFinderProcess` | `libraries/raw/examples/VetoAnalysis.yaml` |
 | `TRestRawSignalChannelSelectionProcess` | `examples/TREXDMToTracks.yaml`, `libraries/raw/examples/FeminosRootToRaw.yaml`, `libraries/raw/examples/VetoAnalysis.yaml` |
 | `TRestRawSignalRecoverSaturationProcess` | `examples/TREXDMToTracks.yaml` |
 | `TRestRawSignalShapingProcess` | `libraries/raw/examples/RawSignalAnalysis.yaml` (commented) |
