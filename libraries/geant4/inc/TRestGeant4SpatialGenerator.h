@@ -168,9 +168,13 @@ class TRestGeant4SpatialGeneratorSurface : public TRestGeant4SpatialGeneratorSha
 /// \brief `type: "cosmic"`: the origin depends on the direction, a uniform point of the disk of radius
 /// `radius` through the world center normal to the direction, moved back to the sphere of that radius.
 /// The radius is, if not given, the one of the sphere circumscribing the world (written to the YAML).
+/// `flux` (counts / s / cm2 through the disk) is written when the source is loaded, if it is a distribution
+/// of energy and angle (TRestGeant4ParticleSource::GetJointIntegral), to normalize to a time
+/// (TRestGeant4Metadata::GetCosmicExposureTime).
 class TRestGeant4SpatialGeneratorCosmic : public TRestGeant4SpatialGenerator {
    public:
     TRestWithUnits fRadius = 0.0;  ///< `radius` (mm, 0: the world one, set by restG4)
+    double fFlux = 0;              ///< `flux`: of the source (counts / s / cm2), written when it is loaded
 
     TRestGeant4SpatialGeneratorCosmic() = default;
     /// \brief Configured from the `generator` section.
@@ -191,6 +195,8 @@ class TRestGeant4SpatialGeneratorCosmic : public TRestGeant4SpatialGenerator {
 
     /// \brief Sets the radius if not given, also in the YAML node to be stored
     void SetDefaultRadius(double radius);
+    /// \brief Sets the flux of the source (counts / s / cm2), also in the YAML node to be stored
+    void SetFlux(double flux);
     /// \brief Generation surface (the sphere cross section) in cm2, to normalize to a flux
     double GetSurfaceCm2() const { return M_PI * fRadius * fRadius * 0.01; }
 };
@@ -213,8 +219,13 @@ class TRestGeant4CRYEngine {
 /// \class TRestGeant4SpatialGeneratorCRY
 /// \brief `type: "cry"`: the cosmic-ray showers of CRY, generated during the simulation, one per event with
 /// all its particles, with the options of the TRestGeant4CRY section (SetCRY). The CRY plane (z = 0, the
-/// square of subBoxLength) is centered at `position` and its +Z (up) is `verticalAxis`. The copies
-/// (threads) share the CRY generator; the generator has no sources.
+/// square of subBoxLength) is centered at `position` and its +Z (up) is `verticalAxis`. Each copy (thread)
+/// has its own CRY, with the seed of Start plus its index (in the order of their first showers), and the
+/// showers and the exposure are the sums of all of them; the generator has no sources.
+/// With the world set (SetWorld, restG4), as the cosmic generator only the particles crossing the world are
+/// generated: a particle whose line misses the world box is removed, one starting outside it is moved along
+/// its direction to where it enters the world (its time delayed by the flight), and the showers without
+/// particles left are skipped (they count in the exposure of CRY, not in the events of Geant4).
 class TRestGeant4SpatialGeneratorCRY : public TRestGeant4SpatialGenerator {
    public:
     std::array<TRestWithUnits, 3> fPosition = {0.0, 0.0, 0.0};      ///< `position`: CRY plane center (mm)
@@ -235,10 +246,8 @@ class TRestGeant4SpatialGeneratorCRY : public TRestGeant4SpatialGenerator {
     void LoadConfig() override;
     std::string GetClassName() const override { return "TRestGeant4SpatialGeneratorCRY"; }
 
-    /// \brief A copy sharing the CRY generator (once started)
-    std::unique_ptr<TRestGeant4SpatialGenerator> Clone() const override {
-        return std::make_unique<TRestGeant4SpatialGeneratorCRY>(*this);
-    }
+    /// \brief A copy sharing the totals of the CRY generators (once started), with its own CRY
+    std::unique_ptr<TRestGeant4SpatialGenerator> Clone() const override;
     /// \brief Not used, the positions are the ones of the showers (NextShower); it throws
     ROOT::Math::XYZVector Sample(TRandom& random) override;
     /// \brief Returns `position`.
@@ -254,19 +263,22 @@ class TRestGeant4SpatialGeneratorCRY : public TRestGeant4SpatialGenerator {
     bool HasCRY() const { return !fCRYSetup.empty(); }
     /// \brief maxExposureTime of the TRestGeant4CRY (us, 0: no limit)
     double GetMaxExposureTime() const { return fMaxExposureTime; }
-    /// \brief Starts CRY with a seed, shared by the copies made after it (restG4 master thread). Throws if
-    /// there is no TRestGeant4CRY or no engine (restG4 built without CRY)
+    /// \brief Starts CRY with a seed, shared by the copies made after it (restG4 master thread): each copy
+    /// creates its CRY at its first shower, with this seed plus its index. Throws if there is no
+    /// TRestGeant4CRY or no engine (restG4 built without CRY)
     void Start(long seed);
-    /// \brief The particles of a new shower, in world coordinates (thread safe). False if maxExposureTime
-    /// was reached
+    /// \brief The particles of a new shower of the CRY of this copy, in world coordinates (a copy per
+    /// thread). False if maxExposureTime was reached by all the copies
     bool NextShower(std::vector<TRestGeant4ParticleState>& particles);
 
     /// \brief The configuration string of CRYSetup (lengths in m), of the TRestGeant4CRY
     inline const std::string& GetCRYSetup() const { return fCRYSetup; }
 
-    /// \brief The corners of the CRY square (subBoxLength) in world coordinates, to check that it is inside
-    /// the world
+    /// \brief The corners of the CRY square (subBoxLength) in world coordinates
     std::vector<ROOT::Math::XYZVector> GetPlaneCorners() const;
+    /// \brief The half size of the world box (centered at the origin, mm): the particles are generated only
+    /// where they enter it (see the class description). Not set (zero): the particles of CRY as they are
+    void SetWorld(const ROOT::Math::XYZVector& halfSize) { fWorldHalfSize = halfSize; }
 
     /// \brief Sets showersUsed and exposureTime from the showers generated (all the copies), also in the YAML
     void UpdateExposure();
@@ -278,9 +290,13 @@ class TRestGeant4SpatialGeneratorCRY : public TRestGeant4SpatialGenerator {
     std::string fCRYSetup;        //!
     double fSubBoxLength = 0;     //!
     double fMaxExposureTime = 0;  //!
+    /// Half size of the world box (SetWorld, mm), zero if not set
+    ROOT::Math::XYZVector fWorldHalfSize;  //!
 
     struct State;
-    std::shared_ptr<State> fState;  //!
+    struct Engine;
+    std::shared_ptr<State> fState;    //!
+    std::shared_ptr<Engine> fEngine;  //! the CRY of this copy
 
     /// \brief From CRY coordinates (+Z up) to the world: rotation of +Z to verticalAxis
     ROOT::Math::XYZVector RotateToWorld(const ROOT::Math::XYZVector& v) const;

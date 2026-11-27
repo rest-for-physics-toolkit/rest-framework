@@ -521,6 +521,14 @@ class TRestGeant4Metadata : public TRestMetadata {
     inline double GetEquivalentCRYExposureTime() const {
         return GetCRYExposureTime() * fBiasingTotalFactor * GetBiasingCompletedFraction();
     }
+    /// \brief cosmic generator: the time (us) the output represents, GetEquivalentNumberOfEvents / (flux of
+    /// its source * GetCosmicGeneratorSurfaceCm2); 0 without the flux (not cosmic, or a source that is not a
+    /// distribution of energy and angle, see TRestGeant4ParticleSource::GetJointIntegral)
+    double GetCosmicExposureTime() const;
+    /// \brief The time (us) the output represents, to normalize to a rate: GetEquivalentCRYExposureTime (cry
+    /// generator), GetCosmicExposureTime (cosmic generator), 0 for the other generators (e.g. the decays of
+    /// a contamination: normalized with its activity)
+    double GetEquivalentSimulatedTime() const;
     /// \brief Wall time of the simulation (s)
     inline double GetSimulationWallTime() const { return fSimulationTime; }
     /// \brief Sets the wall time of the simulation (s)

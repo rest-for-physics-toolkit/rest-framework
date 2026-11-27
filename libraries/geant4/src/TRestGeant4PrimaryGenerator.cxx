@@ -45,7 +45,11 @@
 /// back to the sphere of that radius, so the flux through any surface inside the sphere is the one of the
 /// distributions. `radius` is, if not given, the one of the sphere circumscribing the world box (written
 /// to the stored metadata); the generation surface, to normalize to a flux, is pi radius^2
-/// (TRestGeant4Metadata::GetCosmicGeneratorSurfaceCm2). It needs a single source, not a Decay0 one.
+/// (TRestGeant4Metadata::GetCosmicGeneratorSurfaceCm2). It needs a single source, not a Decay0 one. With
+/// a distribution of energy and angle (formula2, TH2D, cosmic) its integral in `range` is the flux
+/// (counts / s / cm2), written to the generator section (`flux`), and the time the simulation represents
+/// is the events / (flux * surface) (TRestGeant4Metadata::GetEquivalentSimulatedTime, as the exposure of
+/// the cry generator).
 ///
 /// * **cry** (TRestGeant4SpatialGeneratorCRY): the cosmic-ray showers of CRY, generated during the
 /// simulation (restG4 built with CRY), one per event, with all their particles (name, charge, energy,
@@ -53,11 +57,14 @@
 /// (subBoxLength, latitude, altitude, maxExposureTime...) are in their own section of the
 /// TRestGeant4Manager, of class TRestGeant4CRY; the generator only places the CRY square: its horizontal
 /// plane is centered at `position` ([0, 0, 0] by default) and the CRY +Z (up) is `verticalAxis`
-/// ([0, 1, 0] by default: the cosmics go down along -Y). The square must be inside the world, restG4 stops
-/// with an error otherwise. The seed of CRY is the metadata seed; the threads share the CRY generator. The
-/// simulation stops at nEvents or, with maxExposureTime, when CRY has simulated that time (with nEvents 0,
-/// only then). At the end, the generator section stores `showersUsed` and `exposureTime`, the time
-/// simulated by CRY (TRestGeant4Metadata::GetCRYExposureTime), to normalize to a rate.
+/// ([0, 1, 0] by default: the cosmics go down along -Y). As the cosmic generator, restG4 generates only
+/// the particles crossing the world (the square can be larger than it): a particle starting outside the
+/// world starts where it enters it (its time delayed by the flight), one missing it is removed, and a
+/// shower without particles left is skipped (it counts in the exposure, not in the events). Each thread has
+/// its own CRY, with the metadata seed plus its index; the exposure is the sum of all. The simulation stops
+/// at nEvents or, with maxExposureTime, when CRY has simulated that time (with nEvents 0, only then). At the
+/// end, the generator section stores `showersUsed` and `exposureTime`, the time simulated by CRY
+/// (TRestGeant4Metadata::GetCRYExposureTime), to normalize to a rate.
 ///
 /// `spatialDensityFunction` (volume and surface) is a TF3 formula of x, y, z (mm, world coordinates)
 /// with values in [0, 1]: each position is accepted with that probability (an error if it is > 1).

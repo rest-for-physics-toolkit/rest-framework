@@ -81,6 +81,9 @@ class TRestGeant4PrimaryGeneratorInfo : public TRestMetadata {
     void SetCRY(const TRestGeant4CRY& cry);
     /// \brief The corners of the CRY square of the cry generator in world coordinates (empty if not cry)
     std::vector<ROOT::Math::XYZVector> GetCRYPlaneCorners() const;
+    /// \brief The cry generator: the half size of the world box (restG4), only the particles crossing it
+    /// are generated (TRestGeant4SpatialGeneratorCRY::SetWorld)
+    void SetCRYWorld(const ROOT::Math::XYZVector& halfSize);
     /// \brief The cry generator: sets the showers used and their exposure from the showers generated
     void UpdateCRYExposure();
     /// \brief Showers of the cry generator used and their exposure (time simulated, us), 0 if not cry
@@ -103,6 +106,9 @@ class TRestGeant4PrimaryGeneratorInfo : public TRestMetadata {
     void SetCosmicRadius(double radius);
     /// \brief Cosmic generation surface in cm2 (0 if not cosmic)
     double GetCosmicSurfaceCm2() const;
+    /// \brief Flux of the source of the cosmic generator (counts / s / cm2), written when it is loaded
+    /// (LoadDistributions); 0 if not cosmic or not a distribution of energy and angle
+    double GetCosmicFlux() const;
 
     /// \brief Prints the generator class, the GDML volume, the cosmic surface, the cry file, the density and
     /// the sources.

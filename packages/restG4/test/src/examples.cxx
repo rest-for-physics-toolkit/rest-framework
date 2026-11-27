@@ -490,6 +490,17 @@ TEST(restG4Examples, CosmicGenerator) {
     // The origins on the sphere of the generation surface (pi R^2)
     const double radius = std::sqrt(simulation.metadata->GetCosmicGeneratorSurfaceCm2() / M_PI) * 10;
     EXPECT_LT(Relative(radius, 173.20508), 0.01);
+    // The flux of the Guan formula in its whole range (legacy ValidateCosmicGenerator.C: 0.0172229 counts /
+    // s / cm2, ~1 muon / cm2 / min) and the time simulated, N / (flux * surface)
+    const double flux = simulation.metadata->GetGeant4PrimaryGeneratorInfo().GetCosmicFlux();
+    EXPECT_LT(Relative(flux, 0.0172229), 0.02);
+    const double events = simulation.metadata->GetEquivalentNumberOfEvents();
+    EXPECT_LT(Relative(simulation.metadata->GetEquivalentSimulatedTime(),
+                       events / (flux * simulation.metadata->GetCosmicGeneratorSurfaceCm2()) * 1e6),
+              1e-9);
+    // Stored in the run (s), for the rates of the files processed from it
+    const double seconds = simulation.metadata->GetEquivalentSimulatedTime() / 1e6;
+    EXPECT_LT(Relative(simulation.run.GetSimulatedTime(), seconds), 1e-9);
     simulation.ForEachEvent([&](const TRestGeant4Event& event) {
         EXPECT_LT(Relative(event.GetPrimaryPosition().R(), radius), 1e-3);
     });

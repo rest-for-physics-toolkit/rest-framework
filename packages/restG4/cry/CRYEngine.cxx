@@ -24,9 +24,9 @@
 
 namespace {
 
-/// The random generator of CRY, a function without arguments (a single CRY generator, shared by the threads
-/// under the lock of TRestGeant4SpatialGeneratorCRY)
-TRandom3 gCRYRandom;
+/// The random generator of CRY, a function without arguments: one per thread, as the CRY generators (each
+/// thread creates its own, TRestGeant4SpatialGeneratorCRY, and seeds this one)
+thread_local TRandom3 gCRYRandom;
 double CRYRandom() { return gCRYRandom.Rndm(); }
 
 /// Geant4 name of a CRY particle, as legacy
@@ -53,6 +53,7 @@ std::string ParticleName(CRYParticle& particle) {
 
 class CRYEngine : public TRestGeant4CRYEngine {
    public:
+    /// Created in the thread that uses it: it seeds the random generator of that thread
     CRYEngine(const std::string& setupString, long seed) {
         gCRYRandom.SetSeed(seed);
         const char* dataPath = std::getenv("CRYDATAPATH");

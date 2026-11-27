@@ -481,3 +481,13 @@ void TRestGeant4Metadata::LoadGeometryFromActiveFile() {
 double TRestGeant4Metadata::GetCosmicGeneratorSurfaceCm2() const {
     return fGeant4PrimaryGeneratorInfo.GetCosmicSurfaceCm2();
 }
+
+double TRestGeant4Metadata::GetCosmicExposureTime() const {
+    const double rate = fGeant4PrimaryGeneratorInfo.GetCosmicFlux() * GetCosmicGeneratorSurfaceCm2();
+    return rate > 0 ? GetEquivalentNumberOfEvents() / rate * 1e6 : 0;
+}
+
+double TRestGeant4Metadata::GetEquivalentSimulatedTime() const {
+    if (fGeant4PrimaryGeneratorInfo.IsCRY()) return GetEquivalentCRYExposureTime();
+    return GetCosmicExposureTime();
+}

@@ -216,6 +216,7 @@ TRestGeant4ParticleSource TRestGeant4ParticleSource::Clone() const {
     TRestGeant4ParticleSource copy(GetName(), YAML::Clone(fNode));
     copy.fDecay0Events = fDecay0Events;
     copy.fJointCumulative = fJointCumulative;  // Read only: shared
+    copy.fJointIntegral = fJointIntegral;
     return copy;
 }
 
@@ -262,6 +263,7 @@ void TRestGeant4ParticleSource::BuildJointCumulative() {
     }
     const double total = cumulative->back();
     if (!(total > 0)) throw runtime_error(GetClassName() + ": the integral of the formula is zero");
+    fJointIntegral = total;
     for (auto& value : *cumulative) value /= total;
     fJointCumulative = cumulative;
 }
@@ -328,9 +330,8 @@ void TRestGeant4ParticleSource::LoadJointDistribution() {
             fJointHistogram->SetBinContent(i, j, content);
         }
     }
-    if (fJointHistogram->Integral() <= 0) {
-        throw runtime_error(GetClassName() + ": the histogram is empty in 'range'");
-    }
+    fJointIntegral = fJointHistogram->Integral();
+    if (fJointIntegral <= 0) throw runtime_error(GetClassName() + ": the histogram is empty in 'range'");
     fJointHistogram->ComputeIntegral();
 }
 

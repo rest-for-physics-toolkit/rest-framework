@@ -20,7 +20,9 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
-#include <sstream>
+#include <map>
+#include <string>
+#include <utility>
 
 #include "SimulationManager.h"
 
@@ -91,20 +93,10 @@ G4VPhysicalVolume* DetectorConstruction::Construct() {
                                          worldSolid->GetZHalfLength()};
     restG4Metadata->GetGeant4PrimaryGeneratorInfo().SetCosmicRadius(worldHalfSize.mag());
 
-    // The cry generator: the particles start on the CRY square, which must be inside the world
-    for (const auto& corner : restG4Metadata->GetGeant4PrimaryGeneratorInfo().GetCRYPlaneCorners()) {
-        if (abs(corner.X()) >= worldHalfSize.x() || abs(corner.Y()) >= worldHalfSize.y() ||
-            abs(corner.Z()) >= worldHalfSize.z()) {
-            ostringstream message;
-            message << "The CRY square (subBoxLength of the cry generator, centered at its "
-                       "position) is not inside the world: corner ("
-                    << corner.X() << ", " << corner.Y() << ", " << corner.Z() << ") mm, world half size ("
-                    << worldHalfSize.x() << ", " << worldHalfSize.y() << ", " << worldHalfSize.z()
-                    << ") mm. Make subBoxLength smaller, move the position or enlarge the world";
-            G4Exception("DetectorConstruction::Construct", "REST_G4_CRY_OUTSIDE_WORLD", FatalException,
-                        message.str().c_str());
-        }
-    }
+    // The cry generator: as the cosmic one, only the particles crossing the world, from where they enter it
+    // (the CRY square can be larger than the world)
+    restG4Metadata->GetGeant4PrimaryGeneratorInfo().SetCRYWorld(
+        {worldHalfSize.x(), worldHalfSize.y(), worldHalfSize.z()});
 
     restG4Metadata->fGeant4GeometryInfo.InitializeOnDetectorConstruction(gdmlFile, worldVolume);
     restG4Metadata->SyncActiveVolumesFromMetadata();
@@ -246,22 +238,29 @@ G4VPhysicalVolume* DetectorConstruction::Construct() {
         fBoundBoxZMax = boxMax.z();
     }
 
+    // The volumes of each maxStepSize, written once per value (a geometry may have hundreds of copies)
+    map<double, pair<size_t, string>> stepVolumes;
     for (unsigned int id = 0; id < restG4Metadata->GetNumberOfActiveVolumes(); id++) {
         auto activeVolumeName = restG4Metadata->GetActiveVolumeName(id);
         G4VPhysicalVolume* physicalVolume = GetPhysicalVolume((G4String)activeVolumeName);
         if (physicalVolume != nullptr) {
             G4LogicalVolume* logicalVolume = physicalVolume->GetLogicalVolume();
-            if (restG4Metadata->GetMaxStepSize(activeVolumeName) > 0) {
-                RESTInfo << "Setting maxStepSize of " << restG4Metadata->GetMaxStepSize(activeVolumeName) * mm
-                         << "mm for volume '" << activeVolumeName << "'" << RESTendl;
-                logicalVolume->SetUserLimits(
-                    new G4UserLimits(restG4Metadata->GetMaxStepSize(activeVolumeName) * mm));
+            const double maxStepSize = restG4Metadata->GetMaxStepSize(activeVolumeName);
+            if (maxStepSize > 0) {
+                logicalVolume->SetUserLimits(new G4UserLimits(maxStepSize * mm));
+                auto& volumes = stepVolumes[maxStepSize];
+                if (volumes.first++ == 0) volumes.second = activeVolumeName;
             }
         } else {
             cerr << "DetectorConstruction::Construct - Volume '" << activeVolumeName
                  << "' is not defined in the geometry" << endl;
             exit(1);
         }
+    }
+    for (const auto& [maxStepSize, volumes] : stepVolumes) {
+        RESTInfo << "Setting maxStepSize of " << maxStepSize << " mm for " << volumes.first
+                 << (volumes.first == 1 ? " volume ('" : " volumes (e.g. '") << volumes.second << "')"
+                 << RESTendl;
     }
 
     for (const auto& killVolumeName : restG4Metadata->GetKillVolumes()) {

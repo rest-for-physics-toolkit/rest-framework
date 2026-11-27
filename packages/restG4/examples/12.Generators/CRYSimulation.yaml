@@ -7,7 +7,7 @@
 # maxExposureTime, when CRY has simulated that time (nEvents 0: only then). The generator section of the
 # stored TRestGeant4Metadata gets showersUsed and exposureTime (TRestGeant4Metadata::GetCRYExposureTime), to
 # normalize to a rate. The geometry is the one of this example (geometry/setup.gdml), a world of 200 mm:
-# the CRY square (subBoxLength) must be inside it.
+# only the particles crossing it are simulated, from where they enter it (the CRY square can be larger).
 g4Manager:
   class: "TRestGeant4Manager"
 

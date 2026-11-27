@@ -17,13 +17,14 @@
 /// * date: month-day-year, for the 11-year solar cycle ("7-1-2012").
 /// * latitude: geomagnetic latitude in degrees, -90 to 90 (90).
 /// * altitude: 0, 2100 m or 11300 m, the altitudes of the CRY data tables (0).
-/// * subBoxLength: side of the horizontal square where the particles start, needed. It should be about the
-///   size of the detector: the particles outside it are not returned, the ones far from the detector waste
-///   time in restG4. The square must be inside the world (restG4 stops with an error otherwise).
+/// * subBoxLength: side of the horizontal square where the particles start, needed: the particles outside it
+///   are not returned. It can be larger than the world: restG4 generates only the particles crossing the
+///   world, from where they enter it, and skips the showers without any (they count in the exposure).
 /// * maxExposureTime: the simulation stops when CRY has simulated this time (0: no limit, only nEvents;
 ///   with nEvents 0 only this one).
 ///
-/// The seed of CRY is the one of the simulation (TRestGeant4Metadata). The CRY offsets (xoffset, yoffset,
+/// The seed of CRY is the one of the simulation (TRestGeant4Metadata) plus the index of each thread, which
+/// has its own CRY (the exposure is the sum of all). The CRY offsets (xoffset, yoffset,
 /// zoffset) are not used: the square is placed in the geometry by the `position` and `verticalAxis` of the
 /// generator. The exposure simulated is stored in the generator section
 /// (TRestGeant4Metadata::GetCRYExposureTime), to normalize to a rate.

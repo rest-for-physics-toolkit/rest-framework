@@ -85,6 +85,11 @@ class TRestGeant4ParticleSource : public TRestMetadata {
     inline const TRestGeant4EnergyDistribution* GetEnergyDistribution() const { return fEnergy.get(); }
     /// \brief The angular distribution (nullptr for a Decay0 source)
     inline const TRestGeant4AngularDistribution* GetAngularDistribution() const { return fAngular.get(); }
+    /// \brief The integral of the distribution of energy and angle (formula2, TH2D, cosmic) in `range`, once
+    /// loaded (LoadDistributions), 0 otherwise. For the cosmic histograms, whose bins have the flux through
+    /// a horizontal surface (counts / s / cm2), the flux through the disk of the cosmic generator (each bin
+    /// divided by the cosine of its zenith angle); for formula2, its integral (CosmicMuons: counts / s / cm2)
+    inline double GetJointIntegral() const { return fJointIntegral; }
 
    private:
     /// Energy and angle sampled together (formula2, TH2D, cosmic)
@@ -99,6 +104,7 @@ class TRestGeant4ParticleSource : public TRestMetadata {
     std::unique_ptr<TH2D> fJointHistogram;                        //!
     double fJointEnergyUnit = 1;                                  //!
     double fJointAngleUnit = 1;                                   //!
+    double fJointIntegral = 0;                                    //! GetJointIntegral
 
     /// Decay0 events, read once and shared by the copies
     std::shared_ptr<const std::vector<std::vector<TRestGeant4ParticleState>>> fDecay0Events;  //!

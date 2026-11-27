@@ -160,10 +160,10 @@ void MergeSimulationTrees(const std::vector<RunFile>& runFiles, const std::vecto
 /// merged, by their mergedSubRuns), the same event trees and analysis tree (branches and types) and the
 /// same processing (all their metadata but the TRestRun equal). The trees are merged as the threads of
 /// TRestManager (TFileMerger), in subrun order; the other objects (readouts, geometry) are copied from the
-/// first subrun. The TRestRun of the merged file is the one of the first
-/// subrun with subRunNumber the first one, mergedSubRuns all of them, startTime the earliest, endTime the
-/// latest, entriesSaved the sum and outputFileName the merged file; its codeVersion, codeCommit and
-/// codeClean are those of the first subrun (the code that wrote the data, not the one merging it).
+/// first subrun. The TRestRun of the merged file is the one of the first subrun with subRunNumber the
+/// first one, mergedSubRuns all of them, startTime the earliest, endTime the latest, entriesSaved and
+/// simulatedTime the sums and outputFileName the merged file; its codeVersion, codeCommit and codeClean are
+/// those of the first subrun (the code that wrote the data, not the one merging it).
 ///
 /// Simulations (files with a TRestGeant4Metadata, restG4 outputs or their analysis) of the same
 /// configuration with different seeds (e.g. restG4 --seed in parallel jobs) are merged as a single
@@ -206,7 +206,7 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
         const int runNumber = TRestYAMLUtils::GetParam<int>(first.run, "runNumber", -1);
         if (runNumber < 0 && !simulation) throw std::runtime_error(first.fileName + " has no run number");
         std::vector<int> subRuns;
-        double startTime = 0, endTime = 0;
+        double startTime = 0, endTime = 0, simulatedTime = 0;
         long long entries = 0;
         // Simulations: the seeds, the events simulated before each file and the sums of the counts
         std::set<long long> seeds;
@@ -269,6 +269,7 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
             if (i == 0 || start < startTime) startTime = start;
             if (i == 0 || end > endTime) endTime = end;
             entries += TRestYAMLUtils::GetParam<long long>(runFile.run, "entriesSaved", 0);
+            simulatedTime += TRestYAMLUtils::GetParam<double>(runFile.run, "simulatedTime", 0);
         }
 
         if (simulation) {
@@ -298,6 +299,7 @@ int REST_MergeRuns(const std::string& filePattern, const std::string& outputFile
         run["startTime"] = startTime;
         run["endTime"] = endTime;
         run["entriesSaved"] = entries;
+        run["simulatedTime"] = simulatedTime;
         run["outputFileName"] = outputPath;
         std::map<std::string, YAML::Node> metadata = first.metadata;
         if (simulation) {

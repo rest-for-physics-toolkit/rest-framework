@@ -932,6 +932,12 @@ double TRestDataSet::GetTotalTime() const {
     return total;
 }
 
+double TRestDataSet::GetTotalSimulatedTime() const {
+    double total = 0;
+    for (const auto& run : fRuns) total += run.run->fSimulatedTime;
+    return total;
+}
+
 double TRestDataSet::GetStartTime() const {
     double start = 0;
     for (size_t i = 0; i < fRuns.size(); i++) {
@@ -998,6 +1004,9 @@ void TRestDataSet::PrintDataSetInfo() const {
     RESTMetadata << " - Start time: " << TRestTools::GetTimeStampFromUnixTime(GetStartTime()) << RESTendl;
     RESTMetadata << " - End time: " << TRestTools::GetTimeStampFromUnixTime(GetEndTime()) << RESTendl;
     RESTMetadata << " - Total run time: " << GetTotalTime() / 3600. << " hours" << RESTendl;
+    if (GetTotalSimulatedTime() > 0) {
+        RESTMetadata << " - Simulated time: " << GetTotalSimulatedTime() / 3600. << " hours" << RESTendl;
+    }
     RESTMetadata << " - Entries: " << selectedEntries << " of " << entries << RESTendl;
     for (size_t i = 0; i < fRuns.size(); i++) {
         const auto& run = fRuns[i];

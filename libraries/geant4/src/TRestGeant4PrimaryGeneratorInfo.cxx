@@ -78,6 +78,10 @@ std::set<std::string> TRestGeant4PrimaryGeneratorInfo::GetSharedNodeKeys() const
 
 void TRestGeant4PrimaryGeneratorInfo::LoadDistributions(long seed) {
     for (auto& source : fSources) source.LoadDistributions();
+    // The cosmic generator (a single source): the flux of its source, to normalize to a time
+    if (auto* cosmic = dynamic_cast<TRestGeant4SpatialGeneratorCosmic*>(fSpatialGenerator.get())) {
+        if (fSources.size() == 1) cosmic->SetFlux(fSources[0].GetJointIntegral());
+    }
     if (auto* cry = dynamic_cast<TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get())) cry->Start(seed);
 }
 
@@ -105,6 +109,12 @@ void TRestGeant4PrimaryGeneratorInfo::SetCRY(const TRestGeant4CRY& cry) {
 vector<ROOT::Math::XYZVector> TRestGeant4PrimaryGeneratorInfo::GetCRYPlaneCorners() const {
     const auto* cry = dynamic_cast<const TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get());
     return cry ? cry->GetPlaneCorners() : vector<ROOT::Math::XYZVector>();
+}
+
+void TRestGeant4PrimaryGeneratorInfo::SetCRYWorld(const ROOT::Math::XYZVector& halfSize) {
+    if (auto* cry = dynamic_cast<TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get())) {
+        cry->SetWorld(halfSize);
+    }
 }
 
 void TRestGeant4PrimaryGeneratorInfo::UpdateCRYExposure() {
@@ -160,12 +170,18 @@ double TRestGeant4PrimaryGeneratorInfo::GetCosmicSurfaceCm2() const {
     return cosmic ? cosmic->GetSurfaceCm2() : 0;
 }
 
+double TRestGeant4PrimaryGeneratorInfo::GetCosmicFlux() const {
+    const auto* cosmic = dynamic_cast<const TRestGeant4SpatialGeneratorCosmic*>(fSpatialGenerator.get());
+    return cosmic ? cosmic->fFlux : 0;
+}
+
 void TRestGeant4PrimaryGeneratorInfo::Print() const {
     if (!fSpatialGenerator) return;
     RESTMetadata << "Generator: " << fSpatialGenerator->GetClassName() << RESTendl;
     if (IsGdml()) RESTMetadata << "Generator volume: " << GetGdmlVolume() << RESTendl;
     if (IsCosmic()) {
-        RESTMetadata << "Cosmic generation surface: " << GetCosmicSurfaceCm2() << " cm2" << RESTendl;
+        RESTMetadata << "Cosmic generation surface: " << GetCosmicSurfaceCm2() << " cm2, flux "
+                     << GetCosmicFlux() << " counts/s/cm2" << RESTendl;
     }
     if (IsCRY()) {
         const auto* cry = dynamic_cast<const TRestGeant4SpatialGeneratorCRY*>(fSpatialGenerator.get());

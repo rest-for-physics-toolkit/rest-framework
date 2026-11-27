@@ -452,6 +452,29 @@ class FakeCRYEngine : public TRestGeant4CRYEngine {
    private:
     int fShowers = 0;
 };
+
+/// A CRY engine for the tests: 1 s per shower; the even showers (0, 2...) a muon at (100, 0, 0) mm and an
+/// electron at (5 m, 0, 0) going down, the odd ones a muon at (5 m, 0, 0) going down
+class FakeCRYShowersEngine : public TRestGeant4CRYEngine {
+   public:
+    std::vector<TRestGeant4ParticleState> Generate() override {
+        auto particle = [](const std::string& name, double x) {
+            TRestGeant4ParticleState state;
+            state.SetParticleName(name);
+            state.SetEnergy(1e6);
+            state.SetOrigin({x, 0, 0});
+            state.SetDirection({0, 0, -1});
+            return state;
+        };
+        const bool even = fShowers++ % 2 == 0;
+        if (even) return {particle("mu-", 100), particle("e-", 5000)};
+        return {particle("mu-", 5000)};
+    }
+    double GetTimeSimulated() const override { return fShowers * 1e6; }
+
+   private:
+    int fShowers = 0;
+};
 }  // namespace
 
 TEST(Geant4Metadata, CRYGenerator) {
@@ -493,19 +516,18 @@ TEST(Geant4Metadata, CRYGenerator) {
     EXPECT_THROW(info.LoadDistributions(metadata.GetSeed()), std::runtime_error);
 
     std::string setup;
-    long seed = 0;
+    std::vector<long> seeds;
     TRestGeant4SpatialGeneratorCRY::SetEngineFactory([&](const std::string& s, long engineSeed) {
         setup = s;
-        seed = engineSeed;
+        seeds.push_back(engineSeed);
         return std::unique_ptr<TRestGeant4CRYEngine>(std::make_unique<FakeCRYEngine>());
     });
     EXPECT_TRUE(TRestGeant4SpatialGeneratorCRY::HasEngine());
     info.LoadDistributions(metadata.GetSeed());
-    EXPECT_EQ(seed, 5);
-    EXPECT_NE(setup.find("latitude 42"), std::string::npos);
-    EXPECT_NE(setup.find("subboxLength 2"), std::string::npos);
+    EXPECT_TRUE(seeds.empty());  // each generator (thread) creates its CRY at its first shower
 
-    // Two generators (threads) share the CRY generator: the CRY +Z is +Y, the plane at y = 1 m
+    // Two generators (threads), each with its own CRY (seeds 5 and 6) and the exposure of both: the CRY +Z
+    // is +Y, the plane at y = 1 m
     TRestGeant4PrimaryGenerator first(info, 1), second(info, 2);
     for (auto* generator : {&first, &second, &first}) {
         const auto particles = generator->Generate();
@@ -516,8 +538,12 @@ TEST(Geant4Metadata, CRYGenerator) {
         EXPECT_NEAR(particles[0].GetOrigin().Z(), 0, 1e-9);
         EXPECT_NEAR(particles[0].GetDirection().Y(), -1, 1e-12);
     }
-    // maxExposureTime (3 s) reached: no more showers
+    EXPECT_EQ(seeds, (std::vector<long>{5, 6}));
+    EXPECT_NE(setup.find("latitude 42"), std::string::npos);
+    EXPECT_NE(setup.find("subboxLength 2"), std::string::npos);
+    // maxExposureTime (3 s: 2 of the first CRY and 1 of the second) reached: no more showers
     EXPECT_TRUE(second.Generate().empty());
+    EXPECT_TRUE(first.Generate().empty());
 
     info.UpdateCRYExposure();
     EXPECT_EQ(metadata.GetCRYShowersUsed(), 3);
@@ -547,6 +573,46 @@ TEST(Geant4Metadata, CRYGenerator) {
     EXPECT_THROW(TRestGeant4CRY("cry", YAML::Load("{subBoxLength: 1 m, particles: [muon]}")),
                  std::runtime_error);
     EXPECT_THROW(TRestGeant4CRY("cry", YAML::Load("{subBoxLength: 1 m, altitude: 5 m}")), std::runtime_error);
+}
+
+TEST(Geant4Metadata, CRYGeneratorWorld) {
+    // The CRY square (10 m, at y = 1 m) larger than the world (1 m, half size 500 mm): only the particles
+    // crossing the world, from where they enter it; the showers without any are skipped
+    const std::string config =
+        "geant4Metadata:\n"
+        "  class: TRestGeant4Metadata\n"
+        "  seed: 5\n"
+        "  generator: {type: cry, position: [0, 1 m, 0], verticalAxis: [0, 1, 0]}\n"
+        "cry: {class: TRestGeant4CRY, subBoxLength: 10 m, maxExposureTime: 3 s}\n";
+    TRestGeant4Manager manager("g4Manager", YAML::Load(config));
+    ASSERT_NE(manager.fG4Metadata, nullptr);
+    TRestGeant4Metadata& metadata = *manager.fG4Metadata;
+    auto& info = metadata.GetGeant4PrimaryGeneratorInfo();
+    info.SetCRYWorld({500, 500, 500});
+    TRestGeant4SpatialGeneratorCRY::SetEngineFactory([](const std::string&, long) {
+        return std::unique_ptr<TRestGeant4CRYEngine>(std::make_unique<FakeCRYShowersEngine>());
+    });
+    info.LoadDistributions(metadata.GetSeed());
+    TRestGeant4PrimaryGenerator generator(info, 1);
+
+    // The muon from (100, 1000, 0) mm enters the world at y = 500 mm (1 um inside it), 500 mm later
+    const double mass = 105658.3755, kinetic = 1e6;
+    const double beta = std::sqrt(kinetic * (kinetic + 2 * mass)) / (kinetic + mass);
+    for (int i = 0; i < 2; i++) {
+        const auto particles = generator.Generate();
+        ASSERT_EQ(particles.size(), 1u);  // the electron at x = 5 m misses the world
+        EXPECT_EQ(particles[0].GetParticleName(), "mu-");
+        EXPECT_NEAR(particles[0].GetOrigin().X(), 100, 1e-9);
+        EXPECT_NEAR(particles[0].GetOrigin().Y(), 500 - 1e-3, 1e-9);
+        EXPECT_NEAR(particles[0].GetTime(), (500 + 1e-3) / (beta * 299792.458), 1e-12);
+    }
+    // The odd shower between them was skipped: three showers, 3 s, the end of the exposure
+    EXPECT_TRUE(generator.Generate().empty());
+    info.UpdateCRYExposure();
+    EXPECT_EQ(metadata.GetCRYShowersUsed(), 3);
+    EXPECT_NEAR(metadata.GetCRYExposureTime(), 3e6, 1e-6);
+    EXPECT_NEAR(metadata.GetEquivalentSimulatedTime(), 3e6, 1e-6);
+    TRestGeant4SpatialGeneratorCRY::SetEngineFactory(nullptr);
 }
 
 TEST(Geant4Metadata, GeneratorErrors) {

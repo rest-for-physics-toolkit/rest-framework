@@ -226,9 +226,13 @@ The generator `type: "cry"` calls CRY during the simulation: each event is a sho
 options of CRY are in their own section of the `TRestGeant4Manager`, of class `TRestGeant4CRY` (`subBoxLength`,
 the side of the square where the particles start, `latitude`, `altitude`, `date`, the `particles` returned,
 `maxExposureTime`...), as the physics lists; the generator only places the square: its `position` and its
-`verticalAxis` (the up of CRY) in the geometry. The section is not used with another generator, so a
-configuration can keep it for all its generators. The seed of CRY is the one of the simulation. The simulation
-stops at `nEvents` or, with `maxExposureTime`, when CRY has simulated that time (`nEvents` 0: only then); the
+`verticalAxis` (the up of CRY) in the geometry. As the cosmic generator, only the particles crossing the world
+are simulated: those starting outside it start where they enter it (their time delayed by the flight), those
+missing it are removed, and the showers without any are skipped (they count in the exposure, not in the
+events). The square can be larger than the world, as CRY needs it to sample the showers. The section is not
+used with another generator, so a configuration can keep it for all its generators. Each thread has its own
+CRY, with the seed of the simulation plus the index of the thread; the exposure is the sum of all. The
+simulation stops at `nEvents` or, with `maxExposureTime`, when CRY has simulated that time (`nEvents` 0: only then); the
 exposure simulated is stored in the `TRestGeant4Metadata` (`GetCRYExposureTime()`), to normalize to a rate. See
 `examples/12.Generators/CRYSimulation.yaml`.
 

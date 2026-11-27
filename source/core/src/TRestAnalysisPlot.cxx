@@ -36,7 +36,9 @@
 /// optional, printf style (%.2f) or a number of significant digits. In the expression:
 /// * entries, allEntries (with the global cuts only, e.g. {entries/allEntries} is the fraction of the
 ///   events that pass the cuts of the panel), runLength (hours, from the start and end time of each run,
-///   not affected by the cuts; without them, from the first and last timeSeconds), meanRate (Hz),
+///   not affected by the cuts; without them, from the first and last timeSeconds), simulatedTime (hours,
+///   the time the simulations represent: TRestRunInfo::fSimulatedTime of the runs, e.g. of the cosmic rays
+///   of restG4, 0 for data), meanRate (Hz),
 ///   startTime and endTime (dates), cuts (expression of the cuts of the panel);
 /// * run.key (TRestRunInfo of the first run, e.g. run.runTag, and its runInfo, e.g. run.runInfo.meshVoltage)
 ///   and instance.key... (any metadata of the first file, e.g. medium.charge.driftField);
@@ -49,8 +51,8 @@
 /// `plots`: list of plots, with name, title, xLabel, yLabel, logX/logY/logZ, gridX/gridY, legend,
 /// timeDisplay (X axis as dates, e.g. timeSeconds), marginLeft/Right/Top/Bottom, stackOption ("nostack"),
 /// normalize (integral of each histogram), scale (each histogram divided by this expression of binSize,
-/// entries, integral and runLength, e.g. "binSize*runLength*3600" for a rate), save (file of the pad
-/// alone), enabled (true) and `histos`: list of histograms with
+/// entries, integral, runLength and simulatedTime, e.g. "binSize*runLength*3600" for a rate), save (file of
+/// the pad alone), enabled (true) and `histos`: list of histograms with
 /// * name (legend and name in outputFileName; default the plot name for a plot of a single histogram, and
 ///   plotName_index in `histos`), option (draw option), cuts (TRestCut names), stats (only for plots of a
 ///   single histogram),
@@ -607,12 +609,12 @@ void TRestAnalysisPlot::PlotCombinedCanvas(TRestDataSet& dataSet, const TRestMan
     YAML::Node run;
     if (!dataSet.GetRuns().empty()) run.reset(dataSet.GetRuns().front().run->GetYAMLNode());
     DrawFrame(dataSet.GetDataFrame(), metadata, run, dataSet.GetStartTime(), dataSet.GetEndTime(),
-              dataSet.GetTotalTime(), manager);
+              dataSet.GetTotalTime(), dataSet.GetTotalSimulatedTime(), manager);
 }
 
 void TRestAnalysisPlot::DrawFrame(ROOT::RDF::RNode frame, const std::map<std::string, YAML::Node>& metadata,
                                   const YAML::Node& run, double startTime, double endTime, double duration,
-                                  const TRestManager* manager) {
+                                  double simulatedTime, const TRestManager* manager) {
     auto cutExpression = [&](const std::vector<std::string>& names) {
         std::string expression;
         for (const auto& name : names) {
@@ -745,6 +747,7 @@ void TRestAnalysisPlot::DrawFrame(ROOT::RDF::RNode frame, const std::map<std::st
     global.numbers["entries"] = *totalEntries;
     global.numbers["allEntries"] = *totalEntries;
     global.numbers["runLength"] = duration / 3600.;
+    global.numbers["simulatedTime"] = simulatedTime / 3600.;
     global.numbers["meanRate"] = duration > 0 ? *totalEntries / duration : 0;
     global.texts["startTime"] = TRestTools::GetTimeStampFromUnixTime(startTime);
     global.texts["endTime"] = TRestTools::GetTimeStampFromUnixTime(endTime);

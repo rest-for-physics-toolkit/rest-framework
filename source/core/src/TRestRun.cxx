@@ -96,8 +96,8 @@ void TRestRun::LoadInputRunParameters() {
     for (const auto& key : kRunParameters)
         if (inputRun[key]) parameters[key] = inputRun[key];
     // The code that wrote the file
-    for (const std::string key :
-         {"startTime", "endTime", "mergedSubRuns", "entriesSaved", "codeVersion", "codeCommit", "codeClean"})
+    for (const std::string key : {"startTime", "endTime", "mergedSubRuns", "entriesSaved", "simulatedTime",
+                                  "codeVersion", "codeCommit", "codeClean"})
         if (inputRun[key]) parameters[key] = inputRun[key];
     UpdateParamsFromYAML<TRestRun>(parameters);
     if (inputRun["runInfo"] && inputRun["runInfo"].IsMap())
@@ -179,8 +179,9 @@ void TRestRun::LoadConfig() {
             inherited[key] = inputRun[key];
         }
     }
-    // A process reading raw data sets them again; the merged subruns of the data
-    for (const std::string key : {"startTime", "endTime", "mergedSubRuns"}) {
+    // A process reading raw data sets them again; the merged subruns of the data; the time a simulation
+    // represents
+    for (const std::string key : {"startTime", "endTime", "mergedSubRuns", "simulatedTime"}) {
         if (!config[key] && hasInputRun && inputRun[key]) inherited[key] = inputRun[key];
     }
     UpdateParamsFromYAML<TRestRun>(inherited);

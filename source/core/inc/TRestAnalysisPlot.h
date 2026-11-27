@@ -122,10 +122,10 @@ class TRestAnalysisPlot : public TRestMetadata {
 
     /// \brief Draws (and saves) the combined canvas with the frame. metadata: instance -> configuration
     /// ({instance.key}), run: TRestRun ({run.key}), times of the runs (seconds; duration 0: from the first
-    /// and last timeSeconds)
+    /// and last timeSeconds) and the time the simulations represent (seconds)
     void DrawFrame(ROOT::RDF::RNode frame, const std::map<std::string, YAML::Node>& metadata,
                    const YAML::Node& run, double startTime, double endTime, double duration,
-                   const TRestManager* manager);
+                   double simulatedTime, const TRestManager* manager);
 
    public:
     /// Input: a run file, a dataset or a pattern of them (e.g. R*_ANA.root). Empty: the output of the

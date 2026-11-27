@@ -6,6 +6,21 @@ releases); the notes of the GitHub release list its pull requests.
 
 ## Unreleased
 
+- `simulatedTime` of the runs (`TRestRunInfo`): the time a simulation represents, written by restG4 (cosmic
+  and cry generators), kept by the runs processed from it and summed by `REST_MergeRuns`; datasets
+  (`GetTotalSimulatedTime`) and `TRestAnalysisPlot` (`simulatedTime`, hours, as `runLength`) to give the
+  rates of the simulations.
+- restG4, formula `CosmicMuons` (Guan): the azimuth factor 2 pi was counted twice (as legacy before
+  geant4lib#151): its flux is 6.28 times lower (0.0172 counts / s / cm2); the sampled distribution is the
+  same.
+- restG4, `cosmic` generator: the flux of its source (the integral of its distribution of energy and angle
+  in `range`) is stored (`flux`), and `TRestGeant4Metadata::GetEquivalentSimulatedTime` gives the time a
+  simulation represents (events / (flux * surface); the exposure of CRY for the `cry` generator).
+- restG4, `cry` generator: as the `cosmic` one, only the particles crossing the world are simulated, from
+  where they enter it (their time delayed by the flight); the showers without any are skipped (they count in
+  the exposure of CRY, not in the events). The CRY square (`subBoxLength`) can be larger than the world.
+  Each thread has its own CRY (seed of the simulation plus the thread index), not one shared under a lock:
+  the simulation scales with the threads; the exposure is the sum of all.
 - TRestAnalysisPlot: `allEntries` in the labels of the panels (the entries with the global cuts only),
   e.g. `{entries/allEntries}` for the fraction of the events that pass the cuts of the panel.
 - TRestAnalysisPlot: the integer values of the labels (e.g. entries) are divided as real numbers

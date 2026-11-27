@@ -3,6 +3,9 @@
 #include <Math/AxisAngle.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 
@@ -32,6 +35,7 @@ static const bool TRestGeant4SpatialGenerator_FieldsRegistered = []() {
 
     using Cosmic = TRestGeant4SpatialGeneratorCosmic;
     reg.RegisterField<Cosmic>("radius", &Cosmic::fRadius);
+    reg.RegisterField<Cosmic>("flux", &Cosmic::fFlux);
 
     using CRY = TRestGeant4SpatialGeneratorCRY;
     reg.RegisterField<CRY>("position", &CRY::fPosition);
@@ -192,6 +196,7 @@ TRestGeant4SpatialGeneratorCosmic::TRestGeant4SpatialGeneratorCosmic(const strin
 void TRestGeant4SpatialGeneratorCosmic::LoadConfig() {
     UpdateParamsFromYAML<TRestGeant4SpatialGeneratorCosmic>(fNode);
     if (fRadius < 0) throw runtime_error(GetClassName() + ": 'radius' must be positive");
+    if (fFlux < 0) throw runtime_error(GetClassName() + ": 'flux' must be positive");
     UpdateYAMLFromParams<TRestGeant4SpatialGeneratorCosmic>(fNode);
 }
 
@@ -219,6 +224,11 @@ void TRestGeant4SpatialGeneratorCosmic::SetDefaultRadius(double radius) {
     UpdateYAMLFromParams<TRestGeant4SpatialGeneratorCosmic>(fNode);
 }
 
+void TRestGeant4SpatialGeneratorCosmic::SetFlux(double flux) {
+    fFlux = flux;
+    UpdateYAMLFromParams<TRestGeant4SpatialGeneratorCosmic>(fNode);
+}
+
 // --- TRestGeant4SpatialGeneratorCRY ---
 
 namespace {
@@ -226,13 +236,75 @@ TRestGeant4SpatialGeneratorCRY::EngineFactory& CRYEngineFactory() {
     static TRestGeant4SpatialGeneratorCRY::EngineFactory factory;
     return factory;
 }
+
+/// Mass (keV) of the particles of CRY by their Geant4 name, for their speed; others taken at the light speed
+double CRYParticleMass(const string& name) {
+    if (name == "e-" || name == "e+") return 510.99895;
+    if (name == "mu-" || name == "mu+") return 105658.3755;
+    if (name == "pi-" || name == "pi+") return 139570.39;
+    if (name == "pi0") return 134976.8;
+    if (name == "kaon-" || name == "kaon+") return 493677;
+    if (name == "neutron") return 939565.42;
+    if (name == "proton") return 938272.088;
+    return 0;
+}
+
+/// Moves a particle to where its line enters the box of half size `half` centered at the origin, its time
+/// delayed by the flight (nothing if it starts inside). False if its line misses the box ahead of it
+bool MoveToBox(TRestGeant4ParticleState& particle, const XYZVector& half) {
+    const XYZVector origin = particle.GetOrigin();
+    const XYZVector direction = particle.GetDirection().Unit();
+    const double o[3] = {origin.X(), origin.Y(), origin.Z()};
+    const double d[3] = {direction.X(), direction.Y(), direction.Z()};
+    const double h[3] = {half.X(), half.Y(), half.Z()};
+    double enter = -numeric_limits<double>::infinity(), leave = numeric_limits<double>::infinity();
+    for (int i = 0; i < 3; i++) {
+        if (d[i] == 0) {
+            if (abs(o[i]) >= h[i]) return false;
+            continue;
+        }
+        const double t1 = (-h[i] - o[i]) / d[i], t2 = (h[i] - o[i]) / d[i];
+        enter = max(enter, min(t1, t2));
+        leave = min(leave, max(t1, t2));
+    }
+    if (leave <= max(enter, 0.0)) return false;
+    if (enter <= 0) return true;  // inside the world
+    // 1 um inside the world, not on its surface
+    const double distance = enter + min(1e-3, (leave - enter) / 2);
+    const double mass = CRYParticleMass(particle.GetParticleName());
+    const double kinetic = particle.GetEnergy();
+    const double beta = mass > 0 ? sqrt(kinetic * (kinetic + 2 * mass)) / (kinetic + mass) : 1;
+    constexpr double lightSpeed = 299792.458;  // mm/us
+    particle.SetOrigin(origin + distance * direction);
+    particle.SetTime(particle.GetTime() + distance / (beta * lightSpeed));
+    return true;
+}
 }  // namespace
 
-/// The CRY generator, shared by the copies of the generator (threads): one shower at a time
+namespace {
+/// Adds to an atomic double (fetch_add of doubles is C++20)
+void AtomicAdd(std::atomic<double>& value, double delta) {
+    double current = value.load();
+    while (!value.compare_exchange_weak(current, current + delta)) {
+    }
+}
+}  // namespace
+
+/// The CRY generators of the copies (threads), each one its own CRY with the seed `seed` + its index, and
+/// their total showers and exposure, shared by the copies
 struct TRestGeant4SpatialGeneratorCRY::State {
-    std::mutex mutex;
+    std::mutex mutex;  // the list of engines
+    std::string setup;
+    long seed = 0;
+    std::vector<std::shared_ptr<Engine>> engines;
+    std::atomic<int64_t> showers{0};
+    std::atomic<double> exposure{0};  // us
+};
+
+/// The CRY generator of a copy (thread) and its exposure already added to the total
+struct TRestGeant4SpatialGeneratorCRY::Engine {
     std::unique_ptr<TRestGeant4CRYEngine> engine;
-    int64_t showers = 0;
+    double exposure = 0;
 };
 
 TRestGeant4SpatialGeneratorCRY::TRestGeant4SpatialGeneratorCRY(const string& name, const YAML::Node& node)
@@ -272,23 +344,45 @@ void TRestGeant4SpatialGeneratorCRY::Start(long seed) {
                             ": restG4 was built without CRY (REST_CRY, CRY_PATH or $CRYHOME)");
     }
     auto state = make_shared<State>();
-    state->engine = CRYEngineFactory()(fCRYSetup, seed);
+    state->setup = fCRYSetup;
+    state->seed = seed;
     fState = state;
+}
+
+std::unique_ptr<TRestGeant4SpatialGenerator> TRestGeant4SpatialGeneratorCRY::Clone() const {
+    auto copy = make_unique<TRestGeant4SpatialGeneratorCRY>(*this);
+    copy->fEngine.reset();  // its own CRY, created at its first shower
+    return copy;
 }
 
 bool TRestGeant4SpatialGeneratorCRY::NextShower(vector<TRestGeant4ParticleState>& particles) {
     if (!fState) throw runtime_error(GetClassName() + ": CRY is not started");
-    particles.clear();
-    {
+    if (!fEngine) {
+        // The CRY of this copy, created in its thread (the random generator of CRY is one per thread)
         lock_guard<mutex> lock(fState->mutex);
-        if (fMaxExposureTime > 0 && fState->engine->GetTimeSimulated() >= fMaxExposureTime) return false;
-        particles = fState->engine->Generate();
-        fState->showers++;
+        fEngine = make_shared<Engine>();
+        const long seed = fState->seed + static_cast<long>(fState->engines.size());
+        fEngine->engine = CRYEngineFactory()(fState->setup, seed);
+        fState->engines.push_back(fEngine);
     }
+    particles.clear();
     const XYZVector center = GetCenter();
-    for (auto& particle : particles) {
-        particle.SetOrigin(RotateToWorld(particle.GetOrigin()) + center);
-        particle.SetDirection(RotateToWorld(particle.GetDirection()));
+    const bool world = fWorldHalfSize.R() > 0;
+    // The showers without a particle crossing the world are skipped (they count in the exposure)
+    while (particles.empty()) {
+        if (fMaxExposureTime > 0 && fState->exposure.load() >= fMaxExposureTime) return false;
+        vector<TRestGeant4ParticleState> shower = fEngine->engine->Generate();
+        fState->showers++;
+        const double exposure = fEngine->engine->GetTimeSimulated();
+        AtomicAdd(fState->exposure, exposure - fEngine->exposure);
+        fEngine->exposure = exposure;
+        for (auto& particle : shower) {
+            particle.SetOrigin(RotateToWorld(particle.GetOrigin()) + center);
+            particle.SetDirection(RotateToWorld(particle.GetDirection()));
+            if (!world || MoveToBox(particle, fWorldHalfSize)) particles.push_back(particle);
+        }
+        // Without the world, a shower is used as it is (an empty one too: CRY returns at least a particle)
+        if (!world) break;
     }
     return true;
 }
@@ -313,8 +407,7 @@ vector<XYZVector> TRestGeant4SpatialGeneratorCRY::GetPlaneCorners() const {
 
 void TRestGeant4SpatialGeneratorCRY::UpdateExposure() {
     if (!fState) return;
-    lock_guard<mutex> lock(fState->mutex);
-    SetExposure(fState->showers, fState->engine->GetTimeSimulated());
+    SetExposure(fState->showers.load(), fState->exposure.load());
 }
 
 void TRestGeant4SpatialGeneratorCRY::SetExposure(int64_t showers, double exposureTime) {

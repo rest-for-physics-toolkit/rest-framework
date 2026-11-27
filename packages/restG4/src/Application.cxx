@@ -619,6 +619,8 @@ void Application::Run(const CommandLineOptions::Options& options) {
     const auto nEntries = run->GetSavedEntries();
 
     metadata->SetSimulationWallTime(fSimulationManager.GetElapsedTime());
+    // The time the simulation represents (cosmic and cry generators), kept by the runs processed from it
+    run->SetSimulatedTime(metadata->GetEquivalentSimulatedTime() / 1e6);
 
     // run->AddMetadata(fSimulationManager.GetRestMetadata());
     // run->AddMetadata(fSimulationManager.GetRestPhysicsLists());
@@ -647,6 +649,12 @@ void Application::Run(const CommandLineOptions::Options& options) {
             cout << " " << metadata->GetBiasingStageParticles(volume);
         }
         cout << ", equivalent number of events " << metadata->GetEquivalentNumberOfEvents() << endl;
+    }
+
+    // cosmic and cry generators: the time the output represents, to normalize to a rate
+    if (metadata->GetEquivalentSimulatedTime() > 0) {
+        cout << "\n\t- Equivalent simulated time: " << metadata->GetEquivalentSimulatedTime() / 1e6 << " s"
+             << endl;
     }
 
     cout << "\n\t- Total simulation time is "
