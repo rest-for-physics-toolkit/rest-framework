@@ -277,10 +277,9 @@ void RunAmplificationResponse(const TRestDetectorMedium& medium, TRestDetectorAm
              << ", on a dielectric " << lost.fDielectric << ", attached " << lost.fAttached << ", other "
              << lost.fOther << RESTendl;
     if (response.fAnodeElectrons > 0) {
-        RESTInfo
-            << "restGarfield: electrons at the anode out of the cell of their primary (charge sharing, not "
-               "applied): "
-            << response.fSharedElectrons / response.fAnodeElectrons << RESTendl;
+        RESTInfo << "restGarfield: electrons at the anode out of the cell of their primary (charge sharing) "
+                 << response.fSharedElectrons / response.fAnodeElectrons << ", sigma of the displacement "
+                 << response.GetSharingSigma() * 1000 << " um" << RESTendl;
     }
     if (response.HasCellMap()) {
         double minimum = 1, maximum = 0;

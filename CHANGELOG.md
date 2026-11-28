@@ -85,6 +85,10 @@ releases); the notes of the GitHub release list its pull requests.
   frame of the volume containing it, whatever the rotations). Responses computed before have no map (the
   cell average). restGarfield prints the rms of the gain factors of the bins and its statistical value
   (~500 primaries per bin for ~3 %).
+- Charge sharing between pads: `TRestDetectorAmplificationResponse::GetSharingSigma`, the sigma of a Gaussian
+  displacement giving the fraction of the electrons at the anode out of the cell of their primary (the
+  diffusion across the cell edge below the start plane); `TRestDetectorAvalancheProcess` moves each amplified
+  hit by it in the readout plane (`sharingSigma` in its metadata; needs the readout).
 
 ## 3.0.0 (2026-11-24)
 

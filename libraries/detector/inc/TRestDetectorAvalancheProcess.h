@@ -26,14 +26,19 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
    private:
     const TRestDetectorChargeResponse* fCharge = nullptr;
     std::shared_ptr<const TRestDetectorAmplificationResponse> fResponse;  //!
-    /// Readout locating the hits in the pixels, with the map of the cell of the response
+    /// Readout locating the hits in the pixels (map of the cell) and giving the plane of the charge sharing
     const TRestDetectorReadout* fReadout = nullptr;  //!
     /// The size of the cell of the response and of the pixels has been compared (once)
     bool fCellChecked = false;  //!
-    TRandom3 fRandom;           //!
+    /// A hit without readout normal (no charge sharing) has been reported (once)
+    bool fNormalWarned = false;  //!
+    TRandom3 fRandom;            //!
 
     /// \brief Warns once if the cell of the response and the pixel of the readout differ by more than 5 %
     void CheckCell(const TRestDetectorReadout::PixelPosition& pixel);
+    /// \brief A position moved in the plane of the readout by a Gaussian of sigma fSharingSigma along each
+    /// axis of the plane (the position itself, with a warning once, where the readout has no normal)
+    ROOT::Math::XYZVector Share(const ROOT::Math::XYZVector& position);
 
    public:
     /// Voltage across the amplification gap
@@ -62,6 +67,10 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     /// Transparency of the response (fraction of the electrons amplified; 1 with a gain table), written with
     /// the value used (not an input)
     double fTransparency = 1;
+    /// Sigma (mm) of the displacement of the hits in the readout plane from the charge sharing of the
+    /// response (TRestDetectorAmplificationResponse::GetSharingSigma; 0 with a gain table), written with the
+    /// value used (not an input)
+    double fSharingSigma = 0;
 
     /// \brief Default constructor (no configuration).
     TRestDetectorAvalancheProcess();
@@ -73,11 +82,11 @@ class TRestDetectorAvalancheProcess : public TRestEventProcess {
     /// \brief Reads the parameters from the YAML node.
     void LoadConfig() override;
     /// \brief Gets the charge response of the medium and either reads the amplification response of
-    /// responseFile (with the readout if it has the map of the cell) or checks amplificationVoltage and gap
-    /// and gets the gain and theta of its gain table at the field amplificationVoltage / gap (written to the
-    /// metadata). Throws if one of them is missing or out of range, if both responseFile and
-    /// amplificationVoltage or gap are given, or if the response has the map of the cell and there is no
-    /// readout.
+    /// responseFile (with the readout if it has the map of the cell or charge sharing) or checks
+    /// amplificationVoltage and gap and gets the gain and theta of its gain table at the field
+    /// amplificationVoltage / gap (written to the metadata). Throws if one of them is missing or out of
+    /// range, if both responseFile and amplificationVoltage or gap are given, or if the response has the map
+    /// of the cell or charge sharing and there is no readout.
     void InitProcess() override;
     /// \brief Multiplies the energy of each hit by its avalanche gain per electron (see the class
     /// description).

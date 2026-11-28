@@ -108,7 +108,7 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     /// Sum of the sizes of the collected avalanches of each bin
     std::vector<double> fCellSizeSum;  //!
     /// Electrons at the anode of all the collected avalanches, and those of them out of the cell where their
-    /// primary started (on the pad of a neighbouring cell: charge sharing, not applied by the process)
+    /// primary started (on the pad of a neighbouring cell: charge sharing, GetSharingSigma)
     double fAnodeElectrons = 0;
     /// Electrons at the anode out of the cell of their primary
     double fSharedElectrons = 0;
@@ -163,6 +163,11 @@ class TRestDetectorAmplificationResponse : public TRestMetadata {
     double GetCellTransparency(int bin) const;
     /// \brief Mean size of the avalanches of a bin over the mean size of all (1 without avalanches)
     double GetCellGainFactor(int bin) const;
+    /// \brief Sigma (mm) of a Gaussian displacement along x and y giving the fraction of the electrons at the
+    /// anode out of the cell of their primary, f = 2 sigma (1 / sizeX + 1 / sizeY) / sqrt(2 pi) for start
+    /// points uniform in the cell and sigma much smaller than it (the diffusion across the cell edge
+    /// below the start plane); 0 without the cell or electrons at the anode
+    double GetSharingSigma() const;
 
     /// \brief Writes the response to a file (opened with RECREATE or UPDATE): its metadata (configuration,
     /// medium, conditions, counts, histograms, map of the cell and generator) in RESTMetadataStore, and the

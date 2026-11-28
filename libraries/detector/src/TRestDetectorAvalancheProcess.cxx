@@ -25,9 +25,14 @@
 /// of the cell, and the electrons of the hit pass with the transparency of the bin and their gains are
 /// scaled by the mean size of the bin over the mean of all. The cell must be centred on the pixel with its
 /// size (a warning if they differ by more than 5 %). A hit out of the pixels (e.g. between two readout
-/// planes) gets the response averaged over the cell. The hits keep their position: the charge stays on the
-/// pad of the cell (the electrons at the anode on the pad of another cell are counted by restGarfield, and
-/// not applied). With maxHits in hitsDrift, the electrons of a hit share its position.
+/// planes) gets the response averaged over the cell.
+/// Charge sharing: the electrons at the anode on the pad of another cell, counted by restGarfield, crossed
+/// the cell edge by diffusion below the start plane; each amplified hit is moved in the plane of the readout
+/// (normal TRestDetectorReadout::GetReadoutNormal) by a Gaussian along each axis of the plane, of the sigma
+/// giving that fraction (TRestDetectorAmplificationResponse::GetSharingSigma, ~20 um, written as
+/// sharingSigma), after its bin in the cell is taken. With maxHits in hitsDrift, the electrons of a hit share
+/// its position and its displacement. A response with charge sharing, as one with the map of the cell,
+/// needs the readout.
 ///
 /// Differences with legacy: the gain comes from the avalanche simulations of restGarfield at the voltage,
 /// with Polya fluctuations, instead of a fixed detectorGain with a gaussian resolution
@@ -103,6 +108,7 @@ static const bool TRestDetectorAvalancheProcess_FieldsRegistered = []() {
     reg.RegisterField<P>("gain", &P::fGain);
     reg.RegisterField<P>("theta", &P::fTheta);
     reg.RegisterField<P>("transparency", &P::fTransparency);
+    reg.RegisterField<P>("sharingSigma", &P::fSharingSigma);
     return true;
 }();
 
@@ -181,15 +187,17 @@ void TRestDetectorAvalancheProcess::InitProcess() {
         fGain = fResponse->fMeanSize;
         fTheta = fResponse->GetTheta();
         fTransparency = fResponse->GetTransparency();
+        fSharingSigma = fResponse->GetSharingSigma();
         fReadout = nullptr;
-        fCellChecked = false;
-        if (fResponse->HasCellMap()) {
-            // The hits located in the pixels of the readout
+        fCellChecked = fNormalWarned = false;
+        if (fResponse->HasCellMap() || fSharingSigma > 0) {
+            // The hits located in the pixels of the readout, displaced in its plane
             auto* readouts = dynamic_cast<TRestDetectorReadoutManager*>(
                 fManager->GetMetadataClass("TRestDetectorReadoutManager"));
             if (!readouts) {
                 throw std::runtime_error(user + ": the amplification response of " + fResponseFile +
-                                         " has the map of the cell: a TRestDetectorReadoutManager is needed");
+                                         " has the map of the cell or charge sharing: a "
+                                         "TRestDetectorReadoutManager is needed");
             }
             fReadout = readouts->SelectReadout(fReadoutName, user);
         }
@@ -198,6 +206,7 @@ void TRestDetectorAvalancheProcess::InitProcess() {
     }
     fResponse.reset();
     fReadout = nullptr;
+    fSharingSigma = 0;
     fTransparency = 1;
 
     const auto& table = fCharge->GetGainTable(fGap, fTable);
@@ -227,6 +236,27 @@ void TRestDetectorAvalancheProcess::CheckCell(const TRestDetectorReadout::PixelP
                     << "of the readout (" << pixelX << " x " << pixelY << " mm): the map of the cell is "
                     << "stretched to the pixel" << RESTendl;
     }
+}
+
+ROOT::Math::XYZVector TRestDetectorAvalancheProcess::Share(const ROOT::Math::XYZVector& position) {
+    using V = ROOT::Math::XYZVector;
+    const V normal = fReadout->GetReadoutNormal(position);
+    if (!(normal.R() > 0)) {
+        if (!fNormalWarned) {
+            fNormalWarned = true;
+            RESTWarning << "TRestDetectorAvalancheProcess: the readout has no normal at (" << position.X()
+                        << ", " << position.Y() << ", " << position.Z()
+                        << ") mm: no charge sharing for the hits there" << RESTendl;
+        }
+        return position;
+    }
+    // Two orthogonal axes of the plane (the Gaussian is the same along any axis of it)
+    const V axis = std::abs(normal.X()) < 0.9 ? V(1, 0, 0) : V(0, 1, 0);
+    const V first = axis.Cross(normal).Unit();
+    const V second = normal.Cross(first);
+    const double along = fRandom.Gaus(0, fSharingSigma);
+    const double across = fRandom.Gaus(0, fSharingSigma);
+    return position + along * first + across * second;
 }
 
 bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestEvent& output) {
@@ -266,8 +296,11 @@ bool TRestDetectorAvalancheProcess::ProcessEvent(const TRestEvent& input, TRestE
             }
             if (!(gain > 0)) continue;
             const double time = inputEvent->GetTime(n) + fResponse->SampleTime(fRandom);
-            outputEvent->AddHit(inputEvent->GetPosition(n), energy * gain / count, time,
-                                inputEvent->GetType(n), inputEvent->GetParticleID(n));
+            // Charge sharing: the diffusion below the start plane, after the bin of the hit in the cell
+            const auto position =
+                fSharingSigma > 0 ? Share(inputEvent->GetPosition(n)) : inputEvent->GetPosition(n);
+            outputEvent->AddHit(position, energy * gain / count, time, inputEvent->GetType(n),
+                                inputEvent->GetParticleID(n));
             continue;
         }
         // Sum of the Polya gains of the electrons of the hit

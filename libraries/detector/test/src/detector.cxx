@@ -1666,6 +1666,7 @@ TEST(DetectorAvalancheProcess, GainFromTheAmplificationResponse) {
                        losses);
     EXPECT_FALSE(response.HasCellMap());
     EXPECT_DOUBLE_EQ(response.fAnodeElectrons, 400);
+    EXPECT_DOUBLE_EQ(response.GetSharingSigma(), 0);  // no cell
     EXPECT_DOUBLE_EQ(response.GetTransparency(), 0.75);
     EXPECT_NEAR(response.fMeanSize, 400. / 3, 1e-9);
     EXPECT_NEAR(response.fSizeVariance, 10000. / 3, 1e-6);
@@ -1790,6 +1791,9 @@ TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
     EXPECT_DOUBLE_EQ(response.GetCellGainFactor(lostBin), 1);  // no avalanche: the mean
     EXPECT_DOUBLE_EQ(response.fSharedElectrons, 1);
     EXPECT_DOUBLE_EQ(response.fAnodeElectrons, 400);
+    // 1 / 400 out of the cell: 4 edges, 4 sigma / (sqrt(2 pi) 2 half) = 1 / 400
+    const double sigma = std::sqrt(2 * M_PI) * 2 * half / (4 * 400.);
+    EXPECT_NEAR(response.GetSharingSigma(), sigma, 1e-12);
 
     const std::string fileName = std::string(TESTS_WORK_DIR) + "/AmplificationResponse_Cell.root";
     {
@@ -1815,6 +1819,7 @@ TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
     avalanche.SetManager(detector.manager.get());
     avalanche.Initialize();
     EXPECT_EQ(avalanche.fReadoutName, "mmTest");
+    EXPECT_NEAR(avalanche.fSharingSigma, sigma, 1e-12);
     const auto centre = YStripPixel(1, 2);
     const XYZVector offset = XYZVector(0.1, 0.1, 0) / std::sqrt(2.);
     const XYZVector across = XYZVector(-0.05, 0.05, 0) / std::sqrt(2.);
@@ -1832,7 +1837,7 @@ TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
     EXPECT_TRUE(amplifiedBin == lowBin || amplifiedBin == highBin);
     const double wValue = 0.0262;
     int amplified = 0, lost = 0;
-    double sum = 0;
+    double sum = 0, spread = 0;
     const int n = 2000;
     for (int i = 0; i < n; i++) {
         TRestDetectorHitsEvent input, output;
@@ -1841,16 +1846,21 @@ TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
         input.AddHit(lostSide.X(), lostSide.Y(), 0, wValue, 0.5);
         if (!avalanche.ProcessEvent(input, output)) continue;
         ASSERT_EQ(output.GetNumberOfHits(), 1u);
-        // The positions of the hits are stored as float; the two sides are 0.14 mm apart along x
-        if (std::abs(output.GetX(0) - amplifiedSide.X()) < 1e-4) {
+        // The two sides are 0.14 mm apart along x; the hits displaced in the readout plane (z) by the charge
+        // sharing, sigma ~1 um
+        if (std::abs(output.GetX(0) - amplifiedSide.X()) < 0.02) {
             amplified++;
             sum += output.GetEnergy(0) / wValue;
+            const double dx = output.GetX(0) - amplifiedSide.X(), dy = output.GetY(0) - amplifiedSide.Y();
+            spread += dx * dx + dy * dy;
+            EXPECT_NEAR(output.GetZ(0), 0, 1e-6);
         } else {
             lost++;
         }
     }
     EXPECT_EQ(amplified, n);
     EXPECT_EQ(lost, 0);
+    EXPECT_NEAR(std::sqrt(spread / (2 * amplified)), sigma, 0.1 * sigma);
     // The sizes of the whole cell (105 or 295, bins of 10 over [0, 300]: mean 200) scaled by the mean of the
     // bin of the hit over the mean of all
     EXPECT_NEAR(sum / amplified, 200 * response.GetCellGainFactor(amplifiedBin), 15);
@@ -1865,7 +1875,7 @@ TEST(DetectorAvalancheProcess, AmplificationDependingOnThePositionInThePixel) {
     }
     EXPECT_NEAR(static_cast<double>(outside) / n, 0.5, 0.05);
 
-    // A response with the map needs a readout
+    // A response with the map or charge sharing needs a readout
     auto noReadout = std::make_unique<TRestManager>(
         "manager", YAML::Load("class: TRestManager\ngas:\n  class: TRestDetectorMedium\n  name: ArIso\n"
                               "  charge: " +

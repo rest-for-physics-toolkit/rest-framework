@@ -27,15 +27,19 @@
 /// of the avalanche at the anode, timeBins over the range of the times). The map of the cell (cellBins x
 /// cellBins bins over x and y of the cell, by the start point of the primaries): the transparency and the
 /// mean size of each bin, e.g. the losses over the solid mesh around the holes. The electrons at the anode
-/// out of the cell where their primary started (on the pad of another cell) are counted, to check that the
-/// charge stays on the pad of its cell.
+/// out of the cell where their primary started (on the pad of another cell) are counted: in a symmetric cell
+/// the field lines of a cell end on its pad, and those electrons crossed the cell edge by diffusion below the
+/// start plane (in the last part of the drift and in the gap). GetSharingSigma gives the sigma of the
+/// Gaussian displacement along x and y that crosses the edges with that fraction, f = 2 sigma (1 / sizeX + 1
+/// / sizeY) / sqrt(2 pi) (e.g. 5.5 % of a cell of 0.675 mm: 23 um).
 /// TRestDetectorAvalancheProcess with `responseFile` uses it for each drifted electron: it passes with the
 /// transparency, its gain is sampled from the size histogram and its time is delayed by a time sampled from
 /// the time histogram. With the map, the transparency is that of the bin of the electron in the cell and the
 /// gain is scaled by the mean size of the bin over the mean of all; the cell is the volume of the readout
 /// containing the electron (a pixel, TRestDetectorReadout::GetPixelPosition): its x and y from the lower
 /// corner, as fractions of its size, are those of the cell (so the cell must be centred on the pixel, with
-/// its size).
+/// its size). The positions of the amplified hits are displaced in the readout plane by GetSharingSigma
+/// (charge sharing between pads).
 ///
 /// Parameters (`amplification` key): fieldMaps (required), dielectricMaps ([]: none; one per field map in
 /// the same order, "" for a map without), fieldMapOffset ([0, 0, 0] mm), periodicity ("xy"), mirror (false),
@@ -244,6 +248,15 @@ double TRestDetectorAmplificationResponse::GetCellGainFactor(int bin) const {
         return 1;
     }
     return fCellSizeSum[bin] / fCellCollected[bin] / fMeanSize;
+}
+
+double TRestDetectorAmplificationResponse::GetSharingSigma() const {
+    const double sizeX = fCellHigh[0] - fCellLow[0], sizeY = fCellHigh[1] - fCellLow[1];
+    if (!(sizeX > 0) || !(sizeY > 0) || !(fAnodeElectrons > 0)) return 0;
+    // From a point uniform over a length L, a Gaussian displacement of sigma << L crosses one of its ends
+    // with probability sigma / (sqrt(2 pi) L): two edges across each axis
+    const double fraction = fSharedElectrons / fAnodeElectrons;
+    return fraction * std::sqrt(2 * M_PI) / (2 / sizeX + 2 / sizeY);
 }
 
 void TRestDetectorAmplificationResponse::Write(TFile* file, const YAML::Node& generator) const {

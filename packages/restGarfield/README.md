@@ -166,9 +166,11 @@ mean size of the avalanches by the start point (TH2D `AmplificationTransparencyM
 `AmplificationGainMap` of the response file, e.g. the losses over the solid mesh around the holes);
 `TRestDetectorAvalancheProcess` applies it with the pixel of the readout containing each hit as the cell
 (the cell centred on a pixel, with its size). The fraction of the electrons at the anode on the pad of
-another cell (charge sharing, not applied) is printed. One response per operating point (the voltages of
-the CST model). `--jobs N` splits the avalanches in N processes. E.g. the pixel cell of a microbulk (mesh at
-z = 0, anode below -55 um):
+another cell (charge sharing: the diffusion across the cell edge below the start plane) is printed with the
+sigma of the Gaussian displacement giving it, which `TRestDetectorAvalancheProcess` applies to the hits in
+the readout plane (e.g. 5.5 % of a cell of 0.675 mm: 23 um). One response per operating point (the voltages
+of the CST model). `--jobs N` splits the avalanches in N processes. E.g. the pixel cell of a microbulk (mesh
+at z = 0, anode below -55 um):
 
 ```yaml
   amplification:
