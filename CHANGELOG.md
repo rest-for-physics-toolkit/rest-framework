@@ -83,7 +83,8 @@ releases); the notes of the GitHub release list its pull requests.
   electrons at the anode on the pad of another cell; `TRestDetectorAvalancheProcess` applies the bin of each
   hit in its pixel of the readout (`readout`; `TRestDetectorReadout::GetPixelPosition`: the position in the
   frame of the volume containing it, whatever the rotations). Responses computed before have no map (the
-  cell average).
+  cell average). restGarfield prints the rms of the gain factors of the bins and its statistical value
+  (~500 primaries per bin for ~3 %).
 
 ## 3.0.0 (2026-11-24)
 

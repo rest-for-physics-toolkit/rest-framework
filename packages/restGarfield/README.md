@@ -154,7 +154,7 @@ so that each process gets points at all the drift lengths; each process with its
 | `usePenning`, `penningRate` | false, 0 | Penning transfer of the gas. |
 | `sizeBins` | 100 | Bins of the avalanche size histogram (over [0, the largest size]). |
 | `timeBins` | 50 | Bins of the histogram of the time from the start plane to the anode (mean time of the electrons of an avalanche). |
-| `cellBins` | 10 | Bins along x and y of the cell of the map of the transparency and mean size versus the start point (0: no map). About 100 primaries per bin give its transparency to +-0.04: `electrons` ~ 100 `cellBins`^2. |
+| `cellBins` | 10 | Bins along x and y of the cell of the map of the transparency and mean size versus the start point (0: no map). The gain factor of a bin has a statistical error of about 1 / sqrt((1 + theta) T n) for n primaries in the bin (~0.7 / sqrt(n) for theta 1.7, transparency T 0.8), applied as a false non-uniformity: ~500 primaries per bin (3 %, transparency to +-0.02), `electrons` ~ 500 `cellBins`^2. The rms of the gain factors of the bins is printed with its statistical value. |
 | `responseFile` | (required) | Output file of the response. |
 | `overwrite` | false | Compute the response again if the file exists. |
 
@@ -175,9 +175,9 @@ z = 0, anode below -55 um):
     fieldMaps: ["pixel_mesh320_E_fine.txt", "pixel_mesh320_E_coarse.txt"]
     dielectricMaps: ["pixel_mesh320_D_fine.txt"]
     periodicity: "xy"
-    start: 1 mm
+    start: 0.1 mm                      # close to the mesh: the diffusion above it would blur the map
     anode: -54 um
-    electrons: 10000                   # 100 per bin of the map of the cell
+    electrons: 50000                   # 500 per bin of the map of the cell
     cellBins: 10
     usePenning: true
     penningRate: 0.3

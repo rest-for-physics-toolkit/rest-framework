@@ -41,8 +41,10 @@
 /// the same order, "" for a map without), fieldMapOffset ([0, 0, 0] mm), periodicity ("xy"), mirror (false),
 /// start and anode (z in mm, start > anode), electrons (1000), usePenning (false), penningRate (0), sizeBins
 /// (100), timeBins (50), cellBins (10; 0: no map), responseFile and overwrite (false: an existing
-/// responseFile is not computed again). About 100 primaries per bin of the map give its transparency to
-/// +-0.04: electrons ~ 100 cellBins^2.
+/// responseFile is not computed again). The gain factor of a bin has a statistical error of about
+/// 1 / sqrt((1 + theta) T n) for n primaries in the bin (~0.7 / sqrt(n) for theta 1.7, T 0.8), applied by
+/// TRestDetectorAvalancheProcess as a false non-uniformity: ~500 primaries per bin (3 %, transparency to
+/// +-0.02), electrons ~ 500 cellBins^2.
 /// One response per operating point (the voltages of the CST model: mesh voltage and drift field).
 ///
 ///    amplification:

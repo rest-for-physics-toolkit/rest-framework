@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
@@ -291,6 +292,23 @@ void RunAmplificationResponse(const TRestDetectorMedium& medium, TRestDetectorAm
         RESTInfo << "restGarfield: map of the cell, " << response.fCellBins << " x " << response.fCellBins
                  << " bins, " << static_cast<double>(response.fPrimaries) / response.fCellPrimaries.size()
                  << " primaries per bin, transparency from " << minimum << " to " << maximum << RESTendl;
+        // Spread of the gain factors of the bins and the one expected from the statistics alone (relative
+        // variance of the mean size of n avalanches 1 / ((1 + theta) n)): a gain depending on the position
+        // gives a spread above the statistical one; a statistical spread of a few % is applied as a false
+        // non-uniformity, more avalanches reduce it
+        double spread = 0, expected = 0;
+        int bins = 0;
+        for (size_t bin = 0; bin < response.fCellCollected.size(); bin++) {
+            if (response.fCellCollected[bin] <= 0) continue;
+            const double factor = response.GetCellGainFactor(static_cast<int>(bin));
+            spread += (factor - 1) * (factor - 1);
+            expected += 1 / ((1 + response.GetTheta()) * response.fCellCollected[bin]);
+            bins++;
+        }
+        if (bins > 0) {
+            RESTInfo << "restGarfield: gain factors of the bins, rms " << std::sqrt(spread / bins)
+                     << ", statistical " << std::sqrt(expected / bins) << RESTendl;
+        }
     }
 
     YAML::Node generator;
