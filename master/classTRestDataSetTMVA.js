@@ -1,0 +1,27 @@
+var classTRestDataSetTMVA =
+[
+    [ "TRestDataSetTMVA", "classTRestDataSetTMVA.html#a4ee6d75532a45abdd0319c6dbf0ce440", null ],
+    [ "TRestDataSetTMVA", "classTRestDataSetTMVA.html#a1541dcb18e98ee09d4f49fd9b3ab10c9", null ],
+    [ "~TRestDataSetTMVA", "classTRestDataSetTMVA.html#a2bd3cdad34ed6d5c2358f2922c3abc19", null ],
+    [ "Apply", "classTRestDataSetTMVA.html#a0724fc08b15c6a1d336c016accb6b468", null ],
+    [ "ComputeParameters", "classTRestDataSetTMVA.html#af36442d29bf411781966843d0e9ca59d", null ],
+    [ "DrawResults", "classTRestDataSetTMVA.html#a7b2b9242c310e00b9ad5edcda8ed2f59", null ],
+    [ "GetClassName", "classTRestDataSetTMVA.html#a0555db5a97b4470907700c3d0229f38d", null ],
+    [ "GetColumn", "classTRestDataSetTMVA.html#aa6e018f7514ef9ccd814fcc9b04a13af", null ],
+    [ "LoadConfig", "classTRestDataSetTMVA.html#ac179c0925836ccaa24ac8a9f9c3825b0", null ],
+    [ "ReadObjects", "classTRestDataSetTMVA.html#a72fd2ab0fea85bdf9d831dfa389745c8", null ],
+    [ "WriteObjects", "classTRestDataSetTMVA.html#af7f2991816f3fb1dfc77a538029ce154", null ],
+    [ "fBackgroundCutNames", "classTRestDataSetTMVA.html#a55c5bee236d667f192b61261e1a26e43", null ],
+    [ "fBackgroundFileName", "classTRestDataSetTMVA.html#a2a4aa6327309507ac5c8d769cb9563b9", null ],
+    [ "fKSBackground", "classTRestDataSetTMVA.html#a80a4b481eb101024ade899ecbfc8e6ae", null ],
+    [ "fKSSignal", "classTRestDataSetTMVA.html#a03b556db226271b43a81e8b0eb9b81e0", null ],
+    [ "fMethod", "classTRestDataSetTMVA.html#a6b18ddedb3d96b7e24a9d4848038f1a5", null ],
+    [ "fObservables", "classTRestDataSetTMVA.html#a7b4a9a07e24cc9e5c9ab95cffeb56107", null ],
+    [ "fOptions", "classTRestDataSetTMVA.html#a726ede235842c5b0187d719579b49eb6", null ],
+    [ "fROCIntegral", "classTRestDataSetTMVA.html#a183bedd45402939c58d2a4b0c7209b2d", null ],
+    [ "fSeparation", "classTRestDataSetTMVA.html#acb04c42fc97ffbf45caf7b77dabe7334", null ],
+    [ "fSplitOptions", "classTRestDataSetTMVA.html#afc2840b246510e1fa2f3dd100c0bfb2a", null ],
+    [ "fVariableImportance", "classTRestDataSetTMVA.html#a566cea8c766bbbf48b4c386df4ee67fd", null ],
+    [ "fVariableSeparation", "classTRestDataSetTMVA.html#ab12f8b024b6f211ba181048cafb2811e", null ],
+    [ "fWeights", "classTRestDataSetTMVA.html#aadbec6a19d805a9b82f5d18434768490", null ]
+];

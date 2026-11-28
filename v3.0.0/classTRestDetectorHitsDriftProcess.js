@@ -1,0 +1,24 @@
+var classTRestDetectorHitsDriftProcess =
+[
+    [ "TRestDetectorHitsDriftProcess", "classTRestDetectorHitsDriftProcess.html#ade07b041a07165a2f3c12966cbec5af2", null ],
+    [ "TRestDetectorHitsDriftProcess", "classTRestDetectorHitsDriftProcess.html#ac9fadf67a2ddeab62f638966f7050e7a", null ],
+    [ "TRestDetectorHitsDriftProcess", "classTRestDetectorHitsDriftProcess.html#a531547360b1c4944d06759715cc835cd", null ],
+    [ "EndProcess", "classTRestDetectorHitsDriftProcess.html#a8bac675d1bd4ed46a002d06dea1ee55f", null ],
+    [ "GetClassName", "classTRestDetectorHitsDriftProcess.html#acca90f54fe9dc64625a6c8e6d0fc9177", null ],
+    [ "GetInputEvent", "classTRestDetectorHitsDriftProcess.html#aac3cf359fa16c3536bd87abc0cf8a40c", null ],
+    [ "GetOutputEvent", "classTRestDetectorHitsDriftProcess.html#a81d373844e729d81192774074997b525", null ],
+    [ "InitProcess", "classTRestDetectorHitsDriftProcess.html#a19c4462734ae40bb6925a463a6c67f91", null ],
+    [ "LoadConfig", "classTRestDetectorHitsDriftProcess.html#a3d6842997b82895ff11dd12eec6b5bf6", null ],
+    [ "ProcessEvent", "classTRestDetectorHitsDriftProcess.html#ab3589d75d13acc4e8f501aa1b7d6b49f", null ],
+    [ "fAttachment", "classTRestDetectorHitsDriftProcess.html#a479709a9b2679734c7cb253b07f5521d", null ],
+    [ "fDiffusion", "classTRestDetectorHitsDriftProcess.html#af775980e99db48730d35c85f470b7dff", null ],
+    [ "fDriftVelocity", "classTRestDetectorHitsDriftProcess.html#a9fa49702206cef92e81f9313bf2d31e5", null ],
+    [ "fFluctuations", "classTRestDetectorHitsDriftProcess.html#a5cd3766f7d7eeb49df0915b6b85db923", null ],
+    [ "fLongitudinalDiffusion", "classTRestDetectorHitsDriftProcess.html#a8b6a71e2d1650423adb866dc7f1eef75", null ],
+    [ "fMaxHits", "classTRestDetectorHitsDriftProcess.html#a3dd2e257fa4f3a119d3cdb5ba0c59ff1", null ],
+    [ "fMediumName", "classTRestDetectorHitsDriftProcess.html#add82148d4820a367281c46ba9d095707", null ],
+    [ "fReadoutName", "classTRestDetectorHitsDriftProcess.html#a6f45673de888c3570bc505e4e6a42f00", null ],
+    [ "fSeed", "classTRestDetectorHitsDriftProcess.html#a74b5bdc5172166aa99d21b9319721b3b", null ],
+    [ "fTransversalDiffusion", "classTRestDetectorHitsDriftProcess.html#a8b8bf8c9c677a8cb6cdbca455c1703b2", null ],
+    [ "kFluctuations", "classTRestDetectorHitsDriftProcess.html#a0ee1a6b3661600aebf5df71f901dd2cd", null ]
+];

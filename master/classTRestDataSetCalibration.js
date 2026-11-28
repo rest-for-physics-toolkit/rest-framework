@@ -1,0 +1,27 @@
+var classTRestDataSetCalibration =
+[
+    [ "TRestDataSetCalibration", "classTRestDataSetCalibration.html#a64a90a34db8ea3291e0e0aeb3b36ae5f", null ],
+    [ "TRestDataSetCalibration", "classTRestDataSetCalibration.html#a5ae9a4c51dcd35e8b531980c428cd822", null ],
+    [ "~TRestDataSetCalibration", "classTRestDataSetCalibration.html#a2b173d49afa4f8b402be8f2ad2350315", null ],
+    [ "Apply", "classTRestDataSetCalibration.html#ad48455b39b17b46ac648a902330563b7", null ],
+    [ "ComputeParameters", "classTRestDataSetCalibration.html#a2bb05f53289ddc47ae3328a4331b5322", null ],
+    [ "GetClassName", "classTRestDataSetCalibration.html#ab740af68d915049707a1658a41176390", null ],
+    [ "GetEnergyColumn", "classTRestDataSetCalibration.html#a6d2ec46a0cca9f8796a9ca581a5b0254", null ],
+    [ "GetLinearFit", "classTRestDataSetCalibration.html#a1526a8692550088cb1b86aae6313d2bd", null ],
+    [ "GetSpectrum", "classTRestDataSetCalibration.html#a62b1bed184c08e55f844b26d06aa8f8c", null ],
+    [ "LoadConfig", "classTRestDataSetCalibration.html#a77a14d3c64c98e78ec907c826b3d1e3c", null ],
+    [ "ReadObjects", "classTRestDataSetCalibration.html#a518d1a1689c8870bf603858097418cdc", null ],
+    [ "WriteObjects", "classTRestDataSetCalibration.html#abf54e66773ec653deb4176872fa8a314", null ],
+    [ "fBackground", "classTRestDataSetCalibration.html#a16c4b3c0511e5cae784eed23bf154f85", null ],
+    [ "fCalibratedObservable", "classTRestDataSetCalibration.html#ad373366c209847f573e0bcaac9c70791", null ],
+    [ "fIntercept", "classTRestDataSetCalibration.html#a08db4f9307e21ed9d40a876c2c3b47d4", null ],
+    [ "fNBins", "classTRestDataSetCalibration.html#a3f33dc4a11342adc23bf97fc95749c25", null ],
+    [ "fObservable", "classTRestDataSetCalibration.html#a3d7e4cc51fa457c50f7a9c348a630755", null ],
+    [ "fPeakModel", "classTRestDataSetCalibration.html#a92fffa0e7dd6baf6f5386513ac1c04cf", null ],
+    [ "fPeaks", "classTRestDataSetCalibration.html#aa7c62311aa263fed68a70bec0c1767de", null ],
+    [ "fPeakSearch", "classTRestDataSetCalibration.html#ae0be691df1bfc2328defb9b16be6bc74", null ],
+    [ "fRange", "classTRestDataSetCalibration.html#a51058dc9e5e603dea3e5f9ef2b943d82", null ],
+    [ "fSlope", "classTRestDataSetCalibration.html#a5a6bc30a851d6e96a7ba77072e989072", null ],
+    [ "fWindow", "classTRestDataSetCalibration.html#aaba72b4955b151bc585a02dc9eba2921", null ],
+    [ "fZeroPoint", "classTRestDataSetCalibration.html#a0860ea6998a354db3fd31ee646164b0b", null ]
+];

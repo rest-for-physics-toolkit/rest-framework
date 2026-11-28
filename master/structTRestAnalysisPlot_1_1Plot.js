@@ -1,0 +1,25 @@
+var structTRestAnalysisPlot_1_1Plot =
+[
+    [ "gridX", "structTRestAnalysisPlot_1_1Plot.html#ae055158b8c62d5830fbb9d8544fe1b3a", null ],
+    [ "gridY", "structTRestAnalysisPlot_1_1Plot.html#a734ab252c045a15f81729d82ce72227c", null ],
+    [ "histos", "structTRestAnalysisPlot_1_1Plot.html#ad181714046eae59bad98c22c831622cb", null ],
+    [ "legend", "structTRestAnalysisPlot_1_1Plot.html#a7e0518893c8d29efb416235e5383803d", null ],
+    [ "legendBox", "structTRestAnalysisPlot_1_1Plot.html#a2ab09ec2d6b4e3f7466b0e59f33a58f5", null ],
+    [ "logX", "structTRestAnalysisPlot_1_1Plot.html#a0a43f7b73596457049991b1978f4f4b2", null ],
+    [ "logY", "structTRestAnalysisPlot_1_1Plot.html#a9eef77b24aa7c55390291758188058d4", null ],
+    [ "logZ", "structTRestAnalysisPlot_1_1Plot.html#ade4b3111abd4dbd9a959cb717c5c2e9b", null ],
+    [ "marginBottom", "structTRestAnalysisPlot_1_1Plot.html#a72e82c7b0e69e12030a35a11466b0de3", null ],
+    [ "marginLeft", "structTRestAnalysisPlot_1_1Plot.html#aabfee0c6355cdb1445d79879b9992d52", null ],
+    [ "marginRight", "structTRestAnalysisPlot_1_1Plot.html#aba7efcbc97436df25a6dd015052116f3", null ],
+    [ "marginTop", "structTRestAnalysisPlot_1_1Plot.html#a4416e40891fca8082b9b8ea592a61701", null ],
+    [ "name", "structTRestAnalysisPlot_1_1Plot.html#ab8961ff88b6d695d5f7ff9c22412578d", null ],
+    [ "normalize", "structTRestAnalysisPlot_1_1Plot.html#ae1bfd75b7cd153d1d91d05e7b2b87abb", null ],
+    [ "save", "structTRestAnalysisPlot_1_1Plot.html#a99cc22b02ee1a6f69fe70828475c2623", null ],
+    [ "scale", "structTRestAnalysisPlot_1_1Plot.html#ae0805c5d03fd4f87363b63db964db440", null ],
+    [ "stack", "structTRestAnalysisPlot_1_1Plot.html#a48fe2843b569cf683d94ff99a00f1d9f", null ],
+    [ "stackOption", "structTRestAnalysisPlot_1_1Plot.html#a2f3b3df662ffb4ed23d11a2946869791", null ],
+    [ "timeDisplay", "structTRestAnalysisPlot_1_1Plot.html#a2027f111f6f7fbdc061ae1447d715934", null ],
+    [ "title", "structTRestAnalysisPlot_1_1Plot.html#a4395f736ea2308fd797f4a144a2bc7c0", null ],
+    [ "xLabel", "structTRestAnalysisPlot_1_1Plot.html#a154b25f2e519f86df0210b0f5446d284", null ],
+    [ "yLabel", "structTRestAnalysisPlot_1_1Plot.html#ae2ffc31cde7374f7ab6c686dab74dfb1", null ]
+];

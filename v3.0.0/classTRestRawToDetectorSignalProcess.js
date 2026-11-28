@@ -1,0 +1,26 @@
+var classTRestRawToDetectorSignalProcess =
+[
+    [ "TRestRawToDetectorSignalProcess", "classTRestRawToDetectorSignalProcess.html#a3a0ffcc005a2fadc70377f374e2f036b", null ],
+    [ "TRestRawToDetectorSignalProcess", "classTRestRawToDetectorSignalProcess.html#a32e499f31ddf3fa31e65bafa0aa126fc", null ],
+    [ "TRestRawToDetectorSignalProcess", "classTRestRawToDetectorSignalProcess.html#aae2bb23fb5e32c44d16967226ec9b2e7", null ],
+    [ "EndProcess", "classTRestRawToDetectorSignalProcess.html#a6b9338139ee8face4c60b2aad81671ba", null ],
+    [ "GetClassName", "classTRestRawToDetectorSignalProcess.html#aff08e6e28e154626d9d04b886f908adf", null ],
+    [ "GetInputEvent", "classTRestRawToDetectorSignalProcess.html#a1ff055ce70c054f92e902cfb5b13fe70", null ],
+    [ "GetOutputEvent", "classTRestRawToDetectorSignalProcess.html#abcbb758c29ddbd59794c38af42c9ea55", null ],
+    [ "InitProcess", "classTRestRawToDetectorSignalProcess.html#ad94d8f5eace816d5607f6283ff083afe", null ],
+    [ "LoadConfig", "classTRestRawToDetectorSignalProcess.html#ac47daaefe70f65f41795ac2eddd604ea", null ],
+    [ "ProcessEvent", "classTRestRawToDetectorSignalProcess.html#acb6270dfd35d5350b7044b371f63a8be", null ],
+    [ "fBaselineOption", "classTRestRawToDetectorSignalProcess.html#ac201ca321b2a1361400832c77c39752d", null ],
+    [ "fBaselineRange", "classTRestRawToDetectorSignalProcess.html#a8d50357ca617cc48f5ef59949f4a7d37", null ],
+    [ "fGain", "classTRestRawToDetectorSignalProcess.html#aaff7b372961cc95738e7a1ce879128b4", null ],
+    [ "fIntegralRange", "classTRestRawToDetectorSignalProcess.html#af8d190f5951801bb27cb92c318c26480", null ],
+    [ "fNPointsFlat", "classTRestRawToDetectorSignalProcess.html#a44c56249b809af79d96b1be22a485a67", null ],
+    [ "fPointsOverThreshold", "classTRestRawToDetectorSignalProcess.html#a78f40b068ae33dc097c6dc160aecb6fc", null ],
+    [ "fPointsThreshold", "classTRestRawToDetectorSignalProcess.html#a3071fb15a4f0bf691bcb3cb2e53bef5a", null ],
+    [ "fReadoutName", "classTRestRawToDetectorSignalProcess.html#a965580ab71a139daf2b84a0cc587b62d", null ],
+    [ "fSampling", "classTRestRawToDetectorSignalProcess.html#a00ce27af37b4618d134d24d2610340ca", null ],
+    [ "fSignalThreshold", "classTRestRawToDetectorSignalProcess.html#af87592c1198c02a936da786efe4b48a7", null ],
+    [ "fThreshold", "classTRestRawToDetectorSignalProcess.html#a6dfcb8bf1ad9a2e50f58be14bca1a416", null ],
+    [ "fTriggerStarts", "classTRestRawToDetectorSignalProcess.html#a73006dfcbd7f48c54a33db6c5c210f7e", null ],
+    [ "fZeroSuppression", "classTRestRawToDetectorSignalProcess.html#ad7c2f33ed29ba57e3127b7e04757e495", null ]
+];

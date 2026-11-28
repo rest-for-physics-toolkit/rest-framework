@@ -1,0 +1,28 @@
+var classTRestRawDAQSignalEvent =
+[
+    [ "TRestRawDAQSignalEvent", "classTRestRawDAQSignalEvent.html#a551201dac1c357c6d54513bf54b138f9", null ],
+    [ "~TRestRawDAQSignalEvent", "classTRestRawDAQSignalEvent.html#abd2400faa4d9c27c56fab267d5771f29", null ],
+    [ "AddFEM", "classTRestRawDAQSignalEvent.html#ab3043f8073f97732ac9e39de8b8dcce5", null ],
+    [ "CopyFrom", "classTRestRawDAQSignalEvent.html#a6c3ca0873c6c543bb29e55edfd9bbe3d", null ],
+    [ "CreateBranches", "classTRestRawDAQSignalEvent.html#ae7861c716c6945c192f43d42224aea4e", null ],
+    [ "GetClassName", "classTRestRawDAQSignalEvent.html#ad63642fee9da3e537313c49d93dff15b", null ],
+    [ "GetFEMEventCount", "classTRestRawDAQSignalEvent.html#a4abc981f9bedeca7542a1dd22c99c102", null ],
+    [ "GetFEMID", "classTRestRawDAQSignalEvent.html#a9062c05453c88e0d3531333969e2b660", null ],
+    [ "GetFEMNSignals", "classTRestRawDAQSignalEvent.html#ac4b8efcc10030289db82726feb1f346f", null ],
+    [ "GetFEMTimestamp", "classTRestRawDAQSignalEvent.html#ae6a1bcea8735243b12cd6ec70bc1fee0", null ],
+    [ "GetNumberOfFEMs", "classTRestRawDAQSignalEvent.html#aab3e848251b98fb5ec8aa7818640ae90", null ],
+    [ "HasFEMInfo", "classTRestRawDAQSignalEvent.html#a1a5c38e4ad5cd450a973d1d66c78f806", null ],
+    [ "Initialize", "classTRestRawDAQSignalEvent.html#aaa8a594d9a670e2f97f4d29e6804bf0a", null ],
+    [ "MoveFrom", "classTRestRawDAQSignalEvent.html#ab30b22a43eb76772fa59073a12d8c44e", null ],
+    [ "PrintEvent", "classTRestRawDAQSignalEvent.html#af2a02c91965cbcb66250df8d89b48b1a", null ],
+    [ "SetBranchAddresses", "classTRestRawDAQSignalEvent.html#a55160e5c78203e5cc7dfc360410bc439", null ],
+    [ "fFEMEventCounts", "classTRestRawDAQSignalEvent.html#a0fe0aefb87cefb3e75f32dbf731bac49", null ],
+    [ "fFEMIDs", "classTRestRawDAQSignalEvent.html#a924268176e0100aadb20029f53819022", null ],
+    [ "fFEMNSignals", "classTRestRawDAQSignalEvent.html#a5452045135037205703c3f41452a64a4", null ],
+    [ "fFEMTimestamps", "classTRestRawDAQSignalEvent.html#ad8ba023b4890cf185a0a0bab928d80f1", null ],
+    [ "fHasFEMInfo", "classTRestRawDAQSignalEvent.html#a404dda2f0eabaf16c604ca591187f206", null ],
+    [ "fPtrFEMEventCounts", "classTRestRawDAQSignalEvent.html#a1afaa895d89f6a72dfd43e9f45dcf008", null ],
+    [ "fPtrFEMIDs", "classTRestRawDAQSignalEvent.html#acb5de5d4d327659537a2d8caef8e73a0", null ],
+    [ "fPtrFEMNSignals", "classTRestRawDAQSignalEvent.html#af7fb3837312ac67a64352a3ef6ff9428", null ],
+    [ "fPtrFEMTimestamps", "classTRestRawDAQSignalEvent.html#ac7294e524ad544b3bf95417918f3d0fc", null ]
+];

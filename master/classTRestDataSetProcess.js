@@ -1,0 +1,28 @@
+var classTRestDataSetProcess =
+[
+    [ "TRestDataSetProcess", "classTRestDataSetProcess.html#a03efa6a37e9744a6159301399f90d147", null ],
+    [ "TRestDataSetProcess", "classTRestDataSetProcess.html#aa56e8e0509f3d66335f5b69b7b80d882", null ],
+    [ "Apply", "classTRestDataSetProcess.html#a51e22324ae0e1a19330d82b083c374c6", null ],
+    [ "AsDouble", "classTRestDataSetProcess.html#a9d8c81d1eb71ceb8eebcd3ba3efdd361", null ],
+    [ "ComputeParameters", "classTRestDataSetProcess.html#a16a2f04bee23b2f322b17c3516a72cb4", null ],
+    [ "DefineColumn", "classTRestDataSetProcess.html#ad7f02324111143a56a85b8ca952c9512", null ],
+    [ "DefineColumn", "classTRestDataSetProcess.html#a3db3fc1001faa74a99a5c2e9d9651bab", null ],
+    [ "GetCutExpression", "classTRestDataSetProcess.html#ada3d22640b0c56a8fc79551fc990a879", null ],
+    [ "GetStoreDirectory", "classTRestDataSetProcess.html#a2f0725130e836e869d6f52a9c5811907", null ],
+    [ "Initialize", "classTRestDataSetProcess.html#a33a1a5b4b79c42deeccd62824f794c24", null ],
+    [ "LoadStoredConfig", "classTRestDataSetProcess.html#a46fa111b7e61c9dd3f8e138d53236a1f", null ],
+    [ "ObtainParameters", "classTRestDataSetProcess.html#a23dc2f5d4b8eb87d5ed494eeccf257a3", null ],
+    [ "ReadFromFile", "classTRestDataSetProcess.html#ae54208318271aeff52d0979d31b868bf", null ],
+    [ "ReadObjects", "classTRestDataSetProcess.html#a96d05609094068224c86b72e89da1415", null ],
+    [ "ResolveReference", "classTRestDataSetProcess.html#ae0193a0a674ab035aee670d4e605d8cb", null ],
+    [ "Save", "classTRestDataSetProcess.html#aed507d94c7de4152151fca78f00f74cb", null ],
+    [ "UpdateFile", "classTRestDataSetProcess.html#a52ed41564b74ddc01a99ff8651694bb5", null ],
+    [ "WriteObjects", "classTRestDataSetProcess.html#a43d1a7f21935be6ac9b96a09576933b8", null ],
+    [ "fCutNames", "classTRestDataSetProcess.html#a92d7973a8320d1894494dc409dfd0f5a", null ],
+    [ "fManager", "classTRestDataSetProcess.html#a323cbce236afb1d0b3ae85a4fddb70dd", null ],
+    [ "fParametersFileName", "classTRestDataSetProcess.html#aa011e2d50444033b0cc14f67c3671115", null ],
+    [ "fReferenceFileName", "classTRestDataSetProcess.html#ab21d91bbbfb533d23f8cd7fb5ffe0cda", null ],
+    [ "fReferenceSelection", "classTRestDataSetProcess.html#aff01f9ae823f78ce4cb141cfa7b2ea67", null ],
+    [ "fReferenceUsed", "classTRestDataSetProcess.html#a84f08883ccdbab6fedcfccc30a899df8", null ],
+    [ "kStoreDirectory", "classTRestDataSetProcess.html#aaf12526fc7733f62c4d5aeb98db9736e", null ]
+];

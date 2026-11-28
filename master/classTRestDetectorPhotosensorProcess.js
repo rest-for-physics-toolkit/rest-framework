@@ -1,0 +1,25 @@
+var classTRestDetectorPhotosensorProcess =
+[
+    [ "TRestDetectorPhotosensorProcess", "classTRestDetectorPhotosensorProcess.html#a009be4dfe4b65d1c4b21375ff31cf83f", null ],
+    [ "TRestDetectorPhotosensorProcess", "classTRestDetectorPhotosensorProcess.html#a3725cb3c0642f687cef65f61bab266ac", null ],
+    [ "TRestDetectorPhotosensorProcess", "classTRestDetectorPhotosensorProcess.html#a98722db3a02cb657f5202c0f3ff4f85e", null ],
+    [ "EndProcess", "classTRestDetectorPhotosensorProcess.html#a81f9fda145e149369c7a4fb676335836", null ],
+    [ "GetClassName", "classTRestDetectorPhotosensorProcess.html#a262b19887bc9564075a9031a7dd5208a", null ],
+    [ "GetInputEvent", "classTRestDetectorPhotosensorProcess.html#aeb462a9c4454d2aaed7f9bfb70971745", null ],
+    [ "GetOutputEvent", "classTRestDetectorPhotosensorProcess.html#af4e9bd9a95f7fad5ca8ddb12783ead79", null ],
+    [ "InitProcess", "classTRestDetectorPhotosensorProcess.html#aff9d45987434bb554888e67f67189ce8", null ],
+    [ "LoadConfig", "classTRestDetectorPhotosensorProcess.html#af4ec9b2d6a3f708e1d6a92974529467e", null ],
+    [ "ProcessEvent", "classTRestDetectorPhotosensorProcess.html#aa45592c07f94541fb79066a5e91d9c18", null ],
+    [ "fAfterpulseDelay", "classTRestDetectorPhotosensorProcess.html#a8ceb478b861bc911dcb13a86cea74426", null ],
+    [ "fAfterpulseProbability", "classTRestDetectorPhotosensorProcess.html#a509243f3aefb27e918561eae9e075ae9", null ],
+    [ "fAfterpulseSpread", "classTRestDetectorPhotosensorProcess.html#a0a7b1f8f3a0b52858f8457a43f57653e", null ],
+    [ "fCellRecoveryTime", "classTRestDetectorPhotosensorProcess.html#a9a5fa69fed0a3db4a363c69f9500524a", null ],
+    [ "fCells", "classTRestDetectorPhotosensorProcess.html#a8b168b73829f9031c900418a8c3e7a03", null ],
+    [ "fCrosstalkProbability", "classTRestDetectorPhotosensorProcess.html#acc80f1497f8ff00b8a6011739d3a081e", null ],
+    [ "fDarkCountRate", "classTRestDetectorPhotosensorProcess.html#a3922f4dfb1cb1721985e42c667ba8e79", null ],
+    [ "fDarkCountWindow", "classTRestDetectorPhotosensorProcess.html#aae33030f3a16676200a73f98dda18127", null ],
+    [ "fGainSpread", "classTRestDetectorPhotosensorProcess.html#a186324a2bd58945bd58505a0f908d143", null ],
+    [ "fReadoutName", "classTRestDetectorPhotosensorProcess.html#af9e7ec34bca6873e58d46ca408c0fb7e", null ],
+    [ "fSeed", "classTRestDetectorPhotosensorProcess.html#a606939ca88005bc8f04dc9f3f0cf4f20", null ],
+    [ "fTimeJitter", "classTRestDetectorPhotosensorProcess.html#a29d5fa2e2a5d10dce3bdfcd93ab81028", null ]
+];

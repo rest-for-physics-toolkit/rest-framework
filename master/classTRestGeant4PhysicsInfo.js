@@ -1,0 +1,28 @@
+var classTRestGeant4PhysicsInfo =
+[
+    [ "TRestGeant4PhysicsInfo", "classTRestGeant4PhysicsInfo.html#aed2228b995d323a827a850805d1e0568", null ],
+    [ "~TRestGeant4PhysicsInfo", "classTRestGeant4PhysicsInfo.html#a6d4e5cd72a1857f152c4f309055cd38e", null ],
+    [ "GetAllParticles", "classTRestGeant4PhysicsInfo.html#aeb2e51bba6da30295723e48ce6796060", null ],
+    [ "GetAllProcesses", "classTRestGeant4PhysicsInfo.html#a3af8c8a3d7b92fe2a1d3ffd4161ccffb", null ],
+    [ "GetAllProcessTypes", "classTRestGeant4PhysicsInfo.html#a45c7317c0f82f43fedff6cd940ffd779", null ],
+    [ "GetParticleID", "classTRestGeant4PhysicsInfo.html#a39190fcb7bc04e8bc2121f9fccf69d8c", null ],
+    [ "GetParticleName", "classTRestGeant4PhysicsInfo.html#a08fb6fab3e40b31882ac3d89929e4a2e", null ],
+    [ "GetProcessID", "classTRestGeant4PhysicsInfo.html#a34e5ee14031ee24b86e6cc0c5b314a80", null ],
+    [ "GetProcessIDFromGeant4Process", "classTRestGeant4PhysicsInfo.html#a47de1f66463042de5809e85abd4714ef", null ],
+    [ "GetProcessName", "classTRestGeant4PhysicsInfo.html#a16dfc7c742ac74eaf1af9ad58a7187dd", null ],
+    [ "GetProcessType", "classTRestGeant4PhysicsInfo.html#a2981cb8eddcc544fd796be1f70a4b5d2", null ],
+    [ "InsertParticleName", "classTRestGeant4PhysicsInfo.html#a39e6fa0bf9277c283848a2314547e887", null ],
+    [ "InsertProcessName", "classTRestGeant4PhysicsInfo.html#ac5e98a25b2c3eaa493970cb015339b8f", null ],
+    [ "Print", "classTRestGeant4PhysicsInfo.html#a82d44b5ce61c417db2658619b2a549be", null ],
+    [ "PrintParticles", "classTRestGeant4PhysicsInfo.html#abd749c09c952282dc0bc2d7c7af87ff7", null ],
+    [ "PrintProcesses", "classTRestGeant4PhysicsInfo.html#af5e347575b9deb1a6caa37a942d2c9a8", null ],
+    [ "TRestGeant4Metadata", "classTRestGeant4PhysicsInfo.html#ad6a0700a481ed05d01250a9c96b443d9", null ],
+    [ "TRestMetadataFieldRegistry", "classTRestGeant4PhysicsInfo.html#aa9617eedb616c42af0802ac14433dc15", null ],
+    [ "fParticleNamesMap", "classTRestGeant4PhysicsInfo.html#aacfefdf9b466d2e9cf26ce3b875bd1ea", null ],
+    [ "fParticleNamesReverseMap", "classTRestGeant4PhysicsInfo.html#a2a96e4b5de3be0cd6b585f069b8d7276", null ],
+    [ "fProcessNamesMap", "classTRestGeant4PhysicsInfo.html#acc23b2be5db3aa954a39024400adcf68", null ],
+    [ "fProcessNamesReverseMap", "classTRestGeant4PhysicsInfo.html#a7af0f32f3f38f90b7fe8e5fe1dfc35b7", null ],
+    [ "fProcessTypesMap", "classTRestGeant4PhysicsInfo.html#a78e1648ac6ced2985ccf38ac455aa8a7", null ],
+    [ "kKillProcessID", "classTRestGeant4PhysicsInfo.html#a26c5f311a1b2b581005cacae75529da8", null ],
+    [ "kPrimaryGeneratorProcessID", "classTRestGeant4PhysicsInfo.html#a64a7b729d7d382dd687a6df5e4f0a4c1", null ]
+];
